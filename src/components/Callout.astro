@@ -1,0 +1,50 @@
+---
+interface Props {
+  type?: 'note' | 'warning' | 'tip' | 'case'
+  title?: string
+}
+const { type = 'note', title } = Astro.props
+
+const styles = {
+  note: {
+    container:
+      'bg-white border border-[#e4e4df] border-l-2 border-l-[#0c0c0c] p-5 my-6 text-[#333333]',
+    tag: 'text-[#737373]',
+    title: 'text-[#0c0c0c]',
+    defaultTag: 'NOTE',
+  },
+  tip: {
+    container:
+      'bg-[#f4f7fb] border border-[#d6e2ef] border-l-2 border-l-[#0f4c81] p-5 my-6 text-[#1c3550]',
+    tag: 'text-[#0f4c81]',
+    title: 'text-[#0f4c81]',
+    defaultTag: 'TIP',
+  },
+  warning: {
+    container:
+      'bg-[#fcf2f2] border border-[#edd2d2] border-l-2 border-l-[#c92a2a] p-5 my-6 text-[#4a1c1c]',
+    tag: 'text-[#c92a2a]',
+    title: 'text-[#c92a2a]',
+    defaultTag: 'WARNING',
+  },
+  case: {
+    container:
+      'bg-white border border-[#e4e4df] border-l-2 border-l-[#0f4c81] p-5 my-6 text-[#333333]',
+    tag: 'text-[#0f4c81]',
+    title: 'text-[#0c0c0c]',
+    defaultTag: 'CASE STUDY',
+  },
+}
+
+const current = styles[type] || styles.note
+---
+
+<div class={`not-prose ${current.container}`}>
+  <div class="flex items-baseline gap-2 font-mono text-xs tracking-widest uppercase">
+    <span class={current.tag}>[{current.defaultTag}]</span>
+    {title && <span class={`font-display text-sm tracking-normal ${current.title}`}>{title}</span>}
+  </div>
+  <div class="mt-2 text-sm leading-relaxed">
+    <slot />
+  </div>
+</div>

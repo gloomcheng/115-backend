@@ -1,0 +1,119 @@
+---
+title: "前置準備"
+description: "BYOA — 帶你的 GitHub 帳號就夠了。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import GlossaryTerm from '../../components/GlossaryTerm.astro';
+import Callout from '../../components/Callout.astro';
+
+## 教室跟帳號
+
+電腦教室有機器。自己的筆電可以帶，但不是上課條件。
+
+你要先準備自己的 GitHub 帳號，這就是 <GlossaryTerm id="byoa">BYOA</GlossaryTerm>。整學期的 commit 都要進你的帳號。到期末時，Git 歷史會留下你每一次修改，不是只有最後一包檔案。
+
+還沒有帳號，先到 [github.com](https://github.com) 註冊。請用你會長期保留的個人帳號，再把學校 email 加進去；不要另外開一個畢業後就不想用的帳號。
+
+## GitHub Student Pack
+
+GitHub Education 不是上課門檻。有通過學生身分驗證的人，可以使用 Student Developer Pack、Copilot Student 與 Codespaces 等學生權益。
+
+申請位置在 [Settings → Education → Benefits](https://github.com/settings/education/benefits)：
+
+1. 用個人 GitHub 帳號登入。
+2. 按 `Start an application`，選 Student。
+3. 依畫面要求提供學校 email 或在學證明。
+4. 送出申請，回到同一頁查看狀態。
+
+GitHub 接受的文件包括有有效日期的學生證、課表、成績單與在學證明。每個人的驗證流程不一定相同，審核時間也不固定。開學前送出即可，不要因為它還沒通過就停下其他準備。
+
+審核通過後，Copilot Student 仍可能需要另外啟用。如果頁面只顯示付費方案，先不要付款，回 Education benefits 檢查學生權益是否已套用。
+
+## 本機工具
+
+這門課會用 Terminal、Git 與 OpenCode。
+
+Terminal 是輸入指令的視窗。指令能不能執行，取決於裡面跑的是 PowerShell、bash 還是其他 shell。Git 負責版本紀錄。OpenCode 是在 Terminal 裡使用的 AI 寫碼工具；它可以讀程式與解釋錯誤，但你仍要檢查它改了哪些檔案。
+
+OpenCode 支援多個 provider。啟動後用 `/connect` 連接可用的 provider，再依課堂指定選模型。不要把某個模型名稱寫死在設定裡，模型清單會變。
+
+## Windows：先裝 WSL
+
+這門課的指令以 Linux shell 為準。Windows 10 2004 之後的版本與 Windows 11 可以安裝 WSL，直接執行 Linux 工具。
+
+以系統管理員身分開 PowerShell：
+
+<Terminal title="PowerShell — admin">{`
+wsl --install
+`}</Terminal>
+
+這個指令會啟用 WSL 與虛擬機平台，安裝 Linux kernel，並在預設情況下安裝 Ubuntu。完成後重新開機。第一次啟動 Ubuntu 時，系統會請你建立 Linux 使用者名稱與密碼。
+
+之後從 Ubuntu 或 Windows Terminal 的 Ubuntu 分頁進入 bash。先確認環境：
+
+<Terminal title="Ubuntu (WSL)">{`
+pwd
+git --version
+curl --version
+`}</Terminal>
+
+如果 `git --version` 找不到指令，在 Ubuntu 裡安裝 Git：
+
+<Terminal title="Ubuntu (WSL)">{`
+sudo apt update
+sudo apt install git
+`}</Terminal>
+
+### 推薦：Intelligent Terminal
+
+Windows 建議使用 Microsoft 的 [Intelligent Terminal](https://github.com/microsoft/intelligent-terminal)。它保留 Windows Terminal 的分頁、profile 與 shell 功能，另外加入 Agent Control Protocol（ACP）整合，可以在同一個視窗使用 OpenCode、GitHub Copilot、Codex、Claude Code 或 Gemini CLI。
+
+從 Microsoft Store 安裝最省事；也可以在 PowerShell 執行：
+
+<Terminal title="PowerShell">{`
+winget install --id Microsoft.IntelligentTerminal -e
+`}</Terminal>
+
+Intelligent Terminal 是推薦介面，不是課程必要條件。它目前仍是 experimental fork，而且不會替你安裝 WSL。WSL 提供 Linux 環境；Intelligent Terminal、Windows Terminal 都只是打開這個環境的視窗。進入 Ubuntu 分頁後，跑的才是這門課使用的 Linux 指令。
+
+首次設定若要使用 OpenCode，先自行安裝 OpenCode，再於 Agent 選單選取；Intelligent Terminal 只會自動安裝預設的 GitHub Copilot CLI。
+
+## Mac：直接用 Terminal
+
+macOS 已經有 Unix shell，不用安裝 WSL。打開 Terminal，先確認 Git：
+
+<Terminal title="macOS">{`
+git --version
+curl --version
+`}</Terminal>
+
+如果系統要求安裝 Command Line Tools，照畫面完成；也可以手動執行：
+
+<Terminal title="macOS">{`
+xcode-select --install
+`}</Terminal>
+
+內建 Terminal 可以完成整門課。想換介面再裝 [sherly.dev](https://sherly.dev)，不需要為了換終端機重做 Git 設定。
+
+## Linux 基本指令
+
+先知道每一條會改什麼，不用背。
+
+| 指令 | 做什麼 | 執行前要知道的事 |
+| --- | --- | --- |
+| `pwd` | 顯示目前目錄 | 找不到檔案時先打這條 |
+| `ls` | 列出目錄內容 | 加 `-la` 可以看到隱藏檔 |
+| `cd <directory>` | 切換目錄 | `cd ..` 回上一層 |
+| `mkdir <directory>` | 建立目錄 | 同名目錄已存在時會報錯 |
+| `touch <file>` | 建立空檔或更新時間 | 不會替你寫入內容 |
+| `cat <file>` | 印出檔案內容 | 大檔案會一次灌滿畫面 |
+| `rm <file>` | 刪除檔案 | 不會進垃圾桶 |
+
+<Callout type="warning" title="rm 不會進垃圾桶">
+  執行 <code>rm -rf</code> 前先打 <code>pwd</code>，再讀一次完整路徑。<code>-r</code> 會往下刪除整個目錄，<code>-f</code> 會略過多數確認。
+</Callout>
+
+2017 年，GitLab.com 的工程師在處理資料庫故障時，誤刪了主要資料庫目錄。官方事後報告記錄了刪除、備份失效與復原過程：[Postmortem of database outage](https://gitlab.com/gitlab-com/www-gitlab-com/-/blob/master/content/blog/2017-02-10-postmortem-of-database-outage-of-january-31/index.md)。這個案例要記的不是戲劇性數字，而是操作前確認主機、目錄與備份。
+
+安裝失敗時，把完整錯誤訊息與你執行的指令留下來。只截最後一行，通常不夠判斷問題。

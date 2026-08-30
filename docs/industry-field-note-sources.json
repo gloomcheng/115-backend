@@ -1,0 +1,51 @@
+[
+  {
+    "id": "http-418",
+    "source": "RFC Editor",
+    "url": "https://www.rfc-editor.org/rfc/rfc2324",
+    "tags": ["http", "status-code"],
+    "suggestion": "418 從愚人節協定變成被正式保留的 Unused status code。"
+  },
+  {
+    "id": "http-451",
+    "source": "RFC Editor",
+    "url": "https://www.rfc-editor.org/rfc/rfc7725",
+    "tags": ["http", "status-code", "policy"],
+    "suggestion": "451 讓 Server 明確表示資源因法律要求而不可存取。"
+  },
+  {
+    "id": "http-103",
+    "source": "RFC Editor",
+    "url": "https://www.rfc-editor.org/rfc/rfc8297",
+    "tags": ["http", "status-code", "browser"],
+    "suggestion": "103 Early Hints 能在最終 Response 前先提示瀏覽器預載資源。"
+  },
+  {
+    "id": "http-425",
+    "source": "RFC Editor",
+    "url": "https://www.rfc-editor.org/rfc/rfc8470",
+    "tags": ["http", "status-code", "security"],
+    "suggestion": "425 Too Early 用來降低 TLS early data 被重放的風險。"
+  },
+  {
+    "id": "x402",
+    "source": "Coinbase Developer Platform",
+    "url": "https://docs.cdp.coinbase.com/x402/how-it-works",
+    "tags": ["http", "status-code", "payments", "agents"],
+    "suggestion": "x402 把 402 Payment Required 做成每次 API Request 的付款握手。"
+  },
+  {
+    "id": "ap2",
+    "source": "Google Cloud",
+    "url": "https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol",
+    "tags": ["payments", "agents", "security"],
+    "suggestion": "AP2 用可驗證 mandate 記錄使用者授權 Agent 購買的範圍。"
+  },
+  {
+    "id": "acp",
+    "source": "Stripe",
+    "url": "https://stripe.com/blog/developing-an-open-standard-for-agentic-commerce",
+    "tags": ["payments", "agents", "commerce"],
+    "suggestion": "ACP 定義 Agent、商家與支付服務如何完成 checkout。"
+  }
+]

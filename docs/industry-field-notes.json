@@ -1,0 +1,252 @@
+{
+  "generatedAt": "2026-08-30T13:06:10.909Z",
+  "items": [
+    {
+      "id": "http-418",
+      "source": "RFC Editor",
+      "url": "https://www.rfc-editor.org/rfc/rfc2324",
+      "tags": ["http", "status-code"],
+      "suggestion": "418 從愚人節協定變成被正式保留的 Unused status code。",
+      "title": "RFC 2324: Hyper Text Coffee Pot Control Protocol (HTCPCP/1.0) | RFC Editor",
+      "description": "This document describes HTCPCP, a protocol for controlling, monitoring, and diagnosing coffee pots. This memo provides information for the Internet community. It does not specify an Internet standard of any kind.",
+      "fetchedAt": "2026-08-30T13:05:02.540Z",
+      "refreshError": "fetch failed"
+    },
+    {
+      "id": "http-451",
+      "source": "RFC Editor",
+      "url": "https://www.rfc-editor.org/rfc/rfc7725",
+      "tags": ["http", "status-code", "policy"],
+      "suggestion": "451 讓 Server 明確表示資源因法律要求而不可存取。",
+      "title": "RFC 7725: An HTTP Status Code to Report Legal Obstacles | RFC Editor",
+      "description": "This document specifies a Hypertext Transfer Protocol (HTTP) status code for use when resource access is denied as a consequence of legal demands.",
+      "fetchedAt": "2026-08-30T13:06:09.066Z"
+    },
+    {
+      "id": "http-103",
+      "source": "RFC Editor",
+      "url": "https://www.rfc-editor.org/rfc/rfc8297",
+      "tags": ["http", "status-code", "browser"],
+      "suggestion": "103 Early Hints 能在最終 Response 前先提示瀏覽器預載資源。",
+      "title": "RFC 8297: An HTTP Status Code for Indicating Hints | RFC Editor",
+      "description": "This memo introduces an informational HTTP status code that can be used to convey hints that help a client make preparations for processing the final response.",
+      "fetchedAt": "2026-08-30T13:06:09.172Z"
+    },
+    {
+      "id": "http-425",
+      "source": "RFC Editor",
+      "url": "https://www.rfc-editor.org/rfc/rfc8470",
+      "tags": ["http", "status-code", "security"],
+      "suggestion": "425 Too Early 用來降低 TLS early data 被重放的風險。",
+      "title": "RFC 8470: Using Early Data in HTTP | RFC Editor",
+      "description": "Using TLS early data creates an exposure to the possibility of a replay attack. This document defines mechanisms that allow clients to communicate with servers about HTTP requests that are sent in early data. Techniques are described that use these mechanisms to mitigate the risk of replay.",
+      "fetchedAt": "2026-08-30T13:06:09.259Z"
+    },
+    {
+      "id": "x402",
+      "source": "Coinbase Developer Platform",
+      "url": "https://docs.cdp.coinbase.com/x402/how-it-works",
+      "tags": ["http", "status-code", "payments", "agents"],
+      "suggestion": "x402 把 402 Payment Required 做成每次 API Request 的付款握手。",
+      "title": "How x402 works - Coinbase Developer Documentation",
+      "description": "",
+      "fetchedAt": "2026-08-30T13:06:09.520Z"
+    },
+    {
+      "id": "ap2",
+      "source": "Google Cloud",
+      "url": "https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol",
+      "tags": ["payments", "agents", "security"],
+      "suggestion": "AP2 用可驗證 mandate 記錄使用者授權 Agent 購買的範圍。",
+      "title": "Announcing Agent Payments Protocol (AP2) | Google Cloud Blog",
+      "description": "Learn more about the Agent Payments Protocol (AP2), an open protocol that builds on A2A, Agent to Agent Protocol. AP2 was developed by Google with leading payments and technology companies to securely initiate and transact agent-led payments across platforms.",
+      "fetchedAt": "2026-08-30T13:06:09.898Z"
+    },
+    {
+      "id": "acp",
+      "source": "Stripe",
+      "url": "https://stripe.com/blog/developing-an-open-standard-for-agentic-commerce",
+      "tags": ["payments", "agents", "commerce"],
+      "suggestion": "ACP 定義 Agent、商家與支付服務如何完成 checkout。",
+      "title": "Developing an open standard for agentic commerce",
+      "description": "Today, we announced that Stripe is powering OpenAI’s new commerce experience, Instant Checkout in ChatGPT, and we released the Agentic Commerce Protocol, a new open standard that enables programmatic commerce flows between AI agents and businesses.",
+      "fetchedAt": "2026-08-30T13:06:10.188Z"
+    }
+  ],
+  "discoveries": [
+    {
+      "id": "ithome-0-aHR0cHM6Ly93",
+      "discoverySourceId": "ithome",
+      "source": "iThome",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.ithome.com.tw/news/178523",
+      "title": "Google影片生成模型Gemini Omni 1.1 Flash，可延伸40秒並指定首尾影格",
+      "publishedAt": "Sun, 30 Aug 2026 05:01:38 +0000",
+      "titleTags": [],
+      "tags": ["http"],
+      "verificationRequired": true
+    },
+    {
+      "id": "ithome-1-aHR0cHM6Ly93",
+      "discoverySourceId": "ithome",
+      "source": "iThome",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.ithome.com.tw/news/178520",
+      "title": "開發框架Next.js修補兩項重大RCE漏洞，Windows部署及AVIF影像最佳化受影響",
+      "publishedAt": "Sun, 30 Aug 2026 04:55:54 +0000",
+      "titleTags": ["security", "deployment"],
+      "tags": ["http", "security", "deployment"],
+      "verificationRequired": true
+    },
+    {
+      "id": "ithome-2-aHR0cHM6Ly93",
+      "discoverySourceId": "ithome",
+      "source": "iThome",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.ithome.com.tw/news/178528",
+      "title": "數發部五大AI政策上路一年，林宜敬盤點最新成果",
+      "publishedAt": "Sun, 30 Aug 2026 04:00:11 +0000",
+      "titleTags": [],
+      "tags": ["http", "security", "deployment"],
+      "verificationRequired": true
+    },
+    {
+      "id": "ithome-3-aHR0cHM6Ly93",
+      "discoverySourceId": "ithome",
+      "source": "iThome",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.ithome.com.tw/news/178501",
+      "title": "守護原始資料，NetApp活用儲存快照副本技術，助企業因應AI時代下的資料存取風險",
+      "publishedAt": "Sat, 29 Aug 2026 06:29:35 +0000",
+      "titleTags": [],
+      "tags": ["http", "payments", "security", "deployment"],
+      "verificationRequired": true
+    },
+    {
+      "id": "ithome-4-aHR0cHM6Ly93",
+      "discoverySourceId": "ithome",
+      "source": "iThome",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.ithome.com.tw/news/178513",
+      "title": "CISA公布兩起關鍵基礎設施紅隊演練成果，突顯SOC防禦落差並歸納3大關鍵教訓",
+      "publishedAt": "Fri, 28 Aug 2026 10:27:01 +0000",
+      "titleTags": [],
+      "tags": ["http", "security", "deployment"],
+      "verificationRequired": true
+    },
+    {
+      "id": "ithome-5-aHR0cHM6Ly93",
+      "discoverySourceId": "ithome",
+      "source": "iThome",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.ithome.com.tw/news/178519",
+      "title": "Apache發布Tomcat更新，修補11個資安漏洞",
+      "publishedAt": "Fri, 28 Aug 2026 09:12:16 +0000",
+      "titleTags": ["security"],
+      "tags": ["http", "security"],
+      "verificationRequired": true
+    },
+    {
+      "id": "ithome-6-aHR0cHM6Ly93",
+      "discoverySourceId": "ithome",
+      "source": "iThome",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.ithome.com.tw/news/178518",
+      "title": "亞太永續博覽會：臺中、臺南等展示AI、IoT、雲端等數位永續應用成果",
+      "publishedAt": "Fri, 28 Aug 2026 08:19:52 +0000",
+      "titleTags": ["deployment"],
+      "tags": ["payments", "deployment"],
+      "verificationRequired": true
+    },
+    {
+      "id": "ithome-7-aHR0cHM6Ly93",
+      "discoverySourceId": "ithome",
+      "source": "iThome",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.ithome.com.tw/news/178517",
+      "title": "Hugging Face推出400美元雙足小機器人Microduck",
+      "publishedAt": "Fri, 28 Aug 2026 07:39:58 +0000",
+      "titleTags": [],
+      "tags": ["http", "deployment"],
+      "verificationRequired": true
+    },
+    {
+      "id": "ithome-8-aHR0cHM6Ly93",
+      "discoverySourceId": "ithome",
+      "source": "iThome",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.ithome.com.tw/news/178514",
+      "title": "蘋果修補私有雲端運算路徑穿越漏洞，可將AI推論遙測資料導向外部伺服器",
+      "publishedAt": "Fri, 28 Aug 2026 07:09:16 +0000",
+      "titleTags": ["security", "deployment"],
+      "tags": ["http", "security", "deployment"],
+      "verificationRequired": true
+    },
+    {
+      "id": "ithome-9-aHR0cHM6Ly93",
+      "discoverySourceId": "ithome",
+      "source": "iThome",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.ithome.com.tw/news/178515",
+      "title": "【資安日報】8月28日，OpenSSL修補9個漏洞，包含可能造成伺服器當機的高風險漏洞",
+      "publishedAt": "Fri, 28 Aug 2026 06:54:32 +0000",
+      "titleTags": ["security"],
+      "tags": ["http", "browser", "security", "deployment"],
+      "verificationRequired": true
+    },
+    {
+      "id": "technews-9-aHR0cHM6Ly9p",
+      "discoverySourceId": "technews",
+      "source": "科技新報",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://infosecu.technews.tw/2026/08/30/ibm-openai-forge-strategic-partnership-accelerate-secure-ai-deployment-enterprise-core-operations/",
+      "title": "IBM 與 OpenAI 建立策略合作關係，加速企業核心營運安全部署 AI",
+      "publishedAt": "Sun, 30 Aug 2026 06:00:13 +0000",
+      "titleTags": ["deployment"],
+      "tags": ["deployment"],
+      "verificationRequired": true
+    },
+    {
+      "id": "cna-tech-4-aHR0cHM6Ly93",
+      "discoverySourceId": "cna-tech",
+      "source": "中央社科技",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.cna.com.tw/news/ait/202608280037.aspx",
+      "title": "營收分成引疑慮 傳輝達暫停AI雲端融資計畫部分交易",
+      "publishedAt": "Fri, 28 Aug 2026 09:32:50 +0800",
+      "titleTags": ["deployment"],
+      "tags": ["deployment"],
+      "verificationRequired": true
+    },
+    {
+      "id": "cna-tech-13-aHR0cHM6Ly93",
+      "discoverySourceId": "cna-tech",
+      "source": "中央社科技",
+      "sourceType": "taiwan-tech-news",
+      "region": "TW",
+      "url": "https://www.cna.com.tw/news/ait/202608260271.aspx",
+      "title": "Google Cloud布局企業AI 推金融與法務解決方案",
+      "publishedAt": "Wed, 26 Aug 2026 18:03:35 +0800",
+      "titleTags": ["deployment"],
+      "tags": ["deployment"],
+      "verificationRequired": true
+    }
+  ],
+  "threads": {
+    "mode": "manual-public-post-inbox",
+    "watchQueries": ["AI Agent 台灣", "後端工程師 台灣", "資安 台灣", "支付 Agent"],
+    "itemCount": 0
+  }
+}

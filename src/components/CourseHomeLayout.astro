@@ -1,0 +1,65 @@
+---
+import { chapters } from '../data/course'
+import { homeCopy } from '../data/home-copy'
+import { withBase } from '../lib/paths'
+
+const images = [
+  '/images/course/protocol.png',
+  '/images/course/persistence.png',
+  '/images/course/security.png',
+  '/images/course/runtime.png',
+].map(withBase)
+const weeks = chapters.flatMap((chapter) => chapter.weeks)
+---
+
+<main class="overflow-hidden bg-[#fffaf0]">
+  <section class="relative flex min-h-[560px] bg-[#f4c84f] lg:h-[calc(100svh-72px)] lg:max-h-[760px]">
+    <div class="pointer-events-none absolute inset-0 opacity-20 [background-image:radial-gradient(#075486_1px,transparent_1px)] [background-size:18px_18px]"></div>
+    <div class="relative mx-auto grid w-full max-w-[1440px] gap-4 px-6 py-8 sm:px-10 lg:grid-cols-12 lg:items-center lg:px-12 lg:py-7">
+      <div class="z-10 lg:col-span-6">
+        <div class="flex flex-wrap gap-x-5 gap-y-1 font-mono text-xs font-semibold tracking-[.08em] text-[#075486]/75"><span>{homeCopy.masthead.issue} / {homeCopy.masthead.department}</span><span>{homeCopy.masthead.curator} / {homeCopy.masthead.credits}</span></div>
+        <p class="mt-5 font-mono text-sm font-bold tracking-[.15em]">{homeCopy.hero.kicker}</p>
+        <h1 class="mt-3 text-[clamp(2.8rem,4.6vw,4.7rem)] font-bold leading-[.95] tracking-[-.075em]">{homeCopy.hero.titleFirst}<br />{homeCopy.hero.titleSecond}</h1>
+        <p class="mt-5 max-w-[640px] text-base font-medium leading-7 text-[#164f71] sm:text-lg">{homeCopy.hero.intro.beforeGet}<code>GET</code>{homeCopy.hero.intro.betweenGetPost}<code>POST</code>{homeCopy.hero.intro.betweenPost200}<code>200</code>{homeCopy.hero.intro.between200404}<code>404</code>{homeCopy.hero.intro.between404Curl}<code>curl</code>{homeCopy.hero.intro.afterCurl}</p>
+        <div class="mt-6 flex flex-wrap gap-3 text-sm font-bold"><a href={withBase('/lessons/01-http')} class="rounded-[4px] bg-[#075486] px-5 py-3 text-white">{homeCopy.hero.lessonAction} →</a><a href={withBase('/preparation')} class="rounded-[4px] border-2 border-[#075486] px-5 py-[10px]">{homeCopy.hero.preparationAction}</a><a href="#toc" class="px-3 py-[10px] underline decoration-2 underline-offset-4">{homeCopy.hero.contentsAction}</a></div>
+      </div>
+      <div class="relative flex min-h-0 items-center justify-center lg:col-span-6 lg:h-full">
+        <div class="absolute inset-x-[4%] top-[8%] h-[82%] rounded-[50%] border-[3px] border-[#075486]/55"></div>
+        <img src={images[0]} alt="" class="relative z-10 max-h-[360px] w-full object-contain mix-blend-multiply lg:max-h-[520px]" />
+        <div class="absolute bottom-1 right-0 z-20 max-w-[330px] rounded-[4px] border-2 border-[#075486] bg-[#fffaf0] px-5 py-3 text-center font-mono text-xs font-bold"><span>{homeCopy.currentLesson.request}</span><svg aria-hidden="true" viewBox="0 0 28 16" class="mx-2 inline h-4 w-7 fill-none stroke-[#ef795e] stroke-2"><path d="M1 5h24m0 0-4-4m4 4-4 4M27 11H3m0 0 4-4m-4 4 4 4" /></svg><span>{homeCopy.currentLesson.response}</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="px-6 py-10 sm:px-10 lg:px-12">
+    <div class="mx-auto grid max-w-[1180px] gap-8 md:grid-cols-[280px_1fr] md:items-center">
+      <div class="mx-auto grid aspect-square w-full max-w-[250px] place-items-center rounded-full bg-[#ffe29a] text-center"><span><span class="block font-mono text-sm font-bold">{homeCopy.currentLesson.label}</span><span class="mt-2 block text-4xl font-bold">{homeCopy.currentLesson.week}</span></span></div>
+      <div><p class="font-mono text-sm font-bold tracking-[.14em] text-[#ef795e]">{homeCopy.currentLesson.heading}</p><h2 class="mt-2 text-3xl font-bold tracking-[-.04em] sm:text-4xl">{homeCopy.currentLesson.title}</h2><p class="mt-3 text-lg leading-8 text-[#335f78]">{homeCopy.currentLesson.description}</p><p class="mt-3 font-mono text-sm text-[#4f7892]">{homeCopy.currentLesson.dates} / {homeCopy.currentLesson.note}</p><a href={withBase('/lessons/01-http')} class="mt-5 inline-flex items-center gap-3 font-bold"><span aria-hidden="true" class="grid h-9 w-9 place-items-center rounded-full bg-[#075486] text-white"><svg viewBox="0 0 16 16" class="h-4 w-4 fill-none stroke-current stroke-2"><path d="m5 2 6 6-6 6" /></svg></span>{homeCopy.currentLesson.action}</a></div>
+    </div>
+  </section>
+
+  <section id="toc" class="bg-[#fffaf0] bg-[repeating-linear-gradient(0deg,transparent_0,transparent_8px,rgba(7,84,134,.11)_8px,rgba(7,84,134,.11)_10px)] px-6 py-12 sm:px-10 lg:px-12">
+    <div class="mx-auto max-w-[1320px]">
+      <div class="mx-auto max-w-[820px] text-center"><p class="font-mono text-sm font-bold tracking-[.16em] text-[#ef795e]">{homeCopy.chapterMap.label}</p><h2 class="mt-3 text-4xl font-bold tracking-[-.05em] sm:text-5xl">{homeCopy.chapterMap.title}</h2><p class="mt-4 text-lg leading-8 text-[#335f78]">{homeCopy.chapterMap.description}</p></div>
+      <div class="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        {chapters.map((chapter, index) => <article class="flex min-h-full flex-col border-[3px] border-[#075486] bg-[#fffdf0] p-5"><p class="text-center font-mono text-2xl font-bold">{chapter.num}</p><img src={images[index]} alt="" class="mt-4 aspect-[4/3] w-full bg-[#fff5d8] object-cover" loading="lazy" /><p class="mt-5 font-mono text-xs font-bold tracking-[.13em] text-[#ef795e]">{chapter.code}</p><h3 class="mt-2 text-2xl font-bold leading-tight tracking-[-.035em]">{chapter.title}</h3><p class="mt-2 font-mono text-xs text-[#4f7892]">{chapter.english}</p><p class="mt-4 flex-1 text-[15px] leading-7 text-[#335f78]">{chapter.summary}</p><p class="mt-5 font-mono text-sm font-bold">{chapter.range}</p></article>)}
+      </div>
+    </div>
+  </section>
+
+  <section class="px-6 py-14 sm:px-10 lg:px-12">
+    <div class="mx-auto max-w-[1360px]">
+      <div class="text-center"><p class="font-mono text-sm font-bold tracking-[.16em] text-[#ef795e]">{homeCopy.schedule.label}</p><h2 class="mt-3 text-4xl font-bold tracking-[-.05em] sm:text-5xl">{homeCopy.schedule.title}</h2><p class="mt-4 text-lg text-[#4f7892]">{homeCopy.schedule.description}</p></div>
+      <div class="mt-10 overflow-x-auto pb-6 [scrollbar-color:#075486_#f4c84f] [scrollbar-width:thin]"><div class="flex min-w-max items-start gap-3 px-1">
+        {weeks.map((week, index) => <><article class="w-[180px] shrink-0 text-center"><div class:list={['mx-auto grid h-[150px] w-[150px] place-items-center rounded-full border-[3px] border-[#075486]', week.exam ? 'bg-[#ffc7b8]' : 'bg-[#fff0bf]']}><span><span class="block font-mono text-sm font-bold text-[#ef795e]">W{String(week.w).padStart(2, '0')}</span><span class="mt-2 block px-4 text-base font-bold leading-snug">{week.title}</span></span></div><p class="mx-auto mt-[-10px] w-fit bg-[#075486] px-4 py-1 font-mono text-xs font-bold text-white">{week.dates}</p></article>{index < weeks.length - 1 && <span aria-hidden="true" class="mt-[68px] h-5 w-5 rotate-45 border-r-[5px] border-t-[5px] border-[#6e9bb4]"></span>}</>)}
+      </div></div>
+    </div>
+  </section>
+
+  <section class="bg-[#ef795e] px-6 py-14 sm:px-10 lg:px-12">
+    <div class="mx-auto grid max-w-[1240px] gap-10 lg:grid-cols-12">
+      <div class="lg:col-span-4"><p class="font-mono text-sm font-bold tracking-[.15em]">{homeCopy.philosophy.label}</p><h2 class="mt-4 text-5xl font-normal leading-[1.08] tracking-[-.035em]">{homeCopy.philosophy.titleFirst}<br />{homeCopy.philosophy.titleSecond}</h2><p class="mt-5 text-xl font-medium leading-8">{homeCopy.philosophy.lead}</p></div>
+      <div class="lg:col-span-8"><p class="text-xl font-medium leading-9">{homeCopy.philosophy.paragraphs.one.beforeGet}<code>GET</code>{homeCopy.philosophy.paragraphs.one.betweenGetPost}<code>POST</code>{homeCopy.philosophy.paragraphs.one.betweenPost200}<code>200</code>{homeCopy.philosophy.paragraphs.one.between200404}<code>404</code>{homeCopy.philosophy.paragraphs.one.after404}</p><p class="mt-6 text-xl leading-9">{homeCopy.philosophy.paragraphs.two}</p></div>
+    </div>
+  </section>
+</main>

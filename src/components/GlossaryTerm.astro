@@ -1,0 +1,42 @@
+---
+import { getEntry } from 'astro:content'
+
+interface Props {
+  id: string
+}
+const { id } = Astro.props
+const entry = await getEntry('glossary', id)
+if (!entry) {
+  throw new Error(`GlossaryTerm: Cannot find glossary entry "${id}"`)
+}
+---
+
+<span class="group relative inline not-prose">
+  <button
+    type="button"
+    class="cursor-pointer border-b border-dashed border-[#0f52ba] bg-transparent p-0 font-medium text-[#0f52ba] hover:bg-[#f0f4fc] focus-visible:outline-2 focus-visible:outline-[#0f52ba]"
+    aria-haspopup="dialog"
+  >
+    <slot />
+  </button>
+  <span
+    class="invisible absolute left-0 top-full z-30 mt-1 w-80 translate-y-1 opacity-0 transition group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 group-focus-within:delay-100"
+    role="tooltip"
+  >
+    <span class="block rounded-md border border-[#e5e5df] bg-white p-4 shadow-lg">
+      <span class="mb-1 flex items-baseline justify-between gap-3 border-b border-[#f4f4f0] pb-2">
+        <span class="font-mono text-xs font-bold text-[#0f52ba]">
+          {entry.data.term}
+        </span>
+        {entry.data.category && (
+          <span class="text-xs text-[#999990]">
+            {entry.data.category}
+          </span>
+        )}
+      </span>
+      <span class="mt-2 block text-xs leading-relaxed text-[#555550]">
+        {entry.data.definition}
+      </span>
+    </span>
+  </span>
+</span>

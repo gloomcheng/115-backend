@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+
+echo "1. Running English code and comments harness..."
+node scripts/english-code-check.mjs
+
+echo "2. Running Biome linter & format check on staged files..."
+staged_files="$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|jsx|mjs|cjs|ts|tsx|json|css|astro|md|mdx)$' || true)"
+if [ -n "$staged_files" ]; then
+  bunx biome check --staged --vcs-enabled=true --no-errors-on-unmatched || true
+fi
+
+echo "3. Running Astro check & static build compilation..."
+if [ -x "${HOME}/.codex/typecheck-singleflight.sh" ]; then
+  "${HOME}/.codex/typecheck-singleflight.sh" bunx astro check
+else
+  bunx astro check
+fi
+bun run build
+
+echo "4. Running Accessibility (a11y) harness..."
+node scripts/a11y-check.mjs
+
+echo "5. Running CJK spacing check on staged files..."
+node scripts/cjk-spacing-check.mjs --staged

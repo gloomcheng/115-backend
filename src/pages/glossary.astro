@@ -1,0 +1,20 @@
+---
+import { getCollection, render } from 'astro:content'
+import MarkdownContent from '../components/MarkdownContent.astro'
+import { siteCopy } from '../data/site-copy'
+import Layout from '../layouts/Layout.astro'
+
+const terms = await getCollection('glossary')
+terms.sort((a, b) => (a.data.first ?? 99) - (b.data.first ?? 99))
+const rendered = await Promise.all(
+  terms.map(async (term) => ({ term, Content: (await render(term)).Content }))
+)
+const copy = siteCopy.routes.glossary
+---
+
+<Layout title={copy.title} description={copy.description}>
+  <header class="bg-[#f4c84f] px-6 py-12 sm:px-10 lg:px-12"><div class="mx-auto max-w-[1200px]"><p class="font-mono text-sm font-bold tracking-[.15em]">{copy.kicker} / {copy.index}</p><h1 class="mt-4 text-5xl font-bold tracking-[-.06em] sm:text-6xl">{copy.title}</h1><p class="mt-4 max-w-3xl text-xl font-semibold leading-8 text-[#335f78]">{copy.lead}</p></div></header>
+  <main class="bg-[#fffaf0] bg-[repeating-linear-gradient(0deg,transparent_0,transparent_8px,rgba(7,84,134,.11)_8px,rgba(7,84,134,.11)_10px)] px-6 py-12 sm:px-10 lg:px-12"><div class="mx-auto max-w-[1200px] space-y-6">
+    {rendered.map(({ term, Content }) => <article class="grid gap-5 rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-7 md:grid-cols-12"><header class="md:col-span-4"><p class="text-3xl font-bold">{term.data.term}</p>{term.data.category && <p class="mt-3 font-mono text-xs font-bold text-[#ef795e]">{term.data.category}</p>}{term.data.first && <p class="mt-2 text-sm text-[#4f7892]">{copy.weekPrefix}{term.data.first}{copy.weekSuffix}</p>}</header><div class="md:col-span-8"><p class="text-lg font-semibold leading-8 text-[#274f67]">{term.data.definition}</p><div class="mt-4"><MarkdownContent compact><Content /></MarkdownContent></div></div></article>)}
+  </div></main>
+</Layout>

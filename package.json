@@ -1,0 +1,51 @@
+{
+  "name": "115-backend",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "dev:background": "astro dev --background",
+    "build": "astro build && node scripts/pages-output-harness.mjs",
+    "preview": "astro preview",
+    "astro": "astro",
+    "typecheck": "astro check",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "check": "node scripts/harness.mjs",
+    "check:fix": "node scripts/harness.mjs --fix",
+    "check:fast": "node scripts/harness.mjs --fast",
+    "research:japan-web": "node scripts/collect-japanese-web-awards.mjs --output .agents/skills/course-curatorial-design/resources/japanese-web-awards.json",
+    "research:japan-web:check": "node scripts/reference-library-harness.mjs",
+    "research:japan-web:refresh": "npm run research:japan-web && npm run research:japan-web:check",
+    "research:industry-notes": "node scripts/collect-industry-field-notes.mjs",
+    "review:oreilly:web": "npm run research:industry-notes && node scripts/oreilly-review-harness.mjs",
+    "copy:baseline": "astro build && node scripts/copy-integrity.mjs --record",
+    "copy:check": "astro build && node scripts/copy-integrity.mjs",
+    "setup:hooks": "git config core.hooksPath .githooks"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^7.0.8",
+    "@astrojs/react": "^6.0.4",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "astro": "^7.2.9",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3"
+  },
+  "allowScripts": {
+    "esbuild": true
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@biomejs/biome": "^2.5.11",
+    "@iconify-json/lucide": "^1.2.127",
+    "@tailwindcss/typography": "^0.5.20",
+    "astro-icon": "^1.2.0",
+    "typescript": "^5.8.2"
+  }
+}

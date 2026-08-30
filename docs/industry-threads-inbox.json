@@ -1,0 +1,7 @@
+{
+  "source": "Threads",
+  "mode": "manual-public-post-inbox",
+  "instructions": "加入公開 Threads 貼文 URL、標題、摘要與 tags。貼文只能用來發現題目；技術主張仍需 verificationUrl 指向一手來源。",
+  "watchQueries": ["AI Agent 台灣", "後端工程師 台灣", "資安 台灣", "支付 Agent"],
+  "items": []
+}

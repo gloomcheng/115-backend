@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans:
+    "IBM Plex Sans", "LINE Seed JP", "Noto Sans TC", -apple-system, BlinkMacSystemFont,
+    "PingFang TC", "Hiragino Sans TC", sans-serif;
+  --font-display: "IBM Plex Sans", "LINE Seed JP", "Noto Sans TC", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Monaco, monospace;
+}

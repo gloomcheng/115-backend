@@ -1,0 +1,24 @@
+---
+interface Props {
+  marker: string
+  eyebrow: string
+  title: string
+}
+
+const { marker, eyebrow, title } = Astro.props
+---
+
+<aside class="my-12 max-w-full overflow-hidden border-y-2 border-[#075486] bg-[#fff0bf] px-5 py-7 not-prose sm:px-7">
+  <div class="grid min-w-0 gap-6 md:grid-cols-[112px_minmax(0,1fr)] md:items-start">
+    <div class="grid h-24 w-24 place-items-center rounded-full border-[3px] border-[#075486] bg-[#f4c84f] font-mono text-3xl font-bold text-[#075486]">
+      {marker}
+    </div>
+    <div class="min-w-0">
+      <p class="font-mono text-xs font-bold tracking-[.16em] text-[#ef795e]">{eyebrow}</p>
+      <h3 class="mt-2 text-2xl font-bold tracking-[-.03em] text-[#075486] sm:text-3xl">{title}</h3>
+      <div class="mt-4 space-y-4 text-base leading-7 text-[#274f67] [&_a]:font-semibold [&_a]:text-[#075486] [&_a]:underline [&_a]:decoration-[#ef795e] [&_a]:decoration-2 [&_a]:underline-offset-4 [&_code]:rounded-[2px] [&_code]:bg-[#e7f0f4] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[#075486] [&_strong]:text-[#075486]">
+        <slot />
+      </div>
+    </div>
+  </div>
+</aside>

@@ -1,0 +1,23 @@
+[
+  {
+    "id": "ithome",
+    "type": "rss",
+    "source": "iThome",
+    "region": "TW",
+    "url": "https://www.ithome.com.tw/rss.xml"
+  },
+  {
+    "id": "technews",
+    "type": "rss",
+    "source": "科技新報",
+    "region": "TW",
+    "url": "https://technews.tw/feed/"
+  },
+  {
+    "id": "cna-tech",
+    "type": "rss",
+    "source": "中央社科技",
+    "region": "TW",
+    "url": "https://feeds.feedburner.com/rsscna/technology"
+  }
+]

@@ -1,0 +1,186 @@
+---
+title: "HTTP 方法與狀態碼 — 看懂 curl -v"
+week: 1
+description: "從一組真實 Request 與 Response，認出方法、狀態碼與 Client / Server 的責任。"
+---
+
+import CurlPlayground from '../../components/islands/CurlPlayground.tsx';
+import IdempotentDemo from '../../components/islands/IdempotentDemo.tsx';
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+import FieldNote from '../../components/FieldNote.astro';
+import { withBase } from '../../lib/paths';
+
+先在 Terminal 執行：
+
+<Terminal title="bash — first request">{`
+curl -v https://httpbin.org/status/200
+`}</Terminal>
+
+先不要管每一行。找到 `> GET` 與 `< HTTP/` 就好。`>` 是 curl 送出的 Request，`<` 是對方回來的 Response。這一課要讀懂的，就是這一去一回。
+
+---
+
+## 01. Request 與 Response
+
+HTTP 的基本單位是一組 Request 與 Response。Client 先送 Request，Server 收到後才回 Response。
+
+<img src={withBase('/images/lessons/01/request-response.png')} alt="ELI5 請求與回應封包傳輸示意圖" />
+
+用 `curl -v` 看真實內容時，畫面大致會出現這兩段：
+
+<Terminal title="HTTP — wire view" flavor="output">{`
+> GET /status/200 HTTP/1.1
+> Host: httpbin.org
+> User-Agent: curl/8.x
+>
+< HTTP/1.1 200 OK
+< Content-Length: 0
+`}</Terminal>
+
+Request 的第一行包含 Method、target 與 HTTP version。Response 的第一行包含 HTTP version、Status Code 與 reason phrase。Header 跟在第一行後面；空白行代表 Header 結束。
+
+### Stateless 到底少了什麼
+
+HTTP 是 stateless protocol。意思是每一個 Request 都必須帶足 Server 處理這次操作所需的資訊，協定不會自動替下一次 Request 保存「你剛才做過什麼」。
+
+這不代表每次 Response 後 TCP 連線一定斷掉，也不代表應用程式不能保存登入或購物車。Server 可以把狀態放進資料庫或 session；Client 也可以在後續 Request 帶 Cookie 或 Token。這些都是應用程式另外建立的機制。
+
+<Callout type="note" title="單元 12 再處理登入">
+  登入後，瀏覽器通常會在後續 Request 帶 Cookie 或 Token。這一週先認得 Header 的位置，不展開認證流程。
+</Callout>
+
+---
+
+## 02. Client 與 Server
+
+Client 是主動送出 Request 的程式。Server 在指定位置等待 Request，執行對應邏輯，再決定 Response。
+
+<img src={withBase('/images/lessons/01/client-server.png')} alt="ELI5 客戶端與伺服器角色契約與決定權示意圖" />
+
+Client 決定何時送出、使用哪個 Method、請求哪個 target，以及要帶哪些 Header 或 Body。瀏覽器、手機 App 與 `curl` 都可以是 Client。
+
+Server 決定這個 target 是否存在、目前使用者能不能操作、程式要做什麼，以及最後回哪個 Status Code。FastAPI 程式在 `localhost:8000` 等待時，它就是 Server。
+
+角色不是看機器大小。你的筆電可以同時跑 curl 與 FastAPI；前者是 Client process，後者是 Server process。
+
+---
+
+## 03. HTTP Methods
+
+Request 第一行的第一個單字是 Method。它描述 Client 想做的操作，不是裝飾用的標籤。
+
+<img src={withBase('/images/lessons/01/http-methods.png')} alt="ELI5 HTTP 五大動詞與冪等性示意圖" />
+
+- `GET /items`：讀取 items。
+- `POST /items`：在 items 集合下建立一筆新資料，或觸發一個不適合其他 Method 的處理。
+- `PUT /items/7`：用 Request 的內容替換指定資源。
+- `PATCH /items/7`：修改指定資源的一部分。
+- `DELETE /items/7`：刪除指定資源。
+
+這些語意是 Client 與 Server 的共同約定。框架不會因為路由名稱叫 `GET /buy-item` 就自動阻止扣款；Server 仍然可以寫出違反 HTTP 語意的程式。
+
+### Safe 與 idempotent
+
+Safe Method 只要求讀取，不應改變使用者要求的資源狀態。`GET`、`HEAD`、`OPTIONS` 屬於 safe methods。
+
+Idempotent 是另一件事：同一個 Request 執行一次或多次，Server 的預期效果相同。`GET`、`PUT`、`DELETE` 是 idempotent；`POST` 通常不是。刪除同一筆資料兩次時，第二次可能回 `404`，但資源最後仍然是「不存在」，所以 `DELETE` 仍可視為 idempotent。
+
+<IdempotentDemo client:visible />
+
+敏感資料不要放進 URL query。URL 可能出現在瀏覽紀錄、Server log 與分析工具。這是資料位置與記錄面的問題，不是把 Method 換成 `POST` 就自動安全；連線仍要使用 HTTPS，Server 也不能記錄密碼。
+
+---
+
+## 04. Status Codes
+
+Response 第一行裡的三位數是 Status Code。它告訴 Client，Server 如何處理這次 Request。
+
+<img src={withBase('/images/lessons/01/status-codes.png')} alt="ELI5 HTTP 狀態碼責任判定示意圖" />
+
+- `1xx`：處理尚未完成，先回報目前進度或協定切換資訊。
+- `2xx`：Request 已成功處理。常見的是 `200 OK` 與 `201 Created`。
+- `3xx`：Client 還要採取另一個動作，常見的是依 `Location` 前往新網址。
+- `4xx`：Server 判定目前的 Request 無法照要求處理，例如 target 不存在、格式錯誤或權限不足。
+- `5xx`：Server 在處理一個可接受的 Request 時發生錯誤。
+
+第一碼只能先分類，不能取代完整代碼。`400`、`401`、`403`、`404` 都是 4xx，但修法不同。
+
+<FieldNote marker="418" eyebrow="FIELD NOTE 01" title="不是 419：茶壺把玩笑寫進 HTTP">
+  1998 年 4 月 1 日發布的 RFC 2324 定義了 `418 I'm a teapot`：拿茶壺煮咖啡時，Server 可以拒絕。它原本是愚人節 RFC，不是一般 API 應該採用的錯誤語意。
+
+  <Terminal title="bash — teapot">{`
+curl -i https://httpbin.org/status/418
+  `}</Terminal>
+
+  httpbin 目前真的會回 `418` 與一個 ASCII 茶壺。更意外的是，這個玩笑被實作得太廣，RFC 9110 後來把 418 列為 `Unused` 並保留，避免它被重新分配。規格不是只由文件決定，已部署的程式也會反過來影響規格。
+
+  來源：[RFC 2324](https://www.rfc-editor.org/rfc/rfc2324) · [RFC 9110 §15.5.19](https://www.rfc-editor.org/rfc/rfc9110.html#name-418-unused)
+</FieldNote>
+
+<Callout type="important" title="401 與 403">
+  <code>401 Unauthorized</code> 通常表示 Request 缺少有效的認證資訊，Response 會用 <code>WWW-Authenticate</code> 說明認證方式。<code>403 Forbidden</code> 表示 Server 理解 Request，但拒絕執行；即使補上目前使用者的認證資訊也不會得到這項權限。
+</Callout>
+
+`Unauthorized` 這個 reason phrase 容易讓人誤會成「沒有權限」，但 401 實務上處理的是認證問題。判斷時看數字與協定語意，不要只翻譯英文。
+
+<FieldNote marker="402" eyebrow="FIELD NOTE 02" title="Agent payment 正在把 402 變成真的流程">
+  HTTP 長期保留 `402 Payment Required`，卻沒有規定付款流程。x402 把它做成一次 Request / Response 握手：Server 先報價，Client 付款，再帶著付款證明重送同一個 Request。
+
+  <Terminal title="HTTP — x402 concept" flavor="output">{`
+GET /paid-api
+HTTP/1.1 402 Payment Required
+price + recipient + accepted payment options
+
+GET /paid-api + payment proof
+HTTP/1.1 200 OK
+  `}</Terminal>
+
+  目前業界談的 agent payment 不只一層：Coinbase x402 處理每次 API 呼叫怎麼付費；Google AP2 用簽署的 mandate 記錄使用者授權了什麼；Stripe 與 OpenAI 的 ACP 讓 Agent 接上商家的商品、checkout 與付款系統。三者都在處理 Agent 交易，但責任邊界不同。
+
+  來源：[Coinbase x402](https://docs.cdp.coinbase.com/x402/how-it-works) · [Google AP2](https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol) · [Stripe / OpenAI ACP](https://stripe.com/blog/developing-an-open-standard-for-agentic-commerce)
+</FieldNote>
+
+---
+
+## 05. Response 如何變成畫面
+
+瀏覽器是 HTTP Client，也有 HTML / CSS 排版引擎。它先送 Request，收到 Response 後再依 Header 與 Body 決定如何處理內容。
+
+<img src={withBase('/images/lessons/01/browser-vision.png')} alt="ELI5 從封包到瀏覽器畫面繪製的視角穿透圖" />
+
+假設 Body 是：
+
+<Terminal title="HTTP — response body" flavor="output">{`
+<h1>Hello</h1>
+`}</Terminal>
+
+Terminal 只會印出這串文字。瀏覽器看到 HTML 後，會解析元素並把 `Hello` 畫成標題。React 或 Vue 可以參與產生畫面，但 Server 送回來的仍是 Response：Status Line、Headers、空白行與 Body。
+
+後端除錯時要沿這條路查：Client 送了什麼、Server 收到什麼、Server 回了什麼、Client 最後如何顯示。不要直接把畫面上的錯誤全部歸給後端。
+
+---
+
+## 06. 用 Terminal 驗證
+
+依序執行三次：
+
+<Terminal title="bash — curl">{`
+curl -v https://httpbin.org/status/200
+curl -v https://httpbin.org/status/404
+curl -v https://httpbin.org/status/301
+`}</Terminal>
+
+每次只記三件事：
+
+1. `>` 開頭的 Request Line 是什麼。
+2. `<` 開頭的 Status Line 是什麼。
+3. `301` Response 裡的 `Location` Header 指向哪裡。
+
+<CurlPlayground client:visible />
+
+## 單元實作作業
+
+在 Terminal 執行 `200` 與 `404` 兩個網址。截圖必須同時看得到 `>` Request Line 與 `<` Status Line，並在圖片上標出哪個代碼由 Server 回傳。
+
+把截圖存入 `exercises/01-http/`，再提交到 GitHub。提交前執行 `git status`，確認沒有把 `.env` 或虛擬環境一起送上去。

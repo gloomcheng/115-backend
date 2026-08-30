@@ -1,0 +1,25 @@
+---
+import { getCollection, render } from 'astro:content'
+import MarkdownContent from '../components/MarkdownContent.astro'
+import { siteCopy } from '../data/site-copy'
+import Layout from '../layouts/Layout.astro'
+
+const docs = await getCollection('docs')
+const intro = docs.find((item) => item.id.replace(/\.mdx?$/, '') === 'readme')
+if (!intro) throw new Error('Course reader document not found')
+const { Content: Intro } = await render(intro)
+const lessons = await getCollection('lessons')
+lessons.sort((a, b) => a.data.week - b.data.week)
+const renderedLessons = await Promise.all(
+  lessons.map(async (lesson) => ({ lesson, Content: (await render(lesson)).Content }))
+)
+const copy = siteCopy.routes.book
+---
+
+<Layout title={copy.title} description={copy.description}>
+  <header class="bg-[#f4c84f] px-6 py-12 sm:px-10 lg:px-12"><div class="mx-auto max-w-[1200px]"><p class="font-mono text-sm font-bold tracking-[.15em]">{copy.kicker} / {copy.reader}</p><h1 class="mt-4 text-5xl font-bold tracking-[-.06em] sm:text-6xl">{copy.title}</h1><p class="mt-4 text-xl font-semibold text-[#335f78]">{copy.lead}</p></div></header>
+  <main class="bg-[#fffaf0] bg-[repeating-linear-gradient(0deg,transparent_0,transparent_8px,rgba(7,84,134,.11)_8px,rgba(7,84,134,.11)_10px)] px-5 py-12 sm:px-10 lg:px-12"><div class="mx-auto max-w-[980px] space-y-12">
+    <MarkdownContent framed><Intro /></MarkdownContent>
+    {renderedLessons.map(({ lesson, Content }) => <article class="rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] px-6 py-10 sm:px-10"><p class="font-mono text-sm font-bold text-[#ef795e]">{copy.week} {String(lesson.data.week).padStart(2, '0')}</p><h2 class="mt-4 text-4xl font-bold tracking-[-.04em]">{lesson.data.title}</h2><p class="mt-3 text-lg font-semibold leading-8 text-[#335f78]">{lesson.data.description}</p><div class="mt-5"><MarkdownContent><Content /></MarkdownContent></div></article>)}
+  </div></main>
+</Layout>

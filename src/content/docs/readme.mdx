@@ -1,0 +1,67 @@
+---
+title: "網頁程式設計 — 115"
+description: "從 HTTP 開始，手寫第一個後端"
+---
+
+import Terminal from '../../components/Terminal.astro';
+
+# 網頁程式設計 — 115
+
+第一週先開 Terminal，打一次 `curl -v`。
+
+畫面裡以 `>` 開頭的是 Request，以 `<` 開頭的是 Response。你會從這幾行文字認出 `GET`、`POST`、`200`、`404`，再往後學 REST、JSON 與資料庫。這個順序不能倒過來。連一次請求是誰送的、狀態碼是誰回的都說不清楚，框架只會變成一個更大的黑盒。
+
+課堂上的每一段程式都要做到三件事：你打得出來、看得到結果，也能指出結果是哪一行造成的。期末再把這些零件組成一個能用的服務。
+
+教材網站用 `npm run dev` 啟動。課堂使用的最小 FastAPI 放在 `examples/http-api`。
+
+`RikaiDev/keiko` 是獨立開發的 backend agent harness。課程只會在它有可執行、可驗證的 release 後選用對應 proof，不以它取代 `curl` 或課堂 API。
+
+## 開始上課
+
+先啟動教材網站：
+
+<Terminal title="bash — project">{`
+npm install
+npm run dev      # open http://localhost:4321
+`}</Terminal>
+
+另外開一個 Terminal 跑後端：
+
+<Terminal title="bash — backend">{`
+python3 -m venv venv
+source venv/bin/activate
+pip install "fastapi[standard]>=0.111.0"
+fastapi dev examples/http-api/main.py
+`}</Terminal>
+
+看到伺服器啟動後，不要急著往下貼程式碼。先用 `curl -v` 問它一次，確認 Request 與 Response 都出現在 Terminal。
+
+## 18 週
+
+1. HTTP 方法與狀態碼 — 看懂 `curl -v`
+2. URL / Header / Body 的長相
+3. REST — 為什麼 `POST /users` 不是 `GET`
+4. JSON — `422` 跟 `500` 不一樣
+5. 後端怎麼接一個請求
+6. 路由與 Handler
+7. 寫第一個 `GET /health`
+8. 存資料 — `File` 跟 `SQLite` 差在哪
+9. 期中考試週
+10. CRUD：新增、查詢、修改、刪除
+11. 驗證與錯誤
+12. 登入 — 身份認證與 `JWT`（`401` 跟 `403` 差在哪）
+13. 中間件
+14. 密鑰為什麼會外洩
+15. 怎麼看 log
+16. 用 Docker 包起來
+17. 專題整合 — 串起 API、資料庫與部署
+18. 期末考週（期末專題發表）
+
+## 作業
+
+平時作業看 Git 紀錄，占 40%。期末專題占 60%。
+
+提交前先跑 `git status`。`venv`、`__pycache__`、`.env` 不要進版控；如果它們出現在清單裡，先處理 `.gitignore` 再 commit。
+
+本教材由 Fuyuan Cheng 編寫，採 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.zh-hant) 授權。使用或改作時請標示作者與教材名稱。

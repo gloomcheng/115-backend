@@ -1,0 +1,18 @@
+---
+interface Props {
+  quote: string
+  cite?: string
+}
+const { quote, cite } = Astro.props
+---
+
+<div class="my-10 border-l-2 border-[#0c0c0c] pl-6 not-prose">
+  <p class="font-display text-2xl tracking-tight text-[#0c0c0c] leading-snug">
+    {quote}
+  </p>
+  {cite && (
+    <p class="mt-3 font-mono text-xs tracking-wider text-[#737373] uppercase">
+      — {cite}
+    </p>
+  )}
+</div>
