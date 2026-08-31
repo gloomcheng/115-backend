@@ -14,13 +14,15 @@ const { title, description = siteCopy.defaultDescription } = Astro.props
 const path = withoutBase(Astro.url.pathname)
 const activeKey = path.startsWith('/preparation')
   ? 'prep'
-  : path.startsWith('/lessons')
-    ? 'lessons'
-    : path.startsWith('/book')
-      ? 'book'
-      : path.startsWith('/glossary')
-        ? 'glossary'
-        : ''
+  : path.startsWith('/git')
+    ? 'git'
+    : path.startsWith('/lessons')
+      ? 'lessons'
+      : path.startsWith('/book')
+        ? 'book'
+        : path.startsWith('/glossary')
+          ? 'glossary'
+          : ''
 ---
 
 <!doctype html>

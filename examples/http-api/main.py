@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 
 app = FastAPI(title="HTTP Practice API")
 
@@ -16,6 +16,15 @@ def root():
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/request-info")
+def request_info(request: Request):
+    return {
+        "client": request.client.host if request.client else None,
+        "scheme": request.url.scheme,
+        "host": request.headers.get("host"),
+    }
 
 
 @app.get("/users/{name}")

@@ -41,7 +41,26 @@
 ## 部署
 
 - **Dockerfile Best Practices** <https://docs.docker.com/develop/develop-images/dockerfile_best-practices/>
+- **Docker Engine on Ubuntu** — 官方 apt repository、Compose plugin 與 UFW 注意事項 <https://docs.docker.com/engine/install/ubuntu/>
+- **Docker Compose Ports** — 綁定 `127.0.0.1` 與公開 `0.0.0.0` 的差別 <https://docs.docker.com/reference/compose-file/services/#ports>
+- **Ubuntu Server Firewall** — UFW 開放與查詢 port <https://documentation.ubuntu.com/server/how-to/security/firewalls/>
+- **NGINX HTTP Proxy Module** — `proxy_pass` 與 `proxy_set_header` 的正式語意 <https://nginx.org/en/docs/http/ngx_http_proxy_module.html>
+- **Certbot for Nginx** — 取得、安裝與測試自動更新 TLS 憑證 <https://certbot.eff.org/instructions?ws=nginx&os=snap>
+- **FastAPI Behind a Proxy** — `X-Forwarded-*` Header 與受信任 proxy 邊界 <https://fastapi.tiangolo.com/advanced/behind-a-proxy/>
+- **FastAPI Testing** — 使用 `TestClient` 與 pytest 驗證 Status Code 與 Response Body <https://fastapi.tiangolo.com/tutorial/testing/>
+- **Gitleaks** — pre-commit 與 Git history 的 hardcoded secret 掃描 <https://github.com/gitleaks/gitleaks>
+- **GitHub Push Protection** — 在 secret 到達 repository 前擋下 push <https://docs.github.com/en/code-security/concepts/secret-security/push-protection>
+- **GitHub Sensitive Data Removal** — 先 revoke / rotate，再協調 Git history 處理 <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository>
 - **12 Factor — Port binding / Disposability** <https://12factor.net/port> <https://12factor.net/disposability>
+
+## Git 版本管理
+
+- **Pro Git — Recording Changes** — working tree、staging area、commit 與 diff <https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>
+- **Git User Manual — What is a branch?** — branch reference、HEAD 與 parent history <https://git-scm.com/docs/user-manual#understanding-history>
+- **Git Rebase** — 重播 commits、conflict 與 abort / continue <https://git-scm.com/docs/git-rebase>
+- **Pro Git — The Perils of Rebasing** — 不重寫已共享 history 的邊界 <https://git-scm.com/book/en/v2/Git-Branching-Rebasing#_rebase_peril>
+- **Git Worktree** — 一個 repository 同時管理多個 working trees <https://git-scm.com/docs/git-worktree>
+- **Git Revert / Reflog** — 共享 commit 的反向修改與 local reference 移動記錄 <https://git-scm.com/docs/git-revert> <https://git-scm.com/docs/git-reflog>
 
 ## HTTP 冷知識與 Agent payment
 

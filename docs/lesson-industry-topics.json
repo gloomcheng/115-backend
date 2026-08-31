@@ -1,3 +1,4 @@
 {
-  "01-http": ["http", "status-code", "browser"]
+  "01-http": ["http", "status-code", "browser"],
+  "17-vps-deployment": ["http", "security", "deployment"]
 }

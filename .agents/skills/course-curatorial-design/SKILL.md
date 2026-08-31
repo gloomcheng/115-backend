@@ -88,6 +88,11 @@ research history, not an implementation baseline.
 
 ## ELI5 technical diagrams
 
+Before any ImageGen call, read the canonical
+[course diagram style template](../../../docs/diagram-style-prompt.md). Keep its locked
+style block unchanged and append only the per-claim subject brief. Do not recreate the
+art direction from memory or persist a separate full style prompt for every diagram.
+
 1. Write the single claim first. Example: `The 404 is on the first line of the
    Server response.`
 2. Draw the smallest real evidence that proves it. Prefer native SVG or interactive

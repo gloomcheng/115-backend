@@ -1,0 +1,27 @@
+name: http-api
+
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  test:
+    build:
+      context: .
+      target: test
+    profiles:
+      - test

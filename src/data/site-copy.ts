@@ -5,6 +5,7 @@ export const siteCopy = {
   navigationLabel: '切換主選單',
   navigation: [
     { href: '/preparation', label: '前置準備', active: 'prep' },
+    { href: '/git', label: 'Git 版本管理', active: 'git' },
     { href: '/lessons/01-http', label: '單元講義', active: 'lessons' },
     { href: '/book', label: '整冊閱讀', active: 'book' },
     { href: '/glossary', label: '詞彙字典', active: 'glossary' },
@@ -64,8 +65,8 @@ export const siteCopy = {
       tocLabel: 'TOC',
       courseOverview: '← COURSE OVERVIEW',
       home: '返回課程首頁',
-      nextLesson: 'NEXT LESSON →',
-      nextLessonMeta: 'Week 01 / HTTP 方法與狀態碼 — 看懂 curl -v',
+      nextGuide: 'NEXT GUIDE →',
+      nextGuideMeta: 'Git / 不要再存 project-v3-final',
       toc: [
         { n: '01', label: '教室跟帳號', href: '#教室跟帳號' },
         { n: '02', label: 'GitHub Student Pack', href: '#github-student-pack' },
@@ -74,6 +75,16 @@ export const siteCopy = {
         { n: '05', label: 'Mac：sherly', href: '#macsherly' },
         { n: '06', label: 'Linux 基本指令（先偷跑）', href: '#linux-基本指令先偷跑' },
       ],
+    },
+    git: {
+      kicker: 'FOUNDATION 01',
+      reader: 'VERSION CONTROL LAB',
+      guide: 'IN THIS GUIDE',
+      tocLabel: 'TOC',
+      previous: '← PREPARATION',
+      previousMeta: '前置準備指南',
+      nextLesson: 'NEXT LESSON →',
+      nextLessonMeta: 'Week 01 / HTTP 方法與狀態碼 — 看懂 curl -v',
     },
   },
 }

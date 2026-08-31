@@ -12,6 +12,21 @@ const isFast = args.includes('--fast')
 
 const STAGES = [
   {
+    name: 'Secret Policy Guard',
+    cmd: 'node',
+    args: ['scripts/secret-harness.mjs', '--all'],
+  },
+  {
+    name: 'Secret Harness Tests',
+    cmd: 'node',
+    args: ['--test', 'scripts/tests/secret-harness.test.mjs'],
+  },
+  {
+    name: 'Deployment Contract Guard',
+    cmd: 'node',
+    args: ['scripts/deployment-harness.mjs'],
+  },
+  {
     name: 'Biome Linter & Formatter',
     cmd: isFix ? 'npx' : 'npx',
     args: isFix ? ['biome', 'check', '--write', '.'] : ['biome', 'check', '.'],
@@ -60,6 +75,11 @@ const STAGES = [
     name: 'Astro Static Monograph Build',
     cmd: 'npx',
     args: ['astro', 'build'],
+  },
+  {
+    name: 'Rendered Copy Integrity Guard',
+    cmd: 'node',
+    args: ['scripts/copy-integrity.mjs'],
   },
   {
     name: 'Accessibility (A11y) & Font Size Guard',

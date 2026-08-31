@@ -2,16 +2,24 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const baselinePath = path.resolve('docs/copy-baseline.json')
-const routes = [
-  'index.html',
-  'book/index.html',
-  'glossary/index.html',
-  'preparation/index.html',
-  'lessons/01-http/index.html',
-]
+const distPath = path.resolve('dist')
+
+function collectRoutes(directory = distPath) {
+  const routes = []
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const absolutePath = path.join(directory, entry.name)
+    if (entry.isDirectory()) routes.push(...collectRoutes(absolutePath))
+    else if (entry.name === 'index.html') {
+      routes.push(path.relative(distPath, absolutePath).split(path.sep).join('/'))
+    }
+  }
+  return routes.sort()
+}
+
+const routes = collectRoutes()
 
 function visibleTokens(file) {
-  const html = fs.readFileSync(path.resolve('dist', file), 'utf8')
+  const html = fs.readFileSync(path.resolve(distPath, file), 'utf8')
   const text = html
     .replace(/<script[\s\S]*?<\/script>/g, '')
     .replace(/<style[\s\S]*?<\/style>/g, '')
@@ -46,6 +54,19 @@ if (!fs.existsSync(baselinePath)) {
 }
 
 const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'))
+const baselineRoutes = Object.keys(baseline).sort()
+if (JSON.stringify(baselineRoutes) !== JSON.stringify(routes)) {
+  const added = routes.filter((route) => !baselineRoutes.includes(route))
+  const removed = baselineRoutes.filter((route) => !routes.includes(route))
+  console.error(
+    `Rendered route set changed. Added: ${added.join(', ') || 'none'}. Removed: ${removed.join(', ') || 'none'}.`
+  )
+  console.error(
+    'Run `npm run copy:baseline` only after the route and visible copy changes are approved.'
+  )
+  process.exit(1)
+}
+
 const changed = routes.filter(
   (route) => JSON.stringify(baseline[route]) !== JSON.stringify(snapshot[route])
 )

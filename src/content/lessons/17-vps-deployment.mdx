@@ -1,0 +1,518 @@
+---
+title: "把 VPS 變成公開服務 — Nginx 與 HTTPS"
+week: 17
+description: "第一次從自己的電腦登入 VPS，讓同事用 HTTPS 看到 FastAPI 的回應。"
+goals:
+  - "知道指令現在是在自己的電腦還是 VPS 執行"
+  - "讓 FastAPI 只在 VPS 內部接受連線，由 Nginx 對外服務"
+  - "用 test、secret scan 與外部 curl 驗收部署"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+import { withBase } from '../../lib/paths';
+
+公司已經有一台 VPS。你在裡面啟動 FastAPI，自己也看得到 `{"ok":true}`。但同事在她的電腦輸入同一個網址，畫面只顯示無法連線。
+
+這一課要做到的結果很具體。在**自己的電腦**執行：
+
+<Terminal title="bash — final result">{`
+curl -i https://api.example.com/health
+`}</Terminal>
+
+最後要看到：
+
+<Terminal title="HTTP — final response" flavor="output">{`
+HTTP/2 200
+content-type: application/json
+
+{"ok":true}
+`}</Terminal>
+
+`api.example.com` 是範例。你會把它換成公司的真實網域。HTTP 版本也可能顯示 `HTTP/1.1`；這不影響這次驗收。
+
+<Callout type="note" title="這一課先固定一條路線">
+  以下步驟使用 Ubuntu 24.04 或 26.04 LTS、單台 VPS、單一 FastAPI container 與一個可管理 DNS 的網域。這條路線適合課程專題、內部工具與低流量服務。多台主機、零停機、異地容災與資料庫復原不在這一課處理。
+</Callout>
+
+---
+
+## 01. 先分清兩台電腦
+
+伺服器不是某一種特別的電腦。**只要一個程式正在等 Request，收到後回 Response，這個程式此刻就是 Server。**
+
+例如你在筆電上執行 `fastapi dev main.py`，FastAPI 等著 `curl` 來問它。這時：
+
+- `curl` 是 Client，因為它主動送 Request。
+- FastAPI 是 Server，因為它等 Request，再回 Response。
+
+兩個程式就算都在同一台筆電，角色也沒變。
+
+VPS 是一台放在網路上、可以長時間運作的遠端電腦。這一課會在同一台 VPS 上跑兩個 Server programs：
+
+- Nginx 在公開網路上等同事的 Request。
+- FastAPI 只在 VPS 裡等 Nginx 轉交的 Request。
+
+這一課會一直在兩個 Terminal 之間切換：
+
+- **自己的電腦**：你正在使用的 Mac、Windows WSL 或 Linux。它負責登入 VPS，也扮演最後驗收的 Client。
+- **VPS**：向業者租用、放在網路上的 Linux 電腦。FastAPI 與 Nginx 會在這台電腦執行。
+
+每個指令區塊的標題都會寫明要用哪一台。如果你不確定自己在哪裡，先打：
+
+<Terminal title="bash — either computer">{`
+hostname
+whoami
+pwd
+`}</Terminal>
+
+這張圖只證明一件事：外部 Request 只直接連到 Nginx；FastAPI 的 `8000` port 留在 VPS 裡面。
+
+<img src={withBase('/images/lessons/17/vps-public-entry.png')} alt="ELI5 VPS 公開入口示意圖：外部 Client 以 HTTPS 443 連到 Nginx，Nginx 再透過 VPS 內部的 127.0.0.1:8000 轉交給 FastAPI，外部直連 8000 被阻擋。" />
+
+先記住三個位置：
+
+- Nginx 在 `443` 等外部 Request。
+- FastAPI 在 `127.0.0.1:8000` 等 VPS 內部 Request。
+- `127.0.0.1` 永遠是「當前這台電腦」。在 VPS 上指 VPS；在同事的筆電上，就指她的筆電。
+
+---
+
+## 02. 先拿到三個真實值
+
+打開 VPS 業者與網域的管理畫面，找到：
+
+1. **VPS public IP**：這台電腦在網路上的數字位址。
+2. **SSH 使用者名稱**：業者告訴你用哪個帳號登入。Ubuntu cloud image 常見是 `ubuntu`，但不是每家都一樣。
+3. **網域**：同事最後會輸入的名稱，例如 `api.example.com`。
+
+在**自己的電腦**把它們存成 shell 變數：
+
+<Terminal title="bash — your computer">{`
+export SERVER_IP='203.0.113.10'
+export SSH_USER='ubuntu'
+export DOMAIN='api.example.com'
+
+printf 'server=%s\nuser=%s\ndomain=%s\n' "$SERVER_IP" "$SSH_USER" "$DOMAIN"
+`}</Terminal>
+
+`203.0.113.10` 與 `api.example.com` 是專供文件舉例的保留值，不會連到你的 VPS。
+
+<Callout type="warning" title="先停下來換值">
+  如果 <code>printf</code> 還顯示 <code>203.0.113.10</code> 或 <code>api.example.com</code>，不要繼續。先把它們換成業者與公司實際提供的值。
+</Callout>
+
+### 讓網域指向 VPS
+
+在 DNS 管理畫面新增一筆：
+
+| Type | Name | Value |
+| --- | --- | --- |
+| `A` | `api` | VPS public IP |
+
+`A` record 的意思就是：當有人查 `api.example.com`，回答這台 VPS 的 IPv4。如果你用的是根網域，`Name` 常寫成 `@`。
+
+DNS 更新可能不會立刻到達每個 resolver。先把它設好，等待的時間可以繼續安裝主機。
+
+### 在業者畫面開三個入口
+
+Port 可以先理解成一個有編號的網路入口。這一課只用到四個號碼：
+
+| Port | 誰會用 | 是否對外開放 |
+| --- | --- | --- |
+| `22` | 你用 SSH 管理 VPS | 開，來源限制為公司或你當前的 public IP |
+| `80` | Nginx 接 HTTP | 開 |
+| `443` | Nginx 接 HTTPS | 開 |
+| `8000` | Nginx 在 VPS 內連 FastAPI | **不開** |
+
+業者的畫面可能叫 Firewall、Security Group 或 Inbound Rules。新增 TCP `22`、`80`、`443`，不要新增 `8000`。`22` 的 Source 如果有 `My IP` 選項，先選它；`80` 與 `443` 才允許公開網路連入。
+
+<Callout type="note" title="IPv6 先不開">
+  這一課先使用 IPv4。在 VPS 與防火牆尚未設好 IPv6 前，不要新增 DNS <code>AAAA</code> record。
+</Callout>
+
+---
+
+## 03. 先確定你能進入 VPS
+
+在**自己的電腦**執行：
+
+<Terminal title="bash — your computer">{`
+ssh "$SSH_USER@$SERVER_IP"
+`}</Terminal>
+
+第一次連線會詢問是否信任這台主機。把 Terminal 顯示的 fingerprint 與 VPS 業者提供的指紋比對。對得上才輸入 `yes`。
+
+登入後，這個 Terminal 已經在 **VPS** 裡。先確認：
+
+<Terminal title="Ubuntu — VPS">{`
+hostname
+cat /etc/os-release
+whoami
+`}</Terminal>
+
+`/etc/os-release` 應顯示 Ubuntu 24.04 或 26.04。使用者也必須能執行 `sudo`。接著安裝這一課會用的工具：
+
+<Terminal title="Ubuntu — VPS">{`
+sudo apt update
+sudo apt upgrade -y
+sudo apt install -y ca-certificates curl git nginx ufw
+`}</Terminal>
+
+VPS 業者的防火牆是第一層。UFW 是 Ubuntu 這台主機自己的第二層。先允許 SSH，再啟用 UFW：
+
+<Terminal title="Ubuntu — VPS">{`
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+sudo ufw status numbered
+`}</Terminal>
+
+應該看到 `22/tcp`、`80/tcp`、`443/tcp` 是 `ALLOW`，清單中沒有 `8000`。
+
+不要關現在的 SSH。在**自己的電腦**另開一個 Terminal，重新執行：
+
+<Terminal title="bash — second terminal">{`
+ssh "$SSH_USER@$SERVER_IP"
+`}</Terminal>
+
+第二條 SSH 也能登入，才關閉其中一個。
+
+---
+
+## 04. 先讓 FastAPI 只在 VPS 裡回答
+
+Docker 負責把應用程式與它需要的軟體一起啟動。這一課不要自行寫 Dockerfile，直接部署 repository 裡已驗證的範例。
+
+在 **VPS** 加入 Docker 官方 apt repository：
+
+<Terminal title="Ubuntu — VPS">{`
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "\${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+`}</Terminal>
+
+先確認 Docker 真的能執行 container：
+
+<Terminal title="Ubuntu — VPS">{`
+sudo systemctl status docker --no-pager
+sudo docker run --rm hello-world
+sudo docker compose version
+`}</Terminal>
+
+`hello-world` 必須印出成功訊息。如果失敗，先停在這裡處理 Docker，不要繼續設 Nginx。
+
+抓取課程 API，先跑 tests，再啟動：
+
+<Terminal title="Ubuntu — VPS">{`
+git clone https://github.com/gloomcheng/115-backend.git
+cd 115-backend/examples/http-api
+sudo docker compose run --rm --build test
+sudo docker compose up -d --build
+sudo docker compose ps
+`}</Terminal>
+
+Tests 應顯示 `4 passed`。`docker compose ps` 的 `api` 應是 `running`，健康檢查完成後會顯示 `healthy`。
+
+現在還在 **VPS**。直接問 FastAPI：
+
+<Terminal title="Ubuntu — VPS">{`
+curl -i http://127.0.0.1:8000/health
+sudo ss -ltnp | grep ':8000'
+`}</Terminal>
+
+應該看到：
+
+<Terminal title="HTTP — VPS only" flavor="output">{`
+HTTP/1.1 200 OK
+content-type: application/json
+
+{"ok":true}
+
+LISTEN ... 127.0.0.1:8000 ...
+`}</Terminal>
+
+`127.0.0.1:8000` 表示這個入口只綁在 VPS 本機。回到**自己的電腦**做一次反向檢查：
+
+<Terminal title="bash — your computer">{`
+curl --connect-timeout 3 "http://$SERVER_IP:8000/health"
+`}</Terminal>
+
+這次應該失敗。這不是 bug，而是「外部不能繞過 Nginx 直接連 FastAPI」的證據。
+
+<Callout type="important" title="Docker port 不能只靠 UFW 擋">
+  Docker published port 可能繞過 UFW。範例的 Compose 明確使用 <code>127.0.0.1:8000:8000</code>，不是 <code>8000:8000</code>。這個綁定才是 FastAPI 不直接公開的關鍵證據。
+</Callout>
+
+---
+
+## 05. 再讓 Nginx 接住公開 Request
+
+現在 FastAPI 只會在 VPS 裡回答。Nginx 的工作是在公開 port 接到 Request，再轉交給 `127.0.0.1:8000`。這種「先接到，再轉交」的程式叫 reverse proxy。
+
+回到 **VPS** 的 Terminal。先重新設定真實網域；自己電腦上的 shell 變數不會自動帶進 SSH：
+
+<Terminal title="Ubuntu — VPS">{`
+export DOMAIN='api.example.com'
+printf 'domain=%s\n' "$DOMAIN"
+`}</Terminal>
+
+確認已換成真實網域後，產生 Nginx 設定：
+
+<Terminal title="Ubuntu — VPS">{`
+cd ~/115-backend/examples/http-api
+sed "s/api\\.example\\.com/$DOMAIN/g" deploy/nginx/backend-api.conf \
+  | sudo tee /etc/nginx/sites-available/backend-api > /dev/null
+
+sudo ln -sfn /etc/nginx/sites-available/backend-api /etc/nginx/sites-enabled/backend-api
+sudo nginx -t
+sudo systemctl reload nginx
+`}</Terminal>
+
+`nginx -t` 必須顯示 `syntax is ok` 與 `test is successful`。這項檢查通過後才 reload，不要帶著錯誤設定繼續做 HTTPS。
+
+這份設定的核心是：
+
+<Terminal title="Nginx — the handoff" flavor="output">{`
+location / {
+    proxy_pass http://127.0.0.1:8000;
+}
+`}</Terminal>
+
+`location /` 接住這個網域的 path。`proxy_pass` 把同一個 path 轉交給 FastAPI。
+
+在**自己的電腦**先直接指定 VPS IP，不等 DNS：
+
+<Terminal title="bash — your computer">{`
+curl -i --resolve "$DOMAIN:80:$SERVER_IP" "http://$DOMAIN/health"
+`}</Terminal>
+
+這條指令只替這一次 `curl` 指定「這個網域要去這個 IP」。它不修改系統 DNS。看到 `200` 與 `{"ok":true}`，代表業者防火牆、UFW、Nginx、FastAPI 已連成一條路。
+
+現在查真實 DNS：
+
+<Terminal title="bash — your computer">{`
+dig +short A "$DOMAIN"
+printf 'expected=%s\n' "$SERVER_IP"
+`}</Terminal>
+
+兩個 IP 相同後，不加 `--resolve` 再問一次：
+
+<Terminal title="bash — your computer">{`
+curl -i "http://$DOMAIN/health"
+`}</Terminal>
+
+---
+
+## 06. 最後把 HTTP 換成 HTTPS
+
+HTTP 上的內容是明文。HTTPS 會加密 Client 到 Nginx 這一段連線，並用憑證讓 Client 檢查自己連的是哪個網域。
+
+Certbot 會向 Let’s Encrypt 取得憑證，並修改 Nginx 設定。在 **VPS** 執行：
+
+<Terminal title="Ubuntu — VPS">{`
+sudo snap install --classic certbot
+sudo test -e /usr/local/bin/certbot || sudo ln -s /snap/bin/certbot /usr/local/bin/certbot
+sudo certbot --nginx -d "$DOMAIN"
+`}</Terminal>
+
+Certbot 會詢問 email、服務條款，以及是否把 HTTP 轉向 HTTPS。這一課選 redirect，讓 `http://` 自動轉到 `https://`。
+
+驗證憑證未來能自動更新：
+
+<Terminal title="Ubuntu — VPS">{`
+sudo certbot renew --dry-run
+sudo nginx -t
+sudo systemctl status nginx --no-pager
+`}</Terminal>
+
+回到**自己的電腦**。這是第一次完整驗收：
+
+<Terminal title="bash — your computer">{`
+curl -I "http://$DOMAIN/health"
+curl -v "https://$DOMAIN/health"
+curl -sS "https://$DOMAIN/request-info"
+`}</Terminal>
+
+三個結果要一起看：
+
+1. HTTP 回 `3xx`，`Location` 指向 `https://`。
+2. HTTPS 沒有憑證錯誤，Status Code 是 `200`，Body 是 `{"ok":true}`。
+3. `/request-info` 的 `scheme` 是 `https`，`host` 是你的網域。
+
+最後用瀏覽器開 `https://你的網域/docs`。瀏覽器送 Request，Nginx 處理 HTTPS，FastAPI 回傳 API 文件，瀏覽器才把 Response Body 畫成頁面。
+
+<Callout type="important" title="FastAPI 為什麼相信 Nginx">
+  範例使用 <code>--forwarded-allow-ips=*</code> 讀取 Nginx 加入的 <code>X-Forwarded-*</code> Header。這只在 FastAPI 的 <code>8000</code> 綁定 <code>127.0.0.1</code>、外部無法繞過 Nginx 直連時成立。如果你把 <code>8000</code> 開到公開網路，這個信任邊界就不存在。
+</Callout>
+
+---
+
+## 07. 沒有成功時，只查停住的那一關
+
+先看**自己的電腦**收到哪一種結果：
+
+| 畫面上看到的字 | Request 停在哪裡 | 下一條檢查 |
+| --- | --- | --- |
+| `Could not resolve host` | 還沒找到 VPS IP | `dig +short A "$DOMAIN"` |
+| `Connection timed out` | 業者防火牆、UFW 或 Nginx 沒接到 | `sudo ufw status` 與 `sudo ss -ltnp` |
+| `502 Bad Gateway` | Nginx 已接到，但 FastAPI 沒回答 | `sudo docker compose ps` |
+| `500 Internal Server Error` | FastAPI 已接到，但 route 執行失敗 | `sudo docker compose logs --tail=100 api` |
+| Certbot 驗證失敗 | Let’s Encrypt 無法透過 DNS 與 port `80` 找到 Nginx | 重做第 02 與第 05 節 |
+
+在 **VPS** 收集完整證據：
+
+<Terminal title="Ubuntu — VPS">{`
+sudo ss -ltnp | grep -E ':(22|80|443|8000)\\b'
+sudo nginx -t
+sudo journalctl -u nginx -n 50 --no-pager
+cd ~/115-backend/examples/http-api
+sudo docker compose ps
+sudo docker compose logs --tail=100 api
+curl -i http://127.0.0.1:8000/health
+`}</Terminal>
+
+從最外層開始：DNS → firewall → Nginx → FastAPI。哪一關沒有預期證據，就只修那一關。不要一次改四個地方，也不要重安裝整台 VPS。
+
+---
+
+## 08. 公開成功後，把檢查變成門禁
+
+手動 `curl` 證明這一次有通。它不會在下一次改 code 時自動再跑，也不會阻止密碼被 commit。所以部署還需要四道自動檢查。
+
+### Test 同時檢查 Status Code 與 Body
+
+`examples/http-api/tests/test_main.py` 的最小 test 是：
+
+<Terminal title="Python — tests/test_main.py" flavor="output">{`
+def test_health_returns_200_and_expected_body():
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+`}</Terminal>
+
+只檢查 Body 不夠。`200` 也是 API contract 的一部分。範例還會測不存在的 user 是 `404`，以及 POST 建立後能再用 GET 讀回來。
+
+在**開發電腦的 repository root** 執行：
+
+<Terminal title="bash — your development computer">{`
+bun run test:api
+`}</Terminal>
+
+預期是 `4 passed`。Production image 不會收進 `pytest` 與 `tests/`。
+
+### `.gitignore` 擋不住已經 staged 的密碼
+
+Repository 只保留沒有真實值的 `.env.example`：
+
+<Terminal title="dotenv — safe template" flavor="output">{`
+APP_ENV=production
+DATABASE_URL=
+APP_SECRET=
+`}</Terminal>
+
+真實 password、API key、private key、database URL 與 Token 不能出現在程式碼、Compose file、test fixture、截圖或 commit message。程式從環境讀取：
+
+<Terminal title="Python — read from the environment" flavor="output">{`
+import os
+
+database_url = os.environ["DATABASE_URL"]
+`}</Terminal>
+
+每次 clone repository 後，啟用 commit 前檢查：
+
+<Terminal title="bash — your development computer">{`
+bun run setup:hooks
+git config --get core.hooksPath
+bun run test:security
+bun run security:scan
+`}</Terminal>
+
+`core.hooksPath` 必須回 `.githooks`。`secret-harness.mjs` 會擋 `.env`、private-key file 與明文 credential pattern；Gitleaks 會再掃已知憑證格式與 Git history。GitHub Actions 會在 push 後重跑這些檢查。
+
+<Callout type="warning" title="如果真實 secret 已經 commit 或 push">
+  先到憑證發行端 revoke 或 rotate。下一個 commit 刪掉它，不會清除 Git history、fork、cache 與別人的 clone。需要重寫共用 history 時，由 repository 管理者協調，不要自行 force-push。
+</Callout>
+
+### 部署設定與真實網站各查一次
+
+<Terminal title="bash — your development computer">{`
+bun run check:deployment
+bun run check:deployment -- \
+  --url="https://$DOMAIN" \
+  --expected-ip="$SERVER_IP"
+`}</Terminal>
+
+第一條檢查 Compose 是否只綁定 `127.0.0.1:8000`、runtime 是否以非 root 使用者執行，以及 Nginx 是否轉交到正確位址。第二條從外部檢查 DNS、HTTP redirect、HTTPS `200` 與 public `8000` 無法直連。
+
+---
+
+## 09. 下一次更新，仍然先驗收再交付
+
+程式有新 commit 時，先在 **VPS** 確認沒有人手動改檔，再更新：
+
+<Terminal title="Ubuntu — VPS">{`
+cd ~/115-backend
+git status --short
+git pull --ff-only
+cd examples/http-api
+sudo docker compose run --rm --build test
+sudo docker compose up -d --build
+sudo docker compose ps
+curl -f http://127.0.0.1:8000/health
+`}</Terminal>
+
+`git status --short` 有輸出就先停下來。VPS 裡沒有 commit 的程式修改，會讓你無法確定正在運行哪個版本。
+
+回到**自己的電腦**：
+
+<Terminal title="bash — your computer">{`
+curl -f "https://$DOMAIN/health"
+bun run check:deployment -- \
+  --url="https://$DOMAIN" \
+  --expected-ip="$SERVER_IP"
+`}</Terminal>
+
+`curl -f` 遇到 `4xx` 或 `5xx` 會回傳失敗。`{"ok":true}` 與 live deployment harness 都通過，這次更新才結束。
+
+## 單元實作作業
+
+部署一個 FastAPI 服務，交付這六組證據：
+
+1. `bun run test:api` 顯示 `4 passed`，`bun run security:scan` 通過。
+2. DNS `A` record 回傳 VPS public IP。
+3. `sudo ufw status numbered` 沒有 `8000`，`sudo ss -ltnp` 顯示 `127.0.0.1:8000`。
+4. `sudo nginx -t` 與 `sudo certbot renew --dry-run` 通過。
+5. 從另一台電腦執行 `curl -v https://你的網域/health`，同時看得到 Request Line、`200` Status Line 與 `{"ok":true}`。
+6. Live deployment harness 回傳 exit status `0`。
+
+截圖前遮住公司 IP、SSH 使用者名稱、email、Token 與密鑰。對外公開的服務網域可以保留。
+
+完整作業清單在 `exercises/17-vps-deployment/README.md`。
+
+### 本單元使用的正本
+
+- [Ubuntu Server — Firewall](https://documentation.ubuntu.com/server/how-to/security/firewalls/)
+- [Docker — Install Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
+- [Docker Compose — Port mapping](https://docs.docker.com/reference/compose-file/services/#ports)
+- [NGINX — HTTP proxy module](https://nginx.org/en/docs/http/ngx_http_proxy_module.html)
+- [Certbot — Nginx on Ubuntu](https://certbot.eff.org/instructions?ws=nginx&os=snap)
+- [FastAPI — Behind a Proxy](https://fastapi.tiangolo.com/advanced/behind-a-proxy/)
+- [FastAPI — Testing with TestClient and pytest](https://fastapi.tiangolo.com/tutorial/testing/)
+- [Gitleaks — Detect hardcoded secrets](https://github.com/gitleaks/gitleaks)
+- [GitHub — Push protection](https://docs.github.com/en/code-security/concepts/secret-security/push-protection)
+- [GitHub — Removing sensitive data from a repository](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository)

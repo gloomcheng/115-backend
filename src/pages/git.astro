@@ -1,0 +1,29 @@
+---
+import { getCollection, render } from 'astro:content'
+import DocumentToc from '../components/DocumentToc.astro'
+import MarkdownContent from '../components/MarkdownContent.astro'
+import { siteCopy } from '../data/site-copy'
+import Layout from '../layouts/Layout.astro'
+import { withBase } from '../lib/paths'
+
+const docs = await getCollection('docs')
+const document = docs.find((item) => item.id.replace(/\.mdx?$/, '') === 'git')
+if (!document) throw new Error('Git guide document not found')
+const { Content, headings } = await render(document)
+const toc = headings
+  .filter((heading) => heading.depth === 2)
+  .map((heading) => ({
+    href: `#${heading.slug}`,
+    label: heading.text.replace(/^\d+\.\s*/, ''),
+  }))
+const copy = siteCopy.routes.git
+---
+
+<Layout title={document.data.title} description={document.data.description}>
+  <header class="bg-[#f4c84f] px-6 py-12 sm:px-10 lg:px-12"><div class="mx-auto max-w-[1200px]"><p class="font-mono text-sm font-bold tracking-[.15em]">{copy.kicker} / {copy.reader}</p><h1 class="mt-4 text-5xl font-bold tracking-[-.06em] sm:text-6xl">{document.data.title}</h1><p class="mt-4 max-w-[860px] text-xl font-semibold leading-8 text-[#335f78]">{document.data.description}</p></div></header>
+  <div class="bg-[#fffaf0] bg-[repeating-linear-gradient(0deg,transparent_0,transparent_8px,rgba(7,84,134,.11)_8px,rgba(7,84,134,.11)_10px)] px-5 py-12 sm:px-10 lg:px-12"><div class="mx-auto grid max-w-[1200px] gap-9 lg:grid-cols-[260px_1fr]">
+    <DocumentToc eyebrow={copy.guide} title={copy.tocLabel} items={toc} />
+    <MarkdownContent framed><Content /></MarkdownContent>
+  </div></div>
+  <nav class="mx-auto flex max-w-[1200px] flex-wrap justify-between gap-4 px-6 py-10 font-bold sm:px-10 lg:px-12"><a href={withBase('/preparation')}>{copy.previous}<span class="block font-mono text-sm">{copy.previousMeta}</span></a><a href={withBase('/lessons/01-http')}>{copy.nextLesson}<span class="block font-mono text-sm">{copy.nextLessonMeta}</span></a></nav>
+</Layout>

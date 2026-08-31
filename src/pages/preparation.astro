@@ -18,5 +18,5 @@ const { Content } = await render(document)
     <DocumentToc eyebrow={siteCopy.routes.preparation.guide} title={siteCopy.routes.preparation.tocLabel} items={siteCopy.routes.preparation.toc} />
     <MarkdownContent framed><Content /></MarkdownContent>
   </div></div>
-  <nav class="mx-auto flex max-w-[1200px] flex-wrap justify-between gap-4 px-6 py-10 font-bold sm:px-10 lg:px-12"><a href={withBase('/')}>{siteCopy.routes.preparation.courseOverview} · {siteCopy.routes.preparation.home}</a><a href={withBase('/lessons/01-http')}>{siteCopy.routes.preparation.nextLesson}<span class="block font-mono text-sm">{siteCopy.routes.preparation.nextLessonMeta}</span></a></nav>
+  <nav class="mx-auto flex max-w-[1200px] flex-wrap justify-between gap-4 px-6 py-10 font-bold sm:px-10 lg:px-12"><a href={withBase('/')}>{siteCopy.routes.preparation.courseOverview} · {siteCopy.routes.preparation.home}</a><a href={withBase('/git')}>{siteCopy.routes.preparation.nextGuide}<span class="block font-mono text-sm">{siteCopy.routes.preparation.nextGuideMeta}</span></a></nav>
 </Layout>

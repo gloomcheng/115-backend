@@ -87,6 +87,7 @@ export const chapters: Chapter[] = [
         w: 17,
         dates: '12/28–01/03',
         title: '專題整合 — 串起 API、資料庫與部署',
+        href: '/lessons/17-vps-deployment',
         note: '01/01 元旦放假',
       },
       {

@@ -1,0 +1,432 @@
+---
+title: "Git：不要再存 project-v3-final"
+description: "從 v1、v2、v3 資料夾的失敗開始，學會說清哪次改了什麼，並找回過去的程式片段。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+import { withBase } from '../../lib/paths';
+
+你要改一個還能執行的程式，但怕改壞後回不去。最直覺的做法是複製整個資料夾：
+
+<Terminal title="files — three weeks later" flavor="output">{`
+shop-v1/
+shop-v2/
+shop-v3-final/
+shop-v3-final-fix/
+shop-v3-linda/
+`}</Terminal>
+
+等真的要回頭時，資料夾名稱回答不了四個問題：
+
+1. `v2` 到 `v3` 究竟改了哪幾行？
+2. 當時為什麼要改？
+3. `v3-final-fix` 是從哪一份接著改？
+4. 上週那段折扣 snippet 在哪一份，是哪次被刪掉？
+
+這才是版本管理要解決的問題。不是先背 Git 指令。
+
+---
+
+## 01. 先做一次 v1、v2、v3
+
+用臨時資料夾重現這個做法，不會碰到你的作業：
+
+<Terminal title="bash — copy-folder versioning">{`
+export COPY_LAB="$(mktemp -d)/shop-copies"
+mkdir -p "$COPY_LAB/shop-v1"
+printf 'def total(price):\n    return price\n' > "$COPY_LAB/shop-v1/app.py"
+
+cp -R "$COPY_LAB/shop-v1" "$COPY_LAB/shop-v2"
+printf 'def total(price):\n    if price >= 1000:\n        return price * 0.9\n    return price\n' > "$COPY_LAB/shop-v2/app.py"
+
+cp -R "$COPY_LAB/shop-v2" "$COPY_LAB/shop-v3-final"
+printf 'def total(price, shipping):\n    return price + shipping\n' > "$COPY_LAB/shop-v3-final/app.py"
+
+cp -R "$COPY_LAB/shop-v2" "$COPY_LAB/shop-v3-linda"
+printf 'def total(price):\n    return round(price)\n' > "$COPY_LAB/shop-v3-linda/app.py"
+
+find "$COPY_LAB" -maxdepth 2 -type f -print | sort
+`}</Terminal>
+
+現在問：「`v3-final` 改了什麼？」只能挑兩個資料夾做比較：
+
+<Terminal title="bash — compare two guesses">{`
+diff -u "$COPY_LAB/shop-v2/app.py" "$COPY_LAB/shop-v3-final/app.py"
+`}</Terminal>
+
+`diff` 能找行差異，但你要先猜哪兩份是前後版。它也不知道改動理由。
+
+再找折扣 snippet：
+
+<Terminal title="bash — search every copy">{`
+grep -R -n '0\.9' "$COPY_LAB"
+`}</Terminal>
+
+你可以發現 `v2` 還有這行，但無法從資料夾名稱得知它為何在 `v3-final` 消失。`v3-linda` 又是從 `v2` 平行改出來，現在 shipping、rounding 與 discount 要怎麼合在一起，檔案系統無法替你記錄。
+
+複製資料夾只保存「結果」，沒有保存版本之間的「關係」。
+
+---
+
+## 02. Git 要留下四種證據
+
+把剛才的四個問題改寫成可驗收的需求：
+
+| 你想知道的事 | Git 留下的證據 | 查詢指令 |
+| --- | --- | --- |
+| 這次改了哪幾行 | patch / diff | `git show` |
+| 為什麼改 | commit message | `git log` |
+| 它從哪個版本接著改 | parent commit | `git log --graph` |
+| 某段 snippet 何時出現、消失 | 每個 commit 的 patch | `git log -S` 或 `git log -G` |
+
+這四種證據的最小單位是 **commit**。
+
+RPG 的記錄點可以幫忙理解 commit：它是一個可回頭讀取的進度。但 Git commit 比存檔多了兩個關鍵資料：它有唯一 ID，也指向前一個 commit。因此 Git 可以計算兩個記錄點之間的差異，不需要靠 `v2-final` 猜前後關係。
+
+這張圖只證明一件事：資料夾副本是三個失聯的結果；commit history 有 parent 路徑，所以能查兩個記錄點之間加了或刪了哪段程式。
+
+<img src={withBase('/images/docs/git/history-vs-copies.png')} alt="ELI5 版本記錄示意圖：左邊是沒有連結的 v1、v2 與 v3-final 資料夾；右邊是由 parent 路徑連起的 commit A、B、C，中間可看到 price 乘以 0.9 這段程式被加入與刪除。" />
+
+<Callout type="note" title="Commit 不是整台電腦的備份">
+  Commit 只包含 repository 裡被 Git 追蹤、而且這次已 staged 的檔案版本。沒有 <code>git add</code> 的 untracked file、repository 外的檔案、資料庫與上傳檔案都不在裡面。
+</Callout>
+
+---
+
+## 03. 用 commit 取代整包複製
+
+回到課程 repository root，建立另一個臨時 lab：
+
+<Terminal title="bash — create a Git history">{`
+export COURSE_ROOT="$(pwd)"
+export GIT_LAB="$(mktemp -d)/shop-git"
+
+git init --initial-branch=main "$GIT_LAB"
+cd "$GIT_LAB"
+git config user.name "Course Student"
+git config user.email "student@example.com"
+
+printf 'def total(price):\n    return price\n' > app.py
+git status --short
+git add app.py
+git diff --staged
+git commit -m "create base price calculation"
+`}</Terminal>
+
+現在加入折扣，但先不 commit：
+
+<Terminal title="bash — inspect before saving">{`
+printf 'def total(price):\n    if price >= 1000:\n        return price * 0.9\n    return price\n' > app.py
+
+git status --short
+git diff
+git add app.py
+git diff --staged
+git commit -m "apply member discount above 1000"
+git log --oneline --decorate --graph
+`}</Terminal>
+
+這裡有三個不同狀態：
+
+- working tree 是你正在改的檔案。
+- staging area 是這次 commit 準備收進去的版本。
+- commit 是已經寫入 history 的 snapshot。
+
+`git add` 不是上傳。它只是把「這個檔案目前的內容」放進 staging area。如果 `git add` 後又改了同一個檔案，`git diff --staged` 與 `git diff` 會各自顯示一部分。
+
+Commit message 寫「這次改動的意圖」，不寫 `update`、`fix` 或 `v3`。`apply member discount above 1000` 讓未來的人不打開檔案也能先判斷這個 commit 是否相關。
+
+---
+
+## 04. 某段 snippet 在哪次被改掉
+
+現在刻意把折扣拿掉，模擬一次不完整的重寫：
+
+<Terminal title="bash — remove a line, then investigate">{`
+printf 'def total(price):\n    return price\n' > app.py
+git add app.py
+git commit -m "simplify price calculation"
+
+git log -S '0.9' --oneline -- app.py
+`}</Terminal>
+
+`-S '0.9'` 會找「這個字串出現次數有變化」的 commits，所以加入與刪除折扣的 commit 都會出現。要搜尋 added / removed lines 符合的 regular expression，使用 `git log -G '<regex>'`。
+
+把加入折扣的 commit ID 存進 shell 變數：
+
+<Terminal title="bash — read an old file without switching versions">{`
+export DISCOUNT_COMMIT="$(git log --reverse -S '0.9' --format=%H -- app.py | head -n 1)"
+
+git show --stat "$DISCOUNT_COMMIT"
+git show "$DISCOUNT_COMMIT":app.py
+`}</Terminal>
+
+`git show <commit>:<path>` 只讀取舊版本，不改 working tree。先看過內容，確認真的是要找的 snippet，再取回檔案：
+
+<Terminal title="bash — restore the file from that commit">{`
+git restore --source="$DISCOUNT_COMMIT" -- app.py
+git diff -- app.py
+git add app.py
+git commit -m "restore member discount"
+`}</Terminal>
+
+取回 snippet 的關鍵不是「回到 v2 資料夾繼續寫」。你是從舊 commit 讀一份檔案，把需要的內容帶到現在，再建立新 commit。中間發生過的事仍然留在 history。
+
+---
+
+## 05. Branch 記錄「從哪裡開始分開改」
+
+Copy-folder 方式裡，`shop-v3-final` 與 `shop-v3-linda` 都宣稱自己是 v3，但檔名無法證明它們的共同起點。
+
+Git branch 是指向某個 commit 的可移動 reference。開 branch 時，兩條線共用當前 commit 以前的 history，只記錄之後各自新增的 commits。
+
+<Terminal title="bash — start shipping work">{`
+git switch -c feature/shipping
+printf 'def total(price, shipping):\n    if price >= 1000:\n        price = price * 0.9\n    return price + shipping\n' > app.py
+git add app.py
+git commit -m "add shipping fee after discount"
+
+git branch -v
+git log --oneline --decorate --graph --all
+`}</Terminal>
+
+`HEAD` 表示你現在站在哪個 branch 或 commit。當 `HEAD` 指向 `feature/shipping`，新 commit 會讓這個 branch reference 往前移；`main` 仍留在原 commit。建立 branch 不會複製整個 project。
+
+在 `main` 做一個不同檔案的改動：
+
+<Terminal title="bash — main also moves">{`
+git tag lab/shipping-before-rebase feature/shipping
+git switch main
+printf 'Receipt\n' > receipt.txt
+git add receipt.txt
+git commit -m "add receipt heading"
+
+git log --oneline --decorate --graph --all
+`}</Terminal>
+
+現在 graph 會真正顯示兩條 branch 從哪個 parent 分開。這是資料夾名稱無法提供的證據。
+
+---
+
+## 06. Rebase 是把 local commits 放到新 base 重做
+
+`feature/shipping` 建立在舊 `main` 上。如果想先以最新 `main` 當起點，再套用 shipping 改動，這個操作叫 rebase。
+
+<Terminal title="bash — prove what rebase changes">{`
+export SHIPPING_BEFORE="$(git rev-parse feature/shipping)"
+
+git switch feature/shipping
+git rebase main
+git tag lab/shipping-after-rebase
+export SHIPPING_AFTER="$(git rev-parse feature/shipping)"
+
+printf 'before=%s\nafter=%s\n' "$SHIPPING_BEFORE" "$SHIPPING_AFTER"
+test "$SHIPPING_BEFORE" != "$SHIPPING_AFTER"
+git log --oneline --decorate --graph --all
+`}</Terminal>
+
+Rebase 找出 shipping branch 在分叉後特有的 commits，再依序重播到最新 `main` 上。新 commit 的 parent 已經不同，所以 commit hash 也不同。內容可以相同，但它們不是同一個 commit。
+
+整合到 `main`：
+
+<Terminal title="bash — fast-forward main">{`
+git switch main
+git merge --ff-only feature/shipping
+`}</Terminal>
+
+`--ff-only` 只允許 `main` reference 沿同一條 parent chain 向前移。如果 history 還在分叉，它會拒絕，而不是自動建立 merge commit。
+
+<Callout type="important" title="什麼時不要 rebase">
+  還沒 push、只有你使用的 local commits，可以 rebase。已經 push 且被隊友當成 base 的 commits，不要自行 rebase 後 force-push。Rebase 會產生新 commit IDs，隊友的 history 還指向舊 IDs。
+</Callout>
+
+---
+
+## 07. Conflict 不是 Git 壞掉，是兩個改法都有證據
+
+如果兩個人從同一版複製資料夾，又同時改了同一行，最後只能由人決定。Git 不會用比較新的檔案直接蓋掉另一邊；它保留 base、目前 branch 與要合入 branch 的證據，再停下來要求決定。
+
+先建立一行共同文字：
+
+<Terminal title="bash — create the common base">{`
+printf 'Checkout\n' > message.txt
+git add message.txt
+git commit -m "add checkout message"
+
+git switch -c copy/red
+printf 'Red checkout\n' > message.txt
+git add message.txt
+git commit -m "write red checkout copy"
+
+git switch main
+printf 'Blue checkout\n' > message.txt
+git add message.txt
+git commit -m "write blue checkout copy"
+
+git merge copy/red
+`}</Terminal>
+
+最後一條應該回 `CONFLICT`。這次失敗是實驗目標。馬上執行：
+
+<Terminal title="bash — read before editing">{`
+git status
+git diff
+cat message.txt
+`}</Terminal>
+
+檔案會保留兩邊：
+
+<Terminal title="text — conflict evidence" flavor="output">{`
+<<<<<<< HEAD
+Blue checkout
+=======
+Red checkout
+>>>>>>> copy/red
+`}</Terminal>
+
+Conflict markers 不能直接留在程式。讀完兩邊意圖，寫出最後結果：
+
+<Terminal title="bash — resolve the decision">{`
+printf 'Checkout ready\n' > message.txt
+git add message.txt
+git commit -m "resolve checkout copy conflict"
+
+git status --short
+git log --oneline --decorate --graph --all
+`}</Terminal>
+
+`git add` 在這裡的意思是「這個檔案的決定已完成」。這個 merge commit 有兩個 parents，所以後來可以看出兩條 history 在哪裡會合。
+
+不想繼續 merge 時用 `git merge --abort`。Rebase 遇到 conflict 時，解完每個檔案並 `git add` 後用 `git rebase --continue`；放棄整次 rebase 用 `git rebase --abort`。不確定現在正在做什麼，先看 `git status`。
+
+---
+
+## 08. Worktree 才是「同時要兩個資料夾」的工具
+
+有時候你真的需要兩份 working files：一個資料夾保留寫到一半的 feature，另一個資料夾修線上 hotfix。這時不需要再 clone 一份，也不需要把當前修改硬塞進 stash。
+
+<Terminal title="bash — one repository, two working directories">{`
+git worktree add "\${GIT_LAB}-hotfix" -b hotfix/health main
+git worktree list
+
+printf 'ok\n' > "\${GIT_LAB}-hotfix/health.txt"
+git -C "\${GIT_LAB}-hotfix" add health.txt
+git -C "\${GIT_LAB}-hotfix" commit -m "add health checkpoint"
+
+git status --short
+git -C "\${GIT_LAB}-hotfix" status --short
+`}</Terminal>
+
+兩個資料夾共用同一個 Git object database 與 references，但各自有 `HEAD`、index 與 working files。Git 不允許同一個 branch 同時 checkout 在兩個 worktrees，因為兩邊都可能嘗試移動同一個 branch reference。
+
+整合 hotfix：
+
+<Terminal title="bash — merge the second worktree">{`
+git merge --ff-only hotfix/health
+git worktree list
+
+node "$COURSE_ROOT/exercises/git-history/check.mjs" "$GIT_LAB"
+
+git worktree remove "\${GIT_LAB}-hotfix"
+git worktree list
+`}</Terminal>
+
+`git worktree remove` 遇到 dirty worktree 預設會拒絕。先 commit、帶走或明確丟掉修改，不要先加 `--force`。
+
+---
+
+## 09. Remote 是共享 history，不是自動備份
+
+GitHub 上的 repository 是 remote。你的 local repository 有自己的 commits 與 branches，斷網也能 commit。兩邊不會自動同步。
+
+`origin/main` 是 local remote-tracking branch，記錄上次 fetch 時 remote `main` 的位置。隊友 push 後，你要 fetch 才會更新：
+
+<Terminal title="bash — inspect remote changes first">{`
+git fetch origin
+git log --oneline --left-right HEAD...origin/main
+`}</Terminal>
+
+- `fetch` 取得新 objects，更新 `origin/*`，不改當前 working tree。
+- `merge origin/main` 將兩條 history 會合，分叉時通常留下 merge commit。
+- `rebase origin/main` 把未共享的 local commits 重播到新 base。
+- `push` 嘗試用 local branch 更新 remote branch。Remote 已有你沒有的 commits 時，普通 push 會拒絕。
+
+`git pull` 是 fetch 之後再做 merge 或 rebase。初學時分開執行，比較容易看出哪一步讓 history 改變。
+
+---
+
+## 10. 改錯後要回哪一層
+
+| 現在的情況 | 指令 | 結果 |
+| --- | --- | --- |
+| 已 staged，但這次不想 commit | `git restore --staged <file>` | 拿出 staging area，working tree 修改還在 |
+| 未 commit 的檔案改壞了 | `git restore <file>` | 放棄 working tree 修改；執行前先看 `git diff` |
+| 已共享的 commit 需要撤銷 | `git revert <commit>` | 新增一個反向 commit，舊 history 保留 |
+| rebase 或 reset 後找不到 local commit | `git reflog` | 查詢這個 local repository 近期的 reference 移動 |
+
+Reflog 可以先幫你找到舊 commit ID：
+
+<Terminal title="bash — inspect before rescuing">{`
+git reflog --date=local
+git show --stat <commit-from-reflog>
+git branch rescue/checkpoint <commit-from-reflog>
+`}</Terminal>
+
+先建立 `rescue/checkpoint` 保留找到的 commit，再判斷要怎麼整合。不要一看到舊 hash 就 `git reset --hard`。`--hard` 會同時重設 index 與 working tree，未 commit 修改可能無法回復。
+
+<Callout type="warning" title="密碼進過 commit，不能只靠刪除">
+  下一個 commit 刪掉 password、Token 或 private key，舊 commit 還是有它。先 revoke 或 rotate。第 17 單元會建立 staged secret policy、Gitleaks、CI 與 push protection，在憑證進入共享 history 前擋下來。
+</Callout>
+
+---
+
+## 11. 每次下指令前先定位
+
+真正的工作不是背一長串 Git 指令，而是先回答現在哪些狀態有變化：
+
+<Terminal title="bash — inspect before acting">{`
+git status
+git diff
+git diff --staged
+git log --oneline --decorate --graph --all -12
+`}</Terminal>
+
+- `status` 告訴你當前 branch、staged / unstaged / untracked files，以及是否正在 merge 或 rebase。
+- `diff` 顯示 working tree 還沒 staged 的改動。
+- `diff --staged` 顯示下一個 commit 實際會收進的改動。
+- `log --graph` 顯示 commits 的 parent chain 與 branches 目前指到哪裡。
+
+課程 lab 的 checker 會讀這些真實 Git objects 與 references：
+
+<Terminal title="bash — history harness">{`
+node "$COURSE_ROOT/exercises/git-history/check.mjs" "$GIT_LAB"
+`}</Terminal>
+
+它會驗證 snippet 真的在 history 中出現、消失又被取回；rebase 前後 commit ID 不同；conflict resolution 是兩個 parent 的 merge commit；shipping 與 hotfix 已進入 `main`；每個 worktree 都是 clean。
+
+通過後，才用這個節奏處理真實專案：
+
+<Terminal title="bash — repository routine">{`
+git status --short
+git diff
+git add <files-you-reviewed>
+git diff --staged
+bun run check
+git commit -m "describe the reason for this change"
+git fetch origin
+git rebase origin/main
+git push -u origin HEAD
+`}</Terminal>
+
+這裡的 rebase 只適用還沒被其他人當成 base 的 local branch。團隊規定使用 merge 時，依團隊規則整合。關鍵不是所有專案都要同一組指令，而是每一步都能從 status、diff 與 graph 說明它會改變什麼。
+
+### 本單元使用的正本
+
+- [Pro Git — Recording Changes](https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository)
+- [Git User Manual — What is a branch?](https://git-scm.com/docs/user-manual#understanding-history)
+- [Git — Rebase](https://git-scm.com/docs/git-rebase)
+- [Pro Git — The Perils of Rebasing](https://git-scm.com/book/en/v2/Git-Branching-Rebasing#_rebase_peril)
+- [Git — Worktree](https://git-scm.com/docs/git-worktree)
+- [Git — Revert](https://git-scm.com/docs/git-revert)
+- [Git — Reflog](https://git-scm.com/docs/git-reflog)
