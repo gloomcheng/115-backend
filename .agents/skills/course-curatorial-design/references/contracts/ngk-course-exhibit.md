@@ -21,8 +21,13 @@ Course copy is fixed during layout work. All visible text comes from `src/data` 
 - Desktop first viewport: 72 px navigation plus one yellow exhibit field whose bottom
   lands at the viewport bottom at 1432 × 661. Use a 6/6 split for copy and the main
   illustration. The title remains two intentional lines and must not clip.
-- Mobile first scene: one column inside the same yellow field. Copy and actions precede
-  the illustration. Nothing may overlap text; the page must not overflow at 390 px.
+- Mobile first scene: one column inside the same yellow field. On short phones, the
+  title and Week 01 action precede the Request/Response illustration; the full
+  explanation and secondary actions continue immediately after it. Nothing may
+  overlap text; the page must not overflow at 375 px.
+- Tablet portrait: use a 7/5 split for copy and illustration instead of inheriting the
+  phone stack or shrinking the desktop 6/6 composition. Size the yellow field to its
+  content with a 480 px minimum; do not stretch it to fill the portrait viewport.
 - After the hero, use one focused current-lesson explanation, then an equal-height
   chapter exhibit grid. Each chapter card contains number, original illustration,
   title, summary, and week range.
@@ -73,6 +78,8 @@ Course copy is fixed during layout work. All visible text comes from `src/data` 
 - Desktop 1432 × 661: header and complete hero fit; no horizontal overflow.
 - Mobile 390 × 844: no overlap or horizontal page overflow; navigation and hero remain
   usable; timeline may scroll inside its own region.
+- Short mobile 375 × 667: the course title, Week 01 action, and Request/Response
+  illustration are all visible in the first viewport.
 - Lesson illustrations are 852 px wide inside a 980 px reading field on desktop, with
   readable source/status text and clear space above and below.
 - `npm run copy:check` passes for all five routes.

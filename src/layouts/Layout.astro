@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css'
+import { Icon } from 'astro-icon/components'
 import SiteFooter from '../components/SiteFooter.astro'
 import { siteCopy } from '../data/site-copy'
 import { withBase, withoutBase } from '../lib/paths'
@@ -36,11 +37,18 @@ const activeKey = path.startsWith('/preparation')
   </head>
   <body class="flex min-h-screen flex-col bg-[#fffaf0] font-sans text-[#075486]">
     <header class="relative z-50 bg-[#fffaf0]">
-      <div class="mx-auto flex max-w-[1440px] flex-col items-start gap-3 px-5 py-3 sm:h-[72px] sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:px-8 sm:py-0 lg:px-12">
+      <div class="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4 px-5 sm:h-[72px] sm:gap-8 sm:px-8 lg:px-12">
         <a href={withBase('/')} class="flex shrink-0 items-center gap-3 font-extrabold tracking-[-.04em]"><span class="text-xl sm:text-2xl">{siteCopy.brand.title}</span><span class="grid h-9 w-9 place-items-center rounded-full bg-[#075486] font-mono text-xs text-white">{siteCopy.brand.issue}</span></a>
-        <nav class="grid w-full grid-cols-4 gap-1 whitespace-nowrap font-mono text-xs font-semibold sm:flex sm:w-auto sm:items-center sm:gap-7 sm:text-[13px]">
-          {siteCopy.navigation.map((item) => <a href={withBase(item.href)} class:list={['border-b-2 px-1 py-2 text-center transition-colors', item.active === activeKey ? 'border-[#ef795e] text-[#075486]' : 'border-transparent text-[#4f7892] hover:border-[#f4c84f] hover:text-[#075486]']}>{item.label}</a>)}
-        </nav>
+        <div class="relative sm:block">
+          <input id="site-navigation-toggle" type="checkbox" aria-label={siteCopy.navigationLabel} aria-controls="site-navigation" class="peer sr-only" />
+          <label for="site-navigation-toggle" class="grid h-11 w-11 cursor-pointer place-items-center rounded-full border-2 border-[#075486] peer-checked:[&>[data-close-icon]]:block peer-checked:[&>[data-menu-icon]]:hidden sm:hidden">
+            <Icon name="lucide:menu" data-menu-icon class="h-5 w-5" />
+            <Icon name="lucide:x" data-close-icon class="hidden h-5 w-5" />
+          </label>
+          <nav id="site-navigation" class="absolute right-0 top-[calc(100%+10px)] hidden w-[min(280px,calc(100vw-40px))] border-2 border-[#075486] bg-[#fffaf0] p-2 font-mono text-sm font-semibold shadow-[6px_6px_0_#075486] peer-checked:grid sm:static sm:flex sm:w-auto sm:items-center sm:gap-7 sm:border-0 sm:bg-transparent sm:p-0 sm:text-[13px] sm:shadow-none">
+            {siteCopy.navigation.map((item) => <a href={withBase(item.href)} class:list={['border-b border-[#075486]/20 px-4 py-3 last:border-b-0 sm:border-b-2 sm:px-1 sm:py-2 sm:text-center sm:last:border-b-2', item.active === activeKey ? 'bg-[#f4c84f] text-[#075486] sm:border-[#ef795e] sm:bg-transparent' : 'text-[#4f7892] sm:border-transparent sm:hover:border-[#f4c84f] sm:hover:text-[#075486]']}>{item.label}</a>)}
+          </nav>
+        </div>
       </div>
     </header>
     <div class="min-w-0 flex-1"><slot /></div>

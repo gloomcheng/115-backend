@@ -2,6 +2,7 @@ export const siteCopy = {
   defaultDescription: '網頁程式設計 115 — 從 HTTP 開始，手寫第一個後端',
   titleSuffix: '網頁程式設計 115',
   brand: { title: '網頁程式設計', issue: '115' },
+  navigationLabel: '切換主選單',
   navigation: [
     { href: '/preparation', label: '前置準備', active: 'prep' },
     { href: '/lessons/01-http', label: '單元講義', active: 'lessons' },
