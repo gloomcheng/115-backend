@@ -1,0 +1,537 @@
+---
+title: "AI 工程：讓模型能讀、能查、能被驗證"
+description: "從 token、embedding、attention 與 MoE 開始，追問 AI coding 為什麼需要工具邊界、RAG、測試與權限。"
+---
+
+import Callout from '../../components/Callout.astro';
+import Terminal from '../../components/Terminal.astro';
+
+你把一段程式碼交給 AI。幾秒後，它改了四個檔案，還說「已完成」。
+
+現在真正要問的不是它寫得快不快，而是：它看見了什麼？哪個步驟產生這段 code？誰驗證它沒有破壞 API？
+
+AI 工程不是把 prompt 寫得漂亮。它是把一個會產生機率性輸出的模型，放進有資料、工具、權限、測試與 log 的系統。
+
+<Callout type="note" title="這個單元的先備知識">
+  先學過 HTTP、JSON、路由、資料庫、認證與 log，再來追模型內部。這一單元不要求你訓練大型模型；你要能指出每個機制解決哪個問題，以及它在哪裡可能失敗。
+</Callout>
+
+## 01. 為什麼文字要切成 token？
+
+模型不能直接讀懂「fix the login bug」這個人類字串。它先把文字切成 token，再把 token 映射成整數 ID。模型接收到的是數字序列，不是字典裡的單字。
+
+<svg viewBox="0 0 760 180" role="img" aria-labelledby="ai-q1-title ai-q1-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q1-title">ELI5 文字先變成 token，再變成數字 ID</title>
+  <desc id="ai-q1-description">一段文字被切成 token，每個 token 再被替換成模型可以處理的整數 ID。</desc>
+  <rect x="20" y="55" width="190" height="70" rx="8" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="115" y="96" text-anchor="middle" fill="#075486" font-size="19" font-weight="700">fix the login bug</text>
+  <path d="M225 90 H300" stroke="#075486" stroke-width="4" />
+  <path d="M300 90 l-12 -8 v16 z" fill="#075486" />
+  <rect x="320" y="55" width="85" height="70" rx="6" fill="#b8d8e8" stroke="#075486" stroke-width="2" />
+  <rect x="415" y="55" width="85" height="70" rx="6" fill="#b8d8e8" stroke="#075486" stroke-width="2" />
+  <rect x="510" y="55" width="85" height="70" rx="6" fill="#b8d8e8" stroke="#075486" stroke-width="2" />
+  <text x="362" y="96" text-anchor="middle" fill="#075486" font-size="16">fix</text>
+  <text x="457" y="96" text-anchor="middle" fill="#075486" font-size="16">the</text>
+  <text x="552" y="96" text-anchor="middle" fill="#075486" font-size="16">login</text>
+  <path d="M610 90 H675" stroke="#075486" stroke-width="4" />
+  <path d="M675 90 l-12 -8 v16 z" fill="#075486" />
+  <text x="720" y="78" text-anchor="middle" fill="#ef795e" font-size="17" font-weight="700">41</text>
+  <text x="720" y="105" text-anchor="middle" fill="#ef795e" font-size="17" font-weight="700">928</text>
+</svg>
+
+這不是把文字「翻譯成英文」。token 可以是單字、字的一部分、標點或空白。切法影響輸入長度、成本與模型能看到的上下文。
+
+先用一個假的 tokenizer 看資料形狀。這不是任何模型的正式 tokenizer，只用來確認輸入會先變成序列：
+
+<Terminal title="bash — toy tokenizer">{`
+python3 - <<'PY'
+text = "fix the login bug"
+tokens = ["fix", " the", " login", " bug"]
+print(text)
+print(tokens)
+print(list(enumerate(tokens)))
+PY
+`}</Terminal>
+
+## 02. 為什麼 token 要變成向量？
+
+整數 ID 只能表示「這是哪個 token」。它沒有表示 token 之間的關係。模型需要一個可以被加法、乘法與線性變換處理的表示，所以每個 token 會先進入 embedding table，取出一個向量。
+
+<svg viewBox="0 0 760 180" role="img" aria-labelledby="ai-q2-title ai-q2-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q2-title">ELI5 token ID 會被查表成向量</title>
+  <desc id="ai-q2-description">整數 token ID 進入 embedding table，取出多維向量；向量可以被後續的矩陣運算處理。</desc>
+  <text x="85" y="72" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">token ID</text>
+  <rect x="35" y="90" width="100" height="50" rx="6" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="85" y="122" text-anchor="middle" fill="#075486" font-size="22">928</text>
+  <path d="M155 115 H245" stroke="#075486" stroke-width="4" />
+  <path d="M245 115 l-12 -8 v16 z" fill="#075486" />
+  <rect x="265" y="40" width="170" height="120" rx="6" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="350" y="70" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">embedding table</text>
+  <text x="350" y="105" text-anchor="middle" fill="#274f67" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">928 → [0.2, -0.7, 0.4]</text>
+  <text x="350" y="137" text-anchor="middle" fill="#274f67" font-size="14">learned representation</text>
+  <path d="M455 115 H545" stroke="#075486" stroke-width="4" />
+  <path d="M545 115 l-12 -8 v16 z" fill="#075486" />
+  <circle cx="610" cy="83" r="18" fill="#ef795e" />
+  <circle cx="665" cy="83" r="18" fill="#ef795e" />
+  <circle cx="610" cy="135" r="18" fill="#ef795e" />
+  <circle cx="665" cy="135" r="18" fill="#ef795e" />
+  <text x="638" y="45" text-anchor="middle" fill="#075486" font-size="15">matrix operations</text>
+</svg>
+
+這裡先分清兩種 embedding：token embedding 是模型內部處理文字的表示；text embedding 是拿來做文件或查詢相似度搜尋的表示。兩者都叫 embedding，但用途、模型與評估方式不必相同。
+
+<Terminal title="bash — toy vector distance">{`
+python3 - <<'PY'
+vectors = {
+    "login": [1.0, 0.0],
+    "signin": [0.9, 0.1],
+    "database": [0.0, 1.0],
+}
+score = sum(a * b for a, b in zip(vectors["login"], vectors["signin"]))
+print("login · signin =", score)
+PY
+`}</Terminal>
+
+這個數字不是「相似度真理」。它只示範向量可以被比較；真正的空間是模型用訓練資料學出來的。
+
+## 03. 為什麼還要把位置放進向量？
+
+如果只把 token 向量丟進一個集合，`dog bites man` 與 `man bites dog` 會失去順序資訊。模型需要知道每個 token 位於第幾個位置。
+
+<svg viewBox="0 0 760 205" role="img" aria-labelledby="ai-q3-title ai-q3-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q3-title">ELI5 位置資訊讓相同 token 的順序不同</title>
+  <desc id="ai-q3-description">相同的 token 集合以不同順序排列；加入位置向量後，模型得到不同的輸入表示。</desc>
+  <text x="20" y="45" fill="#075486" font-size="17" font-weight="700">句子 A</text>
+  <rect x="20" y="62" width="150" height="45" rx="5" fill="#b8d8e8" stroke="#075486" stroke-width="2" />
+  <rect x="180" y="62" width="150" height="45" rx="5" fill="#b8d8e8" stroke="#075486" stroke-width="2" />
+  <rect x="340" y="62" width="150" height="45" rx="5" fill="#b8d8e8" stroke="#075486" stroke-width="2" />
+  <text x="95" y="90" text-anchor="middle" fill="#075486" font-size="16">dog</text>
+  <text x="255" y="90" text-anchor="middle" fill="#075486" font-size="16">bites</text>
+  <text x="415" y="90" text-anchor="middle" fill="#075486" font-size="16">man</text>
+  <text x="20" y="135" fill="#075486" font-size="17" font-weight="700">句子 B</text>
+  <rect x="20" y="150" width="150" height="45" rx="5" fill="#ffe29a" stroke="#075486" stroke-width="2" />
+  <rect x="180" y="150" width="150" height="45" rx="5" fill="#ffe29a" stroke="#075486" stroke-width="2" />
+  <rect x="340" y="150" width="150" height="45" rx="5" fill="#ffe29a" stroke="#075486" stroke-width="2" />
+  <text x="95" y="178" text-anchor="middle" fill="#075486" font-size="16">man</text>
+  <text x="255" y="178" text-anchor="middle" fill="#075486" font-size="16">bites</text>
+  <text x="415" y="178" text-anchor="middle" fill="#075486" font-size="16">dog</text>
+  <path d="M530 105 H620" stroke="#075486" stroke-width="4" />
+  <path d="M620 105 l-12 -8 v16 z" fill="#075486" />
+  <text x="680" y="92" text-anchor="middle" fill="#ef795e" font-size="16" font-weight="700">+ position</text>
+  <text x="680" y="120" text-anchor="middle" fill="#075486" font-size="15">不同表示</text>
+</svg>
+
+位置不是把數字貼在 token 旁邊就結束。不同 Transformer 會用不同位置表示；工程師要知道它存在，因為 context 順序是模型輸入的一部分。
+
+<Terminal title="bash — toy positions">{`
+python3 - <<'PY'
+tokens = ["dog", "bites", "man"]
+for position, token in enumerate(tokens):
+    print(position, token)
+PY
+`}</Terminal>
+
+## 04. 為什麼 attention 能建立上下文關聯？
+
+attention 的核心不是「模型突然理解整句話」。它是讓每個 token 根據其他 token 的分數，取回一份加權資訊。
+
+<svg viewBox="0 0 760 220" role="img" aria-labelledby="ai-q4-title ai-q4-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q4-title">ELI5 attention 用 query 和 key 找回 value</title>
+  <desc id="ai-q4-description">每個 query 與所有 key 計算分數，softmax 產生權重，再用權重加總 value。</desc>
+  <text x="50" y="43" fill="#075486" font-size="18" font-weight="700">Query</text>
+  <rect x="30" y="60" width="100" height="42" rx="5" fill="#ffe29a" stroke="#075486" stroke-width="2" />
+  <text x="80" y="87" text-anchor="middle" fill="#075486" font-size="16">login</text>
+  <path d="M145 81 H230" stroke="#075486" stroke-width="4" />
+  <path d="M230 81 l-12 -8 v16 z" fill="#075486" />
+  <rect x="250" y="38" width="180" height="125" rx="6" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="340" y="65" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">QKᵀ scores</text>
+  <text x="340" y="96" text-anchor="middle" fill="#274f67" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">login 0.8</text>
+  <text x="340" y="124" text-anchor="middle" fill="#274f67" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">bug 0.6</text>
+  <text x="340" y="151" text-anchor="middle" fill="#ef795e" font-size="14">softmax → weights</text>
+  <path d="M445 81 H530" stroke="#075486" stroke-width="4" />
+  <path d="M530 81 l-12 -8 v16 z" fill="#075486" />
+  <rect x="550" y="38" width="180" height="125" rx="6" fill="#fff0bf" stroke="#075486" stroke-width="3" />
+  <text x="640" y="65" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">weighted values</text>
+  <text x="640" y="100" text-anchor="middle" fill="#274f67" font-size="16">context for login</text>
+  <text x="640" y="132" text-anchor="middle" fill="#ef795e" font-size="15" font-weight="700">login + bug</text>
+</svg>
+
+為什麼它看起來很快？因為 `QKᵀ` 可以用矩陣乘法一次算出很多 token 對之間的分數，GPU 可以平行處理。不是因為關聯變少；標準 self-attention 對長度 `n` 的成本仍大致是 `n²`。
+
+<Callout type="note" title="先看影片，再看矩陣">
+  [3Blue1Brown：Attention in transformers, step-by-step](https://www.3blue1brown.com/lessons/attention/) 會把 token、query、key、value 與資訊搬移畫出來。看完影片後，回到上圖回答：哪個步驟產生權重？哪個步驟搬回內容？
+</Callout>
+
+<Terminal title="bash — toy attention scores">{`
+python3 - <<'PY'
+query = [1.0, 0.0]
+keys = {"login": [1.0, 0.0], "bug": [0.0, 1.0], "database": [0.5, 0.5]}
+scores = {name: sum(a * b for a, b in zip(query, key)) for name, key in keys.items()}
+print(scores)
+PY
+`}</Terminal>
+
+## 05. 為什麼需要 multi-head attention？
+
+一個 attention head 不必負責所有關係。不同 head 可以在不同表示空間裡學不同線索，例如語法、指代、括號配對或程式碼中的呼叫關係。
+
+<svg viewBox="0 0 760 190" role="img" aria-labelledby="ai-q5-title ai-q5-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q5-title">ELI5 多個 attention head 看不同關係</title>
+  <desc id="ai-q5-description">同一組 token 分別通過 syntax head 與 reference head，最後合併成較完整的表示。</desc>
+  <rect x="20" y="66" width="145" height="58" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="92" y="101" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">same tokens</text>
+  <path d="M180 95 H245 M245 95 V55 H290 M245 95 V135 H290" fill="none" stroke="#075486" stroke-width="3" />
+  <path d="M290 55 l-12 -8 v16 z M290 135 l-12 -8 v16 z" fill="#075486" />
+  <rect x="310" y="25" width="170" height="60" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <rect x="310" y="105" width="170" height="60" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="395" y="61" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">head A: syntax</text>
+  <text x="395" y="141" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">head B: reference</text>
+  <path d="M495 55 H555 M495 135 H555 M555 55 V95 H590 M555 135 V95 H590" fill="none" stroke="#075486" stroke-width="3" />
+  <path d="M590 95 l-12 -8 v16 z" fill="#075486" />
+  <rect x="610" y="66" width="130" height="58" rx="7" fill="#fff0bf" stroke="#075486" stroke-width="3" />
+  <text x="675" y="101" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">combined</text>
+</svg>
+
+multi-head 不是「多幾個答案投票」。它是多組可學習的投影與權重，讓模型同時保留不同種類的關聯。
+
+<Terminal title="bash — toy heads">{`
+python3 - <<'PY'
+heads = {
+    "syntax": "function -> parentheses",
+    "reference": "user_id -> users table",
+}
+for name, relation in heads.items():
+    print(name, relation)
+PY
+`}</Terminal>
+
+## 06. 為什麼 attention 後面還要有 MLP？
+
+attention 比較像把其他位置的資訊搬回目前 token。它搬回來之後，還需要一個非線性轉換，把多種特徵重新組合。這就是 Transformer block 裡的 feed-forward network / MLP 所負責的工作。
+
+<svg viewBox="0 0 760 170" role="img" aria-labelledby="ai-q6-title ai-q6-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q6-title">ELI5 attention 搬資訊，MLP 重新組合特徵</title>
+  <desc id="ai-q6-description">token 先從其他位置取得上下文，再經過 MLP 的非線性轉換，形成下一層使用的表示。</desc>
+  <rect x="25" y="60" width="155" height="55" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="102" y="94" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">context vector</text>
+  <path d="M195 87 H280" stroke="#075486" stroke-width="4" />
+  <path d="M280 87 l-12 -8 v16 z" fill="#075486" />
+  <rect x="300" y="35" width="170" height="105" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="385" y="72" text-anchor="middle" fill="#075486" font-size="18" font-weight="700">MLP</text>
+  <text x="385" y="103" text-anchor="middle" fill="#274f67" font-size="15">linear → nonlinear</text>
+  <text x="385" y="126" text-anchor="middle" fill="#ef795e" font-size="14">feature transform</text>
+  <path d="M485 87 H570" stroke="#075486" stroke-width="4" />
+  <path d="M570 87 l-12 -8 v16 z" fill="#075486" />
+  <rect x="590" y="60" width="145" height="55" rx="7" fill="#fff0bf" stroke="#075486" stroke-width="3" />
+  <text x="662" y="94" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">next layer</text>
+</svg>
+
+這裡不要把 MLP 簡化成「記憶庫」或把 attention 簡化成「理解力」。兩者都是可學習的數值轉換，負責的資料流動方式不同。
+
+<Terminal title="bash — toy nonlinear transform">{`
+python3 - <<'PY'
+features = [0.2, 0.8]
+transformed = [max(0.0, value * 2 - 0.5) for value in features]
+print(features)
+print(transformed)
+PY
+`}</Terminal>
+
+## 07. 為什麼模型需要 MoE？
+
+如果每個 token 都經過同一個 feed-forward network，所有輸入共享同一條計算路徑。MoE 放入多個 expert，讓 router 依 token 的表示選擇少數路徑。
+
+<svg viewBox="0 0 760 215" role="img" aria-labelledby="ai-q7-title ai-q7-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q7-title">ELI5 MoE router 只啟用部分 experts</title>
+  <desc id="ai-q7-description">一個 token 進入 router，router 從四個 experts 中選出兩個，再把結果合併。</desc>
+  <rect x="20" y="82" width="130" height="55" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="85" y="116" text-anchor="middle" fill="#075486" font-size="18" font-weight="700">token</text>
+  <path d="M165 110 H250" stroke="#075486" stroke-width="4" />
+  <path d="M250 110 l-12 -8 v16 z" fill="#075486" />
+  <path d="M290 80 l45 -35 45 35 -45 35 z" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="335" y="84" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">router</text>
+  <path d="M380 70 H475 M380 95 H475 M380 120 H475 M380 145 H475" fill="none" stroke="#075486" stroke-width="2" />
+  <rect x="490" y="47" width="120" height="38" rx="5" fill="#fff0bf" stroke="#075486" stroke-width="2" />
+  <rect x="490" y="92" width="120" height="38" rx="5" fill="#ef795e" stroke="#075486" stroke-width="3" />
+  <rect x="490" y="137" width="120" height="38" rx="5" fill="#fff0bf" stroke="#075486" stroke-width="2" />
+  <rect x="490" y="182" width="120" height="28" rx="5" fill="#ef795e" stroke="#075486" stroke-width="3" />
+  <text x="550" y="72" text-anchor="middle" fill="#075486" font-size="15">expert 1</text>
+  <text x="550" y="117" text-anchor="middle" fill="#fffaf0" font-size="15" font-weight="700">expert 2</text>
+  <text x="550" y="162" text-anchor="middle" fill="#075486" font-size="15">expert 3</text>
+  <text x="550" y="202" text-anchor="middle" fill="#fffaf0" font-size="14" font-weight="700">expert 4</text>
+  <path d="M625 110 H705" stroke="#075486" stroke-width="4" />
+  <path d="M705 110 l-12 -8 v16 z" fill="#075486" />
+</svg>
+
+MoE 的核心不是「每個 expert 有一種人格」。它是 conditional computation：總參數量可以增加，但每個 token 只啟用少數 experts。工程代價是 router 負載平衡、GPU 間資料搬移、記憶體與延遲。
+
+<Terminal title="bash — toy router">{`
+python3 - <<'PY'
+experts = ["syntax", "security", "database", "style"]
+selected = [experts[1], experts[2]]
+print("active experts:", selected)
+print("active count:", len(selected), "/ total:", len(experts))
+PY
+`}</Terminal>
+
+## 08. 為什麼模型可以寫程式？
+
+模型不是先理解「需求」，再像工程師一樣設計程式。它根據訓練過的 token 關係，逐步預測下一個 token。程式碼的語法、慣例與 API 使用方式都會成為可預測的結構，但可預測不等於正確。
+
+<svg viewBox="0 0 760 190" role="img" aria-labelledby="ai-q8-title ai-q8-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q8-title">ELI5 code generation 是逐 token 預測，不是完成證明</title>
+  <desc id="ai-q8-description">模型根據上下文產生候選 token；程式仍要交給 compiler、test 或實際 API 驗證。</desc>
+  <rect x="20" y="60" width="185" height="60" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="112" y="96" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">prompt + code</text>
+  <path d="M220 90 H300" stroke="#075486" stroke-width="4" />
+  <path d="M300 90 l-12 -8 v16 z" fill="#075486" />
+  <rect x="320" y="35" width="180" height="110" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="410" y="67" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">next-token</text>
+  <text x="410" y="100" text-anchor="middle" fill="#274f67" font-size="15">return / raise / pass</text>
+  <text x="410" y="126" text-anchor="middle" fill="#ef795e" font-size="14">one choice at a time</text>
+  <path d="M520 90 H600" stroke="#075486" stroke-width="4" />
+  <path d="M600 90 l-12 -8 v16 z" fill="#075486" />
+  <rect x="620" y="60" width="120" height="60" rx="7" fill="#fff0bf" stroke="#075486" stroke-width="3" />
+  <text x="680" y="85" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">tests?</text>
+  <text x="680" y="106" text-anchor="middle" fill="#ef795e" font-size="14">must run</text>
+</svg>
+
+所以 AI coding 的第一個工程規則是：模型提出 patch，測試才提出證據。SWE-bench 這類研究把真實 repository、issue、跨檔案修改與執行環境放進同一個評估問題，正好說明「產生一段 code」不是完整的 software engineering 任務。[SWE-bench](https://arxiv.org/abs/2310.06770)
+
+<Terminal title="bash — syntax is not behavior">{`
+python3 - <<'PY'
+code = "def total(price):\\n    return price * 0.9\\n"
+compile(code, "generated.py", "exec")
+print("syntax: pass")
+print("behavior: still needs tests")
+PY
+`}</Terminal>
+
+## 09. 為什麼模型需要 context window？
+
+模型只能直接使用這次輸入的 token。context window 是模型一次可以處理的輸入與輸出範圍，不是無限記憶體。
+
+<svg viewBox="0 0 760 190" role="img" aria-labelledby="ai-q9-title ai-q9-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q9-title">ELI5 context window 是有限的工作區</title>
+  <desc id="ai-q9-description">系統規則、repository 摘要、問題與輸出共享有限的 context window；超出範圍的資料不能直接參與這次計算。</desc>
+  <rect x="25" y="50" width="710" height="90" rx="8" fill="#fff0bf" stroke="#075486" stroke-width="3" />
+  <rect x="40" y="67" width="145" height="56" rx="5" fill="#b8d8e8" stroke="#075486" stroke-width="2" />
+  <rect x="195" y="67" width="240" height="56" rx="5" fill="#b8d8e8" stroke="#075486" stroke-width="2" />
+  <rect x="445" y="67" width="150" height="56" rx="5" fill="#ffe29a" stroke="#075486" stroke-width="2" />
+  <rect x="605" y="67" width="115" height="56" rx="5" fill="#ef795e" stroke="#075486" stroke-width="2" />
+  <text x="112" y="100" text-anchor="middle" fill="#075486" font-size="14">system</text>
+  <text x="315" y="100" text-anchor="middle" fill="#075486" font-size="14">repository context</text>
+  <text x="520" y="100" text-anchor="middle" fill="#075486" font-size="14">question</text>
+  <text x="662" y="100" text-anchor="middle" fill="#fffaf0" font-size="14" font-weight="700">output</text>
+  <text x="380" y="35" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">finite context window</text>
+</svg>
+
+context 太長時，系統要截斷、摘要、檢索或分批處理。這就是為什麼 coding agent 需要 repository indexing、檔案選擇與工作記憶；不是把整個硬碟一次貼給模型就會更準。
+
+<Terminal title="bash — count a toy context">{`
+python3 - <<'PY'
+parts = ["system", "repository", "question", "output"]
+limit = 3
+print("kept:", parts[:limit])
+print("dropped:", parts[limit:])
+PY
+`}</Terminal>
+
+## 10. 為什麼需要 embedding 來搜尋資料？
+
+關鍵字搜尋只找字面重疊。embedding 把 query 與文件轉成向量，讓系統可以先找語意上接近的候選資料。
+
+<svg viewBox="0 0 760 210" role="img" aria-labelledby="ai-q10-title ai-q10-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q10-title">ELI5 embedding 把 query 與文件放進可搜尋的空間</title>
+  <desc id="ai-q10-description">query 向量與語意接近的文件向量在空間中距離較近，系統先取回候選文件。</desc>
+  <line x1="95" y1="170" x2="680" y2="170" stroke="#075486" stroke-width="3" />
+  <line x1="95" y1="170" x2="95" y2="30" stroke="#075486" stroke-width="3" />
+  <circle cx="250" cy="120" r="17" fill="#ef795e" />
+  <text x="250" y="103" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">query</text>
+  <circle cx="300" cy="105" r="14" fill="#b8d8e8" stroke="#075486" stroke-width="2" />
+  <text x="300" y="85" text-anchor="middle" fill="#075486" font-size="14">auth doc</text>
+  <circle cx="520" cy="65" r="14" fill="#b8d8e8" stroke="#075486" stroke-width="2" />
+  <text x="520" y="45" text-anchor="middle" fill="#075486" font-size="14">recipe</text>
+  <circle cx="600" cy="135" r="14" fill="#b8d8e8" stroke="#075486" stroke-width="2" />
+  <text x="600" y="160" text-anchor="middle" fill="#075486" font-size="14">unrelated</text>
+  <path d="M250 120 L300 105" stroke="#ef795e" stroke-width="3" stroke-dasharray="6 5" />
+  <text x="385" y="198" text-anchor="middle" fill="#075486" font-size="15">distance is a retrieval signal, not truth</text>
+</svg>
+
+embedding 不是記憶，也不是答案。它只提供候選排序的訊號。真正的搜尋還要決定 chunk 怎麼切、metadata 怎麼篩、要不要混合 keyword search、要不要 rerank。
+
+<Terminal title="bash — toy cosine signal">{`
+python3 - <<'PY'
+def dot(left, right):
+    return sum(a * b for a, b in zip(left, right))
+
+query = [1.0, 0.0]
+documents = {"auth": [0.9, 0.1], "recipe": [0.1, 0.9]}
+print({name: dot(query, vector) for name, vector in documents.items()})
+PY
+`}</Terminal>
+
+## 11. 為什麼需要 RAG？
+
+模型參數不是你的即時資料庫。文件會更新、權限會改變、使用者需要來源。RAG 把外部文件切成 chunks，先取回相關內容，再把內容放進 model context。
+
+<svg viewBox="0 0 760 220" role="img" aria-labelledby="ai-q11-title ai-q11-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q11-title">ELI5 RAG 從文件檢索內容再回答</title>
+  <desc id="ai-q11-description">文件先切分並建立索引；問題觸發檢索，取回的 chunks 進入模型上下文，回答附帶來源。</desc>
+  <rect x="20" y="70" width="110" height="72" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="75" y="100" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">documents</text>
+  <text x="75" y="124" text-anchor="middle" fill="#274f67" font-size="14">chunk + index</text>
+  <path d="M145 106 H225" stroke="#075486" stroke-width="4" />
+  <path d="M225 106 l-12 -8 v16 z" fill="#075486" />
+  <rect x="245" y="70" width="125" height="72" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="307" y="100" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">retrieve</text>
+  <text x="307" y="124" text-anchor="middle" fill="#274f67" font-size="14">top chunks</text>
+  <path d="M385 106 H465" stroke="#075486" stroke-width="4" />
+  <path d="M465 106 l-12 -8 v16 z" fill="#075486" />
+  <rect x="485" y="70" width="120" height="72" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="545" y="100" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">model</text>
+  <text x="545" y="124" text-anchor="middle" fill="#274f67" font-size="14">context + answer</text>
+  <path d="M620 106 H700" stroke="#075486" stroke-width="4" />
+  <path d="M700 106 l-12 -8 v16 z" fill="#075486" />
+  <text x="735" y="92" text-anchor="middle" fill="#ef795e" font-size="15" font-weight="700">cite</text>
+  <text x="735" y="119" text-anchor="middle" fill="#075486" font-size="14">source</text>
+</svg>
+
+RAG 把問題從「模型有沒有背過」改成「檢索有沒有找對、上下文有沒有放對、答案有沒有引用」。它沒有把幻覺自動消除；錯 chunk 仍然會產生有自信的錯誤答案。
+
+<Terminal title="bash — toy rag trace">{`
+python3 - <<'PY'
+question = "How do I rotate the API key?"
+retrieved = ["security.md#rotate-key"]
+answer = "Read the rotation procedure in security.md#rotate-key."
+print({"question": question, "retrieved": retrieved, "answer": answer})
+PY
+`}</Terminal>
+
+## 12. 為什麼需要 tool calling？
+
+模型不能直接修改資料庫、讀取檔案或部署服務。它只能提出一個結構化的 tool call；真正的 Server 必須驗證 schema、身份與權限，再決定是否執行。
+
+<svg viewBox="0 0 760 190" role="img" aria-labelledby="ai-q12-title ai-q12-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q12-title">ELI5 tool calling 是模型提案，Server 做驗證與執行</title>
+  <desc id="ai-q12-description">模型產生 JSON tool call，後端先通過 schema 與權限檢查，再呼叫實際工具並回傳結果。</desc>
+  <rect x="20" y="62" width="130" height="58" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="85" y="97" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">model</text>
+  <path d="M170 91 H250" stroke="#075486" stroke-width="4" />
+  <path d="M250 91 l-12 -8 v16 z" fill="#075486" />
+  <rect x="270" y="42" width="175" height="100" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="357" y="72" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">JSON tool call</text>
+  <text x="357" y="104" text-anchor="middle" fill="#274f67" font-size="14">schema + arguments</text>
+  <text x="357" y="128" text-anchor="middle" fill="#ef795e" font-size="14">untrusted proposal</text>
+  <path d="M465 91 H535" stroke="#075486" stroke-width="4" />
+  <path d="M535 91 l-12 -8 v16 z" fill="#075486" />
+  <rect x="555" y="42" width="180" height="100" rx="7" fill="#fff0bf" stroke="#075486" stroke-width="3" />
+  <text x="645" y="72" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">policy gate</text>
+  <text x="645" y="104" text-anchor="middle" fill="#274f67" font-size="14">authorize → execute</text>
+  <text x="645" y="128" text-anchor="middle" fill="#ef795e" font-size="14">database / git / API</text>
+</svg>
+
+這個邊界和 HTTP API 一樣：模型是 Client，工具 Server 才有真正的執行責任。不要把「模型說要刪檔案」當成「檔案已經可以刪」。
+
+<Terminal title="bash — validate a toy tool call">{`
+python3 - <<'PY'
+import json
+
+call = json.loads('{"tool":"get_user","arguments":{"name":"alice"}}')
+assert set(call) == {"tool", "arguments"}
+assert call["tool"] == "get_user"
+print("schema: pass")
+PY
+`}</Terminal>
+
+## 13. 為什麼需要 eval？
+
+人可以讀一個回答，覺得「好像對」。系統不能只靠這個感覺。eval 把問題、期待結果與判定規則固定下來，讓模型或 prompt 改版後可以比較。
+
+<svg viewBox="0 0 760 190" role="img" aria-labelledby="ai-q13-title ai-q13-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q13-title">ELI5 eval 把模型輸出和可檢查的期待結果比較</title>
+  <desc id="ai-q13-description">固定的測試案例送進模型，把 actual output 和 expected result 比較，再留下分數與失敗案例。</desc>
+  <rect x="20" y="62" width="135" height="58" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="87" y="97" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">test cases</text>
+  <path d="M175 91 H255" stroke="#075486" stroke-width="4" />
+  <path d="M255 91 l-12 -8 v16 z" fill="#075486" />
+  <rect x="275" y="42" width="150" height="100" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="350" y="75" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">model run</text>
+  <text x="350" y="108" text-anchor="middle" fill="#274f67" font-size="14">actual output</text>
+  <text x="350" y="132" text-anchor="middle" fill="#ef795e" font-size="14">trace + cost</text>
+  <path d="M445 91 H525" stroke="#075486" stroke-width="4" />
+  <path d="M525 91 l-12 -8 v16 z" fill="#075486" />
+  <rect x="545" y="42" width="190" height="100" rx="7" fill="#fff0bf" stroke="#075486" stroke-width="3" />
+  <text x="640" y="75" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">compare</text>
+  <text x="640" y="108" text-anchor="middle" fill="#274f67" font-size="14">expected vs actual</text>
+  <text x="640" y="132" text-anchor="middle" fill="#ef795e" font-size="14">pass / fail</text>
+</svg>
+
+eval 不只是一個總分。至少要能分開看：答案是否正確、retrieval 是否找到來源、tool call 是否成功、延遲與成本是否可接受、失敗是否可重現。
+
+<Terminal title="bash — toy eval">{`
+python3 - <<'PY'
+cases = [
+    {"expected": "200", "actual": "200"},
+    {"expected": "404", "actual": "500"},
+]
+passed = sum(case["expected"] == case["actual"] for case in cases)
+print("passed:", passed, "/", len(cases))
+PY
+`}</Terminal>
+
+## 14. 為什麼 Agent 不能直接擁有所有權限？
+
+模型輸出是不可信輸入。使用者訊息、repository 文件、RAG chunk 都可能包含會改變模型行為的指令。Agent 可以提出行動，但權限必須留在模型以外的 policy gate。
+
+<svg viewBox="0 0 760 220" role="img" aria-labelledby="ai-q14-title ai-q14-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q14-title">ELI5 Agent 行動要先通過權限閘門</title>
+  <desc id="ai-q14-description">模型收到使用者或文件內容後提出行動；policy gate 允許低風險讀取，要求高風險寫入經過額外核准。</desc>
+  <rect x="20" y="75" width="145" height="65" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="92" y="103" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">input</text>
+  <text x="92" y="126" text-anchor="middle" fill="#274f67" font-size="13">user / document</text>
+  <path d="M185 108 H260" stroke="#075486" stroke-width="4" />
+  <path d="M260 108 l-12 -8 v16 z" fill="#075486" />
+  <rect x="280" y="50" width="145" height="115" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="352" y="84" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">agent</text>
+  <text x="352" y="116" text-anchor="middle" fill="#274f67" font-size="14">plan / tool call</text>
+  <text x="352" y="142" text-anchor="middle" fill="#ef795e" font-size="14">untrusted</text>
+  <path d="M445 108 H510" stroke="#075486" stroke-width="4" />
+  <path d="M510 108 l-12 -8 v16 z" fill="#075486" />
+  <rect x="530" y="35" width="205" height="145" rx="7" fill="#fff0bf" stroke="#075486" stroke-width="3" />
+  <text x="632" y="68" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">policy gate</text>
+  <text x="632" y="103" text-anchor="middle" fill="#274f67" font-size="14">read → allow</text>
+  <text x="632" y="130" text-anchor="middle" fill="#ef795e" font-size="14">write → approve</text>
+  <text x="632" y="157" text-anchor="middle" fill="#075486" font-size="14">delete → deny by default</text>
+</svg>
+
+系統的身份驗證、授權、檔案權限與資料庫交易不能交給 prompt 保證。Prompt 是提示，不是 security boundary。
+
+<Terminal title="bash — toy permission gate">{`
+python3 - <<'PY'
+allowed = {"read_file"}
+requested = "delete_file"
+decision = "allow" if requested in allowed else "deny"
+print(requested, decision)
+PY
+`}</Terminal>
+
+## 單元實作作業
+
+建立一個最小的 AI coding proof，不要先做聊天機器人：
+
+1. 準備三個小型 repository 問題，每題都有明確的 expected result。
+2. 讓模型提出 patch，但把檔案寫入限制在 sandbox。
+3. 執行測試、收集 diff、stdout、stderr、延遲與 token 使用量。
+4. 加入一份含有錯誤指令的文件，觀察 RAG 或 Agent 是否把它當成權限命令。
+5. 最後提交一張流程圖：`input → model → retrieval / tool → policy → test → result`。
+
+這份流程圖比「模型回答得很像人」更能證明你知道系統在哪裡做決定。
+
+## 延伸來源
+
+- [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
+- [Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer](https://arxiv.org/abs/1701.06538)
+- [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)
+- [3Blue1Brown：Transformers, the tech behind LLMs](https://www.3blue1brown.com/lessons/gpt/)
+- [3Blue1Brown：Attention in transformers, step-by-step](https://www.3blue1brown.com/lessons/attention/)

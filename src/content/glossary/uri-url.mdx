@@ -1,0 +1,16 @@
+---
+term: URI / URL
+definition: URI 是識別資源的總稱；URL 是帶有定位方式的 URI，會告訴 Client 如何找到資源。
+category: 網路
+first: 2
+---
+
+課堂上常把網址叫 URL。需要精確談語法時，使用 URI 這個較大的總稱。
+
+常見 URL 可以拆成：
+
+```text
+scheme://[userinfo@]host[:port]/path?query#fragment
+```
+
+`path` 與 `query` 會進入 HTTP Request；`fragment` 留在 Client 端，不會送給 Server。不要把密碼、Token 或 API key 放進 URL，因為 URL 可能被瀏覽器、Server 或 proxy 記錄。

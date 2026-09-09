@@ -38,6 +38,8 @@ HTTP 的基本單位是一組 Request 與 Response。Client 先送 Request，Ser
 < Content-Length: 0
 `}</Terminal>
 
+`/status/200` 是這一行 Request Target 的 path。下一週會把它放回完整的 URI / URL，拆開 `scheme`、`host`、`port`、`path`、`query` 與 `fragment`，再看哪些部分真的進了 Request。
+
 Request 的第一行包含 Method、target 與 HTTP version。Response 的第一行包含 HTTP version、Status Code 與 reason phrase。Header 跟在第一行後面；空白行代表 Header 結束。
 
 ### Stateless 到底少了什麼

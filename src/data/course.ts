@@ -33,7 +33,13 @@ export const chapters: Chapter[] = [
         href: '/lessons/01-http',
         note: '09/07 開學',
       },
-      { w: 2, dates: '09/14–09/20', title: 'URL / Header / Body 的長相', note: '加退選截止' },
+      {
+        w: 2,
+        dates: '09/14–09/20',
+        title: 'URI / URL / Header / Body 的長相',
+        href: '/lessons/02-url-headers-body',
+        note: '加退選截止',
+      },
       {
         w: 3,
         dates: '09/21–09/27',

@@ -1,0 +1,202 @@
+---
+title: "URI / URL、Header 與 Body — 看懂網址怎麼變成 Request"
+week: 2
+description: "把網址拆成可以觀察的零件，再確認哪些資料進了 HTTP Request，哪些只留在 Client。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+先把這個網址貼進 Terminal：
+
+<Terminal title="bash — inspect one URL">{`
+curl -v 'https://httpbin.org/get?course=115&topic=uri#fragment'
+`}</Terminal>
+
+先找 `> GET`。你會看到 `path` 與 `query` 出現在 Request Target；`#fragment` 不會出現在送給 Server 的那一行。這一個差異，就是本章要確認的事。
+
+<svg viewBox="0 0 900 250" role="img" aria-labelledby="url-claim-title url-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="url-claim-title">ELI5 URL 的 path 與 query 會進入 Request，fragment 留在 Client</title>
+  <desc id="url-claim-description">curl 送出包含 path 與 query 的 Request Target；#fragment 留在 Client 端，沒有出現在 Server 收到的 Request Target。</desc>
+  <defs>
+    <marker id="url-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="35" y="45" width="250" height="150" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="160" y="78" text-anchor="middle" fill="#075486" font-size="22" font-weight="700">Client / curl</text>
+  <text x="160" y="116" text-anchor="middle" fill="#274f67" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">/get?course=115</text>
+  <text x="160" y="145" text-anchor="middle" fill="#ef795e" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">#fragment</text>
+  <text x="160" y="174" text-anchor="middle" fill="#274f67" font-size="14">Client 另外處理</text>
+  <path d="M300 120 H590" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#url-arrow)" />
+  <text x="445" y="105" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">Request Target</text>
+  <rect x="615" y="45" width="250" height="150" rx="8" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="740" y="78" text-anchor="middle" fill="#075486" font-size="22" font-weight="700">Server</text>
+  <text x="740" y="125" text-anchor="middle" fill="#274f67" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">/get?course=115</text>
+  <text x="740" y="160" text-anchor="middle" fill="#ef795e" font-size="14">沒有 #fragment</text>
+</svg>
+
+## 01. URI 是總稱，URL 是其中一種定位方式
+
+你在瀏覽器網址列輸入的字串，通常叫 URL。它告訴 Client 要使用哪種協定、找哪個主機、請哪個資源。
+
+URI 是較大的總稱：只要一個字串能識別某個資源，就可以稱為 URI。URL 是帶有定位方式的 URI。`https://example.com/users/alice` 同時是 URI 與 URL；`urn:isbn:9780131103627` 可以識別一本書，但不告訴瀏覽器要連哪台主機，因此不是用來直接連線的 URL。
+
+這一週先使用一個實務上夠用的 URL 形狀：
+
+<Terminal title="URI — common URL shape" flavor="output">{`
+scheme://[userinfo@]host[:port]/path?query#fragment
+`}</Terminal>
+
+RFC 3986 定義的是 URI 的通用語法。文件若要精確談語法，看到 `URI` 就先不要自行換成「網址」；「網址」是課堂上方便使用的日常說法。
+
+## 02. 把一個 URL 拆成六個位置
+
+拿這個例子逐段看：
+
+<svg viewBox="0 0 920 340" role="img" aria-labelledby="url-parts-title url-parts-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="url-parts-title">ELI5 URL 的六個部分</title>
+  <desc id="url-parts-description">完整 URL 被拆成 scheme、host、port、path、query 與 fragment 六個有不同責任的部分。每個標籤由連接線指向 URL 中的實際字串。</desc>
+  <text x="460" y="25" text-anchor="middle" fill="#075486" font-size="18" font-weight="700">一個 URL，六個工作位置</text>
+  <rect x="25" y="45" width="78" height="64" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="64" y="84" text-anchor="middle" fill="#075486" font-size="18" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">https</text>
+  <text x="119" y="84" text-anchor="middle" fill="#075486" font-size="22" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">://</text>
+  <rect x="135" y="45" width="190" height="64" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="230" y="84" text-anchor="middle" fill="#075486" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">api.example.com</text>
+  <rect x="335" y="45" width="78" height="64" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="374" y="84" text-anchor="middle" fill="#075486" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">:8443</text>
+  <rect x="423" y="45" width="160" height="64" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="503" y="84" text-anchor="middle" fill="#075486" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">/users/alice</text>
+  <rect x="593" y="45" width="170" height="64" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="678" y="84" text-anchor="middle" fill="#075486" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">?active=true</text>
+  <rect x="773" y="45" width="120" height="64" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="833" y="84" text-anchor="middle" fill="#075486" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">#profile</text>
+  <path d="M64 112 V160 M230 112 V160 M374 112 V160 M503 112 V160 M678 112 V160 M833 112 V160" fill="none" stroke="#075486" stroke-width="2" />
+  <rect x="25" y="170" width="78" height="48" rx="6" fill="#fffaf0" stroke="#075486" stroke-width="2" />
+  <rect x="135" y="170" width="190" height="48" rx="6" fill="#fffaf0" stroke="#075486" stroke-width="2" />
+  <rect x="335" y="170" width="78" height="48" rx="6" fill="#fffaf0" stroke="#075486" stroke-width="2" />
+  <rect x="423" y="170" width="160" height="48" rx="6" fill="#fffaf0" stroke="#075486" stroke-width="2" />
+  <rect x="593" y="170" width="170" height="48" rx="6" fill="#fffaf0" stroke="#ef795e" stroke-width="2" />
+  <rect x="773" y="170" width="120" height="48" rx="6" fill="#fffaf0" stroke="#ef795e" stroke-width="2" />
+  <text x="64" y="200" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">scheme</text>
+  <text x="230" y="200" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">host</text>
+  <text x="374" y="200" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">port</text>
+  <text x="503" y="200" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">path</text>
+  <text x="678" y="200" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">query</text>
+  <text x="833" y="200" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">fragment</text>
+  <text x="460" y="268" text-anchor="middle" fill="#274f67" font-size="17">每一段不是裝飾；Client、DNS、Server 與瀏覽器會分別使用它。</text>
+  <text x="460" y="300" text-anchor="middle" fill="#ef795e" font-size="15" font-weight="700">這張圖只證明：先拆開，才知道哪一段交給誰處理。</text>
+</svg>
+
+這裡不靠空白字元對齊。每個標籤都直接指向 URL 中的實際字串；真正的語法要看分隔符號。每一段負責的事不同：
+
+| 部分 | 例子 | Client 用它做什麼 |
+| --- | --- | --- |
+| `scheme` | `https` | 決定使用哪種 URI 存取方式；HTTP 網頁常見 `http` 與 `https` |
+| `userinfo` | `user` | 語法上可以放在 authority 前面；不要把密碼、Token 或 API key 放進 URL |
+| `host` | `api.example.com` | 找到要連線的主機名稱或 IP 位址 |
+| `port` | `8443` | 指定主機上的網路入口；省略時由 scheme 的預設規則決定 |
+| `path` | `/users/alice` | 指出要操作的資源路徑；最後怎麼解讀由 Server 的路由決定 |
+| `query` | `active=true` | 把篩選、排序或其他參數交給 Server；它不是另一條 path |
+| `fragment` | `profile` | 指向 Response 內容中的位置，由 Client 處理，不送給 Server |
+
+`host` 是完整的主機名稱。`api.example.com` 裡的 `api` 常被叫作 subdomain，`example.com` 常被叫作 domain；這是命名與 DNS 的分工，不要把它們和 HTTP path 混在一起。
+
+`http` 預設使用 port `80`，`https` 預設使用 port `443`。其他 scheme 也有自己的常見入口，例如 `ftp` 常見 port `21`；這些是協定或服務的約定，不是 URL 語法自己決定的數字。URL 沒寫出來，不代表連線沒有 port；Client 仍然要依 scheme 選擇連線入口。寫成 `https://api.example.com:8443` 時，`8443` 才是明確指定的非預設 port。
+
+如果 URL 沒寫 path，Client 會請求 `/`。Server 要不要把 `/` 對應到 `index.html`，是 web server 或框架的設定，不是 URL 規則自動補上的檔名。
+
+## 03. URL 怎麼變成 Request Target
+
+瀏覽器或 `curl` 解析 URL 後，會把其中需要送給 Server 的部分組成 Request。`scheme` 與 `host` 會影響連線；在 HTTP/1.1 的一般 Request 中，Request Target 主要看到 path 與 query，Host 則放在 Header。
+
+<Terminal title="HTTP — URL becomes a request" flavor="output">{`
+URL:
+https://httpbin.org/get?course=115&topic=uri#fragment
+
+Request:
+> GET /get?course=115&topic=uri HTTP/1.1
+> Host: httpbin.org
+> User-Agent: curl/8.x
+>
+`}</Terminal>
+
+這裡有三個可驗證的界線：
+
+- `https` 決定 Client 使用 TLS 保護連線。
+- `httpbin.org` 出現在 `Host` Header，讓 Server 知道這個 Request 要交給哪個 host。
+- `#fragment` 沒有被送出。它是 Client 讀完 Response Body 後，用來定位內容的提示。
+
+<Callout type="important" title="Fragment 不是秘密通道">
+  Fragment 不送到 Server，不代表整個 URL 都不會留下紀錄。`path` 與 `query` 可能出現在 Browser history、Server log、proxy log 與分析工具中。密碼、Token、API key 不要放在 URL；改用 HTTPS 也不會讓它們從 log 消失。
+</Callout>
+
+## 04. Header 與 Body 放的不是同一種資料
+
+Header 是 Request 或 Response 的附加欄位。它描述這個訊息的格式、來源、快取條件或認證資訊。Body 是訊息內容本身；不是每一個 Request 都有 Body。
+
+一個讀取 Request 可能只有 Request Line 與 Header：
+
+<Terminal title="HTTP — GET has no request body" flavor="output">{`
+> GET /users/alice HTTP/1.1
+> Host: api.example.com
+> Accept: application/json
+>
+`}</Terminal>
+
+一個建立資料的 Request 可能把 JSON 放在 Body：
+
+<Terminal title="HTTP — POST body" flavor="output">{`
+> POST /users HTTP/1.1
+> Host: api.example.com
+> Content-Type: application/json
+>
+> {"name":"alice"}
+`}</Terminal>
+
+空白行把 Header 與 Body 分開。`Content-Type` 告訴 Server 怎麼讀 Body；它不會把 Body 變成 URL，也不會替 Server 決定資料一定有效。
+
+## 05. Path parameter、query parameter 與 FastAPI 路由
+
+目前範例 API 有這條路由：
+
+<Terminal title="Python — existing route" flavor="output">{`
+@app.get("/users/{name}")
+def get_user(name: str):
+    ...
+`}</Terminal>
+
+當你送出 `GET /users/alice`，FastAPI 把 path 中的 `alice` 放進 `name`。這是 path parameter。
+
+Query parameter 在 `?` 後面：
+
+<Terminal title="HTTP — path and query" flavor="output">{`
+GET /users/alice?active=true HTTP/1.1
+`}</Terminal>
+
+`/users/alice` 仍然是 path；`active=true` 是 query。兩者最後怎麼影響資料，要看 Server 的 handler 是否讀取它。網址長得像有參數，不代表程式一定會使用參數。
+
+## 06. 用 curl 把每個界線找出來
+
+依序執行：
+
+<Terminal title="bash — inspect URL boundaries">{`
+curl -v 'https://httpbin.org/get?course=115&topic=uri#fragment'
+curl -v 'https://httpbin.org/anything/users/alice?active=true'
+curl -i -X POST 'https://httpbin.org/anything/users' \\
+  -H 'Content-Type: application/json' \\
+  -d '{"name":"alice"}'
+`}</Terminal>
+
+每一次只記四件事：
+
+1. URL 的 `scheme` 與 `host` 是什麼。
+2. `> GET` 或 `> POST` 的 Request Target 是什麼。
+3. 哪些資料在 Header，哪一段是 Body。
+4. `#fragment` 有沒有出現在送給 Server 的 Request。
+
+## 單元實作作業
+
+在 `exercises/02-url/` 完成一次 URL 拆解。截圖必須同時看得到你執行的 URL、`>` Request Line 與 `<` Status Line；在圖片上標出 `scheme`、`host`、`path`、`query`，並圈出你原本輸入但沒有送到 Server 的 `fragment`。
+
+最後用一句話回答：`#fragment` 為什麼沒有出現在 Request Target？

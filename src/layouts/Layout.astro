@@ -18,11 +18,13 @@ const activeKey = path.startsWith('/preparation')
     ? 'git'
     : path.startsWith('/lessons')
       ? 'lessons'
-      : path.startsWith('/book')
-        ? 'book'
-        : path.startsWith('/glossary')
-          ? 'glossary'
-          : ''
+      : path.startsWith('/ai-engineering')
+        ? 'ai'
+        : path.startsWith('/book')
+          ? 'book'
+          : path.startsWith('/glossary')
+            ? 'glossary'
+            : ''
 ---
 
 <!doctype html>
