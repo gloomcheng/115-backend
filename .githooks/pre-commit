@@ -14,7 +14,7 @@ node scripts/english-code-check.mjs
 echo "4. Running Biome linter & format check on staged files..."
 staged_files="$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|jsx|mjs|cjs|ts|tsx|json|css|astro|md|mdx)$' || true)"
 if [ -n "$staged_files" ]; then
-  bunx biome check --staged --vcs-enabled=true --no-errors-on-unmatched || true
+  bunx biome check --staged --vcs-enabled=true --no-errors-on-unmatched
 fi
 
 echo "5. Running deployment contract checks..."
