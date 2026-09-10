@@ -25,7 +25,7 @@ curl -v https://httpbin.org/status/200
 
 HTTP 的基本單位是一組 Request 與 Response。Client 先送 Request，Server 收到後才回 Response。
 
-<img src={withBase('/images/lessons/01/request-response.png')} alt="ELI5 請求與回應封包傳輸示意圖" />
+<img src={withBase('/images/lessons/01/request-response.webp')} alt="ELI5 請求與回應封包傳輸示意圖" width="1672" height="941" loading="lazy" decoding="async" />
 
 用 `curl -v` 看真實內容時，畫面大致會出現這兩段：
 
@@ -58,7 +58,7 @@ HTTP 是 stateless protocol。意思是每一個 Request 都必須帶足 Server 
 
 Client 是主動送出 Request 的程式。Server 在指定位置等待 Request，執行對應邏輯，再決定 Response。
 
-<img src={withBase('/images/lessons/01/client-server.png')} alt="ELI5 客戶端與伺服器角色契約與決定權示意圖" />
+<img src={withBase('/images/lessons/01/client-server.webp')} alt="ELI5 客戶端與伺服器角色契約與決定權示意圖" width="1672" height="941" loading="lazy" decoding="async" />
 
 Client 決定何時送出、使用哪個 Method、請求哪個 target，以及要帶哪些 Header 或 Body。瀏覽器、手機 App 與 `curl` 都可以是 Client。
 
@@ -72,7 +72,7 @@ Server 決定這個 target 是否存在、目前使用者能不能操作、程�
 
 Request 第一行的第一個單字是 Method。它描述 Client 想做的操作，不是裝飾用的標籤。
 
-<img src={withBase('/images/lessons/01/http-methods.png')} alt="ELI5 HTTP 五大動詞與冪等性示意圖" />
+<img src={withBase('/images/lessons/01/http-methods.webp')} alt="ELI5 HTTP 五大動詞與冪等性示意圖" width="1672" height="941" loading="lazy" decoding="async" />
 
 - `GET /items`：讀取 items。
 - `POST /items`：在 items 集合下建立一筆新資料，或觸發一個不適合其他 Method 的處理。
@@ -98,7 +98,7 @@ Idempotent 是另一件事：同一個 Request 執行一次或多次，Server �
 
 Response 第一行裡的三位數是 Status Code。它告訴 Client，Server 如何處理這次 Request。
 
-<img src={withBase('/images/lessons/01/status-codes.png')} alt="ELI5 HTTP 狀態碼責任判定示意圖" />
+<img src={withBase('/images/lessons/01/status-codes.webp')} alt="ELI5 HTTP 狀態碼責任判定示意圖" width="1672" height="941" loading="lazy" decoding="async" />
 
 - `1xx`：處理尚未完成，先回報目前進度或協定切換資訊。
 - `2xx`：Request 已成功處理。常見的是 `200 OK` 與 `201 Created`。
@@ -149,7 +149,7 @@ HTTP/1.1 200 OK
 
 瀏覽器是 HTTP Client，也有 HTML / CSS 排版引擎。它先送 Request，收到 Response 後再依 Header 與 Body 決定如何處理內容。
 
-<img src={withBase('/images/lessons/01/browser-vision.png')} alt="ELI5 從封包到瀏覽器畫面繪製的視角穿透圖" />
+<img src={withBase('/images/lessons/01/browser-vision.webp')} alt="ELI5 從封包到瀏覽器畫面繪製的視角穿透圖" width="1672" height="941" loading="lazy" decoding="async" />
 
 假設 Body 是：
 

@@ -68,7 +68,7 @@ pwd
 
 這張圖只證明一件事：外部 Request 只直接連到 Nginx；FastAPI 的 `8000` port 留在 VPS 裡面。
 
-<img src={withBase('/images/lessons/17/vps-public-entry.png')} alt="ELI5 VPS 公開入口示意圖：外部 Client 以 HTTPS 443 連到 Nginx，Nginx 再透過 VPS 內部的 127.0.0.1:8000 轉交給 FastAPI，外部直連 8000 被阻擋。" />
+<img src={withBase('/images/lessons/17/vps-public-entry.webp')} alt="ELI5 VPS 公開入口示意圖：外部 Client 以 HTTPS 443 連到 Nginx，Nginx 再透過 VPS 內部的 127.0.0.1:8000 轉交給 FastAPI，外部直連 8000 被阻擋。" width="1672" height="941" loading="lazy" decoding="async" />
 
 先記住三個位置：
 

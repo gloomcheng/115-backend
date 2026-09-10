@@ -86,7 +86,7 @@ RPG 的記錄點可以幫忙理解 commit：它是一個可回頭讀取的進度
 
 這張圖只證明一件事：資料夾副本是三個失聯的結果；commit history 有 parent 路徑，所以能查兩個記錄點之間加了或刪了哪段程式。
 
-<img src={withBase('/images/docs/git/history-vs-copies.png')} alt="ELI5 版本記錄示意圖：左邊是沒有連結的 v1、v2 與 v3-final 資料夾；右邊是由 parent 路徑連起的 commit A、B、C，中間可看到 price 乘以 0.9 這段程式被加入與刪除。" />
+<img src={withBase('/images/docs/git/history-vs-copies.webp')} alt="ELI5 版本記錄示意圖：左邊是沒有連結的 v1、v2 與 v3-final 資料夾；右邊是由 parent 路徑連起的 commit A、B、C，中間可看到 price 乘以 0.9 這段程式被加入與刪除。" width="1672" height="941" loading="lazy" decoding="async" />
 
 <Callout type="note" title="Commit 不是整台電腦的備份">
   Commit 只包含 repository 裡被 Git 追蹤、而且這次已 staged 的檔案版本。沒有 <code>git add</code> 的 untracked file、repository 外的檔案、資料庫與上傳檔案都不在裡面。
