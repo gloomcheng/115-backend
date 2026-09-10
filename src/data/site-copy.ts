@@ -1,5 +1,5 @@
 export const siteCopy = {
-  defaultDescription: '網頁程式設計 115 — 從 HTTP 開始，手寫第一個後端',
+  defaultDescription: '網頁程式設計 115 — 從 HTTP 開始，做出可以驗證的後端',
   titleSuffix: '網頁程式設計 115',
   brand: { title: '網頁程式設計', issue: '115' },
   navigationLabel: '切換主選單',
@@ -30,7 +30,7 @@ export const siteCopy = {
   routes: {
     book: {
       title: '整冊閱讀',
-      description: '課程說明與十六週講義',
+      description: '課程說明與十八週講義',
       kicker: 'MONOGRAPH',
       reader: 'FULL COURSE READER',
       lead: '全學期課程講義，連貫閱讀。',
@@ -88,13 +88,13 @@ export const siteCopy = {
       nextLessonMeta: 'Week 01 / HTTP 方法與狀態碼 — 看懂 curl -v',
     },
     ai: {
-      kicker: 'SPECIAL DOSSIER',
-      reader: 'AI ENGINEERING FIELD GUIDE',
-      guide: 'IN THIS DOSSIER',
-      tocLabel: 'WHY / HOW',
-      previous: '← WEEK 02',
+      kicker: 'AI 協作與責任',
+      reader: 'AI 工程指南',
+      guide: '這一頁怎麼讀',
+      tocLabel: '問題索引',
+      previous: '← 單元 02',
       previousMeta: 'URI / URL、Header 與 Body',
-      next: 'COURSE OVERVIEW →',
+      next: '回課程首頁 →',
       nextMeta: '回到課程首頁',
     },
   },

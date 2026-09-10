@@ -38,6 +38,8 @@ Terminal 是輸入指令的視窗。指令能不能執行，取決於裡面跑�
 
 OpenCode 支援多個 provider。啟動後用 `/connect` 連接可用的 provider，再依課堂指定選模型。不要把某個模型名稱寫死在設定裡，模型清單會變。
 
+第一次請 AI 改程式前，先跑 `git status`，再把問題、相關檔案和限制說清楚。它提出的 patch 不是完成證明；你仍要看 diff、跑測試，確認沒有把密鑰、個人資料或不需要的檔案送出去。完整規則放在[AI 工程指南](/115-backend/ai-engineering)。
+
 ## Windows：先裝 WSL
 
 這門課的指令以 Linux shell 為準。Windows 10 2004 之後的版本與 Windows 11 可以安裝 WSL，直接執行 Linux 工具。

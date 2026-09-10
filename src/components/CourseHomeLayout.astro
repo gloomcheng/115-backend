@@ -1,5 +1,5 @@
 ---
-import { chapters } from '../data/course'
+import { aiCollaboration, backendCareerDirections, chapters } from '../data/course'
 import { homeCopy } from '../data/home-copy'
 import { withBase } from '../lib/paths'
 
@@ -45,8 +45,22 @@ const weeks = chapters.flatMap((chapter) => chapter.weeks)
     <div class="mx-auto max-w-[1320px]">
       <div class="mx-auto max-w-[820px] text-center"><p class="font-mono text-sm font-bold tracking-[.16em] text-[#ef795e]">{homeCopy.chapterMap.label}</p><h2 class="mt-3 text-4xl font-bold tracking-[-.05em] sm:text-5xl">{homeCopy.chapterMap.title}</h2><p class="mt-4 text-lg leading-8 text-[#335f78]">{homeCopy.chapterMap.description}</p></div>
       <div class="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {chapters.map((chapter, index) => <article class="flex min-h-full flex-col border-[3px] border-[#075486] bg-[#fffdf0] p-5"><p class="text-center font-mono text-2xl font-bold">{chapter.num}</p><img src={images[index]} alt="" class="mt-4 aspect-[4/3] w-full bg-[#fff5d8] object-cover" loading="lazy" /><p class="mt-5 font-mono text-xs font-bold tracking-[.13em] text-[#ef795e]">{chapter.code}</p><h3 class="mt-2 text-2xl font-bold leading-tight tracking-[-.035em]">{chapter.title}</h3><p class="mt-2 font-mono text-xs text-[#4f7892]">{chapter.english}</p><p class="mt-4 flex-1 text-[15px] leading-7 text-[#335f78]">{chapter.summary}</p><p class="mt-5 font-mono text-sm font-bold">{chapter.range}</p></article>)}
+        {chapters.map((chapter, index) => <article class="flex min-h-full flex-col border-[3px] border-[#075486] bg-[#fffdf0] p-5"><p class="text-center font-mono text-2xl font-bold">{chapter.num}</p><img src={images[index]} alt="" class="mt-4 aspect-[4/3] w-full bg-[#fff5d8] object-cover" loading="lazy" /><p class="mt-5 font-mono text-xs font-bold tracking-[.13em] text-[#ef795e]">{chapter.code}</p><h3 class="mt-2 text-2xl font-bold leading-tight tracking-[-.035em]">{chapter.title}</h3><p class="mt-2 font-mono text-xs text-[#4f7892]">{chapter.english}</p><p class="mt-4 flex-1 text-[15px] leading-7 text-[#335f78]">{chapter.summary}</p><p class="mt-5 border-t border-[#075486]/15 pt-4 text-sm leading-7 text-[#335f78]"><span class="font-mono text-xs font-bold text-[#075486]">AI 協作</span><br />{chapter.aiFocus}</p><p class="mt-5 font-mono text-sm font-bold">{chapter.range}</p></article>)}
       </div>
+    </div>
+  </section>
+
+  <section id="ai-collaboration" class="bg-[#075486] px-6 py-14 text-[#fffaf0] sm:px-10 lg:px-12 lg:py-20">
+    <div class="mx-auto max-w-[1240px]">
+      <div class="flex flex-wrap items-end justify-between gap-5">
+        <div><p class="font-mono text-sm font-bold tracking-[.16em] text-[#f4c84f]">{homeCopy.aiCollaboration.label}</p><h2 class="mt-3 max-w-3xl text-4xl font-bold tracking-[-.05em] sm:text-5xl">{aiCollaboration.title}</h2></div>
+        <a href={withBase('/ai-engineering')} class="border-b-2 border-[#f4c84f] pb-1 font-bold text-[#fffaf0] hover:text-[#f4c84f]">{homeCopy.aiCollaboration.action}</a>
+      </div>
+      <p class="mt-6 max-w-3xl text-lg leading-8 text-[#fffaf0]/85">{aiCollaboration.description}</p>
+      <div class="mt-10 grid gap-5 md:grid-cols-2">
+        {aiCollaboration.rules.map((rule) => <article class="border-2 border-[#fffaf0]/35 bg-[#fffaf0]/10 p-6"><div class="flex items-center gap-3"><span class="font-mono text-sm font-bold text-[#f4c84f]">{rule.number}</span><h3 class="text-2xl font-bold">{rule.title}</h3></div><p class="mt-4 text-base leading-8 text-[#fffaf0]/85">{rule.detail}</p><p class="mt-5 border-t border-[#fffaf0]/20 pt-4 font-mono text-xs leading-6 text-[#f4c84f]">{rule.evidence}</p></article>)}
+      </div>
+      <div class="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm text-[#fffaf0]/80"><span class="font-mono text-xs font-bold tracking-[.14em] text-[#f4c84f]">{homeCopy.aiCollaboration.sourceLabel}</span>{aiCollaboration.sources.map((source) => <a href={source.url} target="_blank" rel="noreferrer" class="underline decoration-[#f4c84f] decoration-2 underline-offset-4 hover:text-[#f4c84f]">{source.label} ↗</a>)}</div>
     </div>
   </section>
 
@@ -56,6 +70,24 @@ const weeks = chapters.flatMap((chapter) => chapter.weeks)
       <div class="mt-10 overflow-x-auto pb-6 [scrollbar-color:#075486_#f4c84f] [scrollbar-width:thin]"><div class="flex min-w-max items-start gap-3 px-1">
         {weeks.map((week, index) => <><article class:list={['relative w-[180px] shrink-0 text-center', week.href && 'group cursor-pointer']}><div class:list={['mx-auto grid h-[150px] w-[150px] place-items-center rounded-full border-[3px] border-[#075486]', week.exam ? 'bg-[#ffc7b8]' : 'bg-[#fff0bf]', week.href && 'transition-transform duration-150 group-hover:-translate-y-1 group-hover:bg-[#f4c84f] group-focus-within:-translate-y-1 group-focus-within:bg-[#f4c84f]']}><span><span class="block font-mono text-sm font-bold text-[#ef795e]">W{String(week.w).padStart(2, '0')}</span><span class="mt-2 block px-4 text-base font-bold leading-snug">{week.title}</span></span></div><p class="mx-auto mt-[-10px] w-fit bg-[#075486] px-4 py-1 font-mono text-xs font-bold text-white">{week.dates}</p>{week.href && <a href={withBase(week.href)} aria-label={`開啟單元：${week.title}`} class="absolute inset-0 z-10 rounded-[80px] focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#ef795e]"></a>}</article>{index < weeks.length - 1 && <span aria-hidden="true" class="mt-[68px] h-5 w-5 rotate-45 border-r-[5px] border-t-[5px] border-[#6e9bb4]"></span>}</>)}
       </div></div>
+    </div>
+  </section>
+
+  <section id="backend-career" class="bg-[#fffaf0] px-6 py-14 sm:px-10 lg:px-12 lg:py-20">
+    <div class="mx-auto max-w-[1240px]">
+      <div class="grid gap-7 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.5fr)] lg:items-end lg:gap-12">
+        <div><p class="font-mono text-sm font-bold tracking-[.16em] text-[#ef795e]">{homeCopy.backendCareer.label}</p><h2 class="mt-3 max-w-xl text-4xl font-bold tracking-[-.05em] sm:text-5xl">{homeCopy.backendCareer.title}</h2></div>
+        <p class="max-w-3xl text-lg leading-8 text-[#335f78]">{homeCopy.backendCareer.description}</p>
+      </div>
+      <div class="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {backendCareerDirections.map((direction, index) => <article class="flex h-full flex-col border-2 border-[#075486] bg-[#b8d8e8]/45 p-6 shadow-[6px_6px_0_#075486]">
+          <div class="flex items-center justify-between gap-4"><span class="font-mono text-sm font-bold text-[#ef795e]">PATH {String(index + 1).padStart(2, '0')}</span><span class="font-mono text-xs font-bold tracking-[.12em] text-[#4f7892]">BACKEND</span></div>
+          <h3 class="mt-5 text-2xl font-bold leading-tight tracking-[-.035em]">{direction.title}</h3>
+          <p class="mt-4 flex-1 text-[15px] leading-7 text-[#335f78]">{direction.detail}</p>
+          <div class="mt-6 border-t border-[#075486]/20 pt-4"><p class="text-sm font-bold leading-7 text-[#075486]">可能接到的工作：{direction.roles}</p><a href={direction.source} target="_blank" rel="noreferrer" class="mt-4 inline-flex border-b-2 border-[#ef795e] pb-1 text-sm font-bold text-[#075486] hover:text-[#ef795e]">{direction.sourceLabel} ↗</a></div>
+        </article>)}
+      </div>
+      <p class="mt-8 text-sm leading-7 text-[#4f7892]"><span class="font-bold text-[#075486]">{homeCopy.backendCareer.sourceLabel}</span>每張卡片都連到對應的台灣教育或產業資料。{homeCopy.backendCareer.note}</p>
     </div>
   </section>
 

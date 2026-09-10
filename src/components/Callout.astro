@@ -1,6 +1,6 @@
 ---
 interface Props {
-  type?: 'note' | 'warning' | 'tip' | 'case'
+  type?: 'note' | 'warning' | 'tip' | 'case' | 'important'
   title?: string
 }
 const { type = 'note', title } = Astro.props
@@ -33,6 +33,13 @@ const styles = {
     tag: 'text-[#0f4c81]',
     title: 'text-[#0c0c0c]',
     defaultTag: 'CASE STUDY',
+  },
+  important: {
+    container:
+      'bg-[#fff0bf] border border-[#e4c55e] border-l-2 border-l-[#075486] p-5 my-6 text-[#274f67]',
+    tag: 'text-[#075486]',
+    title: 'text-[#075486]',
+    defaultTag: 'IMPORTANT',
   },
 }
 

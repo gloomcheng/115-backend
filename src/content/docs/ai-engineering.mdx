@@ -1,6 +1,6 @@
 ---
 title: "AI 工程：讓模型能讀、能查、能被驗證"
-description: "從 token、embedding、attention 與 MoE 開始，追問 AI coding 為什麼需要工具邊界、RAG、測試與權限。"
+description: "從 token、embedding、attention 與 MoE 開始，追問 AI coding 為什麼需要資料邊界、工具限制、測試與權限。"
 ---
 
 import Callout from '../../components/Callout.astro';
@@ -14,6 +14,10 @@ AI 工程不是把 prompt 寫得漂亮。它是把一個會產生機率性輸出
 
 <Callout type="note" title="這個單元的先備知識">
   先學過 HTTP、JSON、路由、資料庫、認證與 log，再來追模型內部。這一單元不要求你訓練大型模型；你要能指出每個機制解決哪個問題，以及它在哪裡可能失敗。
+</Callout>
+
+<Callout type="warning" title="把這四條規則帶回 backend">
+  這門課允許你使用 AI，但不把責任交給模型。先看需求與上下文，再問模型；不要貼上 `.env`、API key、Token 或個人資料；模型提出的 patch 或 tool call 要在模型外通過 schema、身份與權限檢查；最後用測試、`curl` 與 log 證明結果，並說明 AI 幫了哪裡。這套規則參考[臺大生成式 AI 工具之教學因應措施](https://www.dlc.ntu.edu.tw/ai-tools/) 與 [數位發展部 AI 產業人才認定指引](https://moda.gov.tw/ADI/services/publications/19692)。
 </Callout>
 
 ## 01. 為什麼文字要切成 token？
@@ -525,6 +529,7 @@ PY
 3. 執行測試、收集 diff、stdout、stderr、延遲與 token 使用量。
 4. 加入一份含有錯誤指令的文件，觀察 RAG 或 Agent 是否把它當成權限命令。
 5. 最後提交一張流程圖：`input → model → retrieval / tool → policy → test → result`。
+6. 補上一段責任說明：你給了模型哪些去識別化的上下文、哪些建議被你拒絕，以及哪一個測試讓你接受最後的 patch。
 
 這份流程圖比「模型回答得很像人」更能證明你知道系統在哪裡做決定。
 

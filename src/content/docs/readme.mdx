@@ -4,6 +4,7 @@ description: "從 HTTP 開始，手寫第一個後端"
 ---
 
 import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
 
 # 網頁程式設計 — 115
 
@@ -12,6 +13,39 @@ import Terminal from '../../components/Terminal.astro';
 畫面裡以 `>` 開頭的是 Request，以 `<` 開頭的是 Response。你會從這幾行文字認出 `GET`、`POST`、`200`、`404`，再往後學 REST、JSON 與資料庫。這個順序不能倒過來。連一次請求是誰送的、狀態碼是誰回的都說不清楚，框架只會變成一個更大的黑盒。
 
 課堂上的每一段程式都要做到三件事：你打得出來、看得到結果，也能指出結果是哪一行造成的。期末再把這些零件組成一個能用的服務。
+
+## AI 協作與責任
+
+現在你可以把錯誤訊息貼給 AI，請它找檔案、解釋原因，甚至提出一個 patch。這門課不禁止你用；但你要記得，模型是在提出建議，不是在替你背責任。
+
+每次讓 AI 碰到程式，先做四件事：
+
+1. **先看，再問**：把需求、現況、限制和你不知道的地方列出來。模型沒有看到的檔案，不能假設它知道。
+2. **資料只給必要的**：`.env`、API key、Token 和個人資料不要貼進 prompt。先用去識別化的範例，保留真正需要的上下文。
+3. **模型提案，Server 決定**：模型可以提出程式或 tool call；schema、身份、授權與 allowlist 要在模型外檢查。
+4. **測試才算證據**：跑測試、`curl` 和 log，對照 expected 與 actual；最後說明 AI 幫了哪裡、你改了哪裡。
+
+<Callout type="warning" title="不要把程式跑了，誤認成程式正確">
+  AI 產出的 code 可以通過語法檢查，仍然可能破壞資料、權限或 API 語意。你要提交 diff、測試輸出與自己的判斷；如果使用 AI，也要依課程要求揭露使用方式。
+</Callout>
+
+這四件事對應到後端的四個位置：HTTP 讓你看見輸入與輸出，資料庫讓你檢查狀態，認證與授權決定誰能做什麼，測試與 log 才能留下可追蹤的證據。完整的模型內部、embedding、RAG、tool calling 與 Agent 權限邊界，放在[「AI 工程指南」](/115-backend/ai-engineering) 繼續讀。
+
+這段規則參考[臺大生成式 AI 工具之教學因應措施](https://www.dlc.ntu.edu.tw/ai-tools/) 與 [數位發展部 AI 產業人才認定指引](https://moda.gov.tw/ADI/services/publications/19692)。
+
+## 這門課接到哪些後端工作
+
+這門課的職涯座標是資訊工程、資訊管理與雲端服務。你練的不是某個框架的按鈕，而是把請求、資料、權限、部署和證據接成一條可以交付的後端服務。
+
+你可以把這些能力接到幾個方向：
+
+1. **後端與 API 開發**：把 HTTP、路由、資料與錯誤處理串成服務。
+2. **資料庫與資料工程**：理解資料結構、交易、查詢、備份，以及資料為什麼會變成現在的樣子。
+3. **資安與網路**：處理身分、權限、密鑰、網路入口與可追蹤的安全紀錄。
+4. **雲端與系統維運**：用 container、health check、log、firewall 與 HTTPS 讓服務能被使用，也能在出錯時找到線索。
+5. **AI 應用與系統整合**：把 embedding、RAG、tool calling 與 eval 接回既有的 API、資料和權限邊界。
+
+這些是能力可以連到的方向，不是保證的職稱。職稱會依公司和職務內容不同；先看你能負責哪一段，再去對照職缺。方向參考 [ColleGo! 資訊工程學類](https://collego.edu.tw/Highschool/MajorIntro?current_major_id=1)、[ColleGo! 資訊管理學類](https://collego.edu.tw/Highschool/MajorIntro?current_college_id=1&current_major_id=7)、[國發會雲端服務產業人力需求](https://theme.ndc.gov.tw/manpower/cp.aspx?n=C9ECDD0E995DB66B) 與 [數位發展部 AI 產業人才認定指引](https://moda.gov.tw/ADI/services/publications/19692)。
 
 教材網站用 `npm run dev` 啟動。課堂使用的最小 FastAPI 放在 `examples/http-api`。
 
@@ -61,6 +95,8 @@ fastapi dev examples/http-api/main.py
 ## 作業
 
 平時作業看 Git 紀錄，占 40%。期末專題占 60%。
+
+使用 AI 時，提交以下四項：去識別化的問題與上下文、模型提出的 diff、你實際執行的測試或 `curl` 輸出，以及你接受或修改它的理由。不要提交 API key、Token、個人資料或其他秘密。
 
 提交前先跑 `git status`。`venv`、`__pycache__`、`.env` 不要進版控；如果它們出現在清單裡，先處理 `.gitignore` 再 commit。
 

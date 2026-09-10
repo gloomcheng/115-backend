@@ -5,7 +5,7 @@
 - [x] 主線命題：AI 工程師要能追蹤資料從 token、向量、attention 到 tool、policy、test 的因果鏈。
 - [x] 每個 Q 只回答一個「為什麼」，並用下一個 Q 建立依賴關係。
 - [x] 沒有把 API 廠商功能清單當成模型原理。
-- [ ] 若未來課程需要更長的實作時間，應把本單元拆成「模型內部」與「AI 系統工程」兩個單元；目前先保留為獨立 field guide，不占用 18 週排程。
+- [x] 已把本單元接回 18 週 backend 課程：課程首頁、課程說明與作業規範都要求保留 AI 協作證據。
 
 ## 2. 先備知識與認知盲區
 
@@ -31,6 +31,7 @@
 - [x] MoE 圖標出 active experts 與 total experts 的差異。
 - [x] RAG 圖保留 retrieve 與 cite，沒有把 embedding 直接畫成答案。
 - [x] Tool calling 與 Agent 權限圖將 model proposal 和 policy execution 分開。
+- [x] 課程規則加入去識別化、AI 使用揭露、diff、測試與 log 的交付要求。
 
 ## 4. 多角色審查
 

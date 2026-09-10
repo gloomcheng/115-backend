@@ -56,12 +56,26 @@ export const homeCopy = {
     description: '十八週依序處理 HTTP、資料庫、認證與部署。每週都有一個可執行結果。',
     included: 'INCLUDED CHAPTERS:',
   },
+  aiCollaboration: {
+    label: '03 / AI 協作與責任',
+    kicker: '四條規則，貫穿整門課',
+    action: '讀完整 AI 工程指南 →',
+    sourceLabel: '參考規範：',
+  },
   schedule: {
-    label: '03 // FULL 18-WEEK FOLIO',
+    label: '04 // FULL 18-WEEK FOLIO',
     title: '教學計畫及進度',
     description: '16 個主題 + 期中期末，共 18 週。',
     movement: 'MOVEMENT',
     read: '閱讀講義',
     exam: '考試週',
+  },
+  backendCareer: {
+    label: '05 // BACKEND CAREER MAP',
+    title: '把能力接到真正的工作。',
+    description:
+      '這門課的職涯座標在資訊工程、資訊管理與雲端服務。你練的不是某個框架的按鈕，而是把請求、資料、權限、部署和證據接成一條可以交付的後端服務。',
+    sourceLabel: '參考資料：',
+    note: '職稱會依公司和職務內容不同；先看你能負責哪一段，再去對照職缺，不要先背職稱。',
   },
 }
