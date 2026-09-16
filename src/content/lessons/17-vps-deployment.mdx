@@ -110,13 +110,13 @@ printf 'server=%s\nuser=%s\ndomain=%s\n' "$SERVER_IP" "$SSH_USER" "$DOMAIN"
 | --- | --- | --- |
 | `A` | `api` | VPS public IP |
 
-`A` record 的意思就是：當有人查 `api.example.com`，回答這台 VPS 的 IPv4。如果你用的是根網域，`Name` 常寫成 `@`。
+在 DNS 設定中，`A` record 的意思就是：當有人查 `api.example.com`，回答這台 VPS 的 IPv4。如果你用的是根網域，`Name` 常寫成 `@`。
 
-DNS 更新可能不會立刻到達每個 resolver。先把它設好，等待的時間可以繼續安裝主機。
+這條 DNS record 更新可能不會立刻到達每個 resolver。先把它設好，等待的時間可以繼續在主機上安裝設定。
 
 ### 在業者畫面開三個入口
 
-Port 可以先理解成一個有編號的網路入口。這一課只用到四個號碼：
+主機上的 Port 可以先理解成一個有編號的網路入口。這一課只用到四個號碼：
 
 | Port | 誰會用 | 是否對外開放 |
 | --- | --- | --- |
@@ -183,7 +183,7 @@ ssh "$SSH_USER@$SERVER_IP"
 
 ## 04. 先讓 FastAPI 只在 VPS 裡回答
 
-Docker 負責把應用程式與它需要的軟體一起啟動。這一課不要自行寫 Dockerfile，直接部署 repository 裡已驗證的範例。
+確認 SSH 連線安全無虞後，接著在主機安裝 Docker。Docker 負責把應用程式與它需要的軟體一起啟動。這一課不要自行寫 Dockerfile，直接部署 repository 裡已驗證的範例。
 
 在 **VPS** 加入 Docker 官方 apt repository：
 
@@ -309,7 +309,7 @@ dig +short A "$DOMAIN"
 printf 'expected=%s\n' "$SERVER_IP"
 `}</Terminal>
 
-兩個 IP 相同後，不加 `--resolve` 再問一次：
+兩個 IP 相同後，不加 `--resolve` 再發出一次 HTTP 請求驗證：
 
 <Terminal title="bash — your computer">{`
 curl -i "http://$DOMAIN/health"
@@ -319,7 +319,7 @@ curl -i "http://$DOMAIN/health"
 
 ## 06. 最後把 HTTP 換成 HTTPS
 
-HTTP 上的內容是明文。HTTPS 會加密 Client 到 Nginx 這一段連線，並用憑證讓 Client 檢查自己連的是哪個網域。
+確認上述 HTTP 請求能正常回應後，接著處理傳輸加密。HTTP 上的內容是明文。HTTPS 會加密 Client 到 Nginx 這一段連線，並用憑證讓 Client 檢查自己連的是哪個網域。
 
 Certbot 會向 Let’s Encrypt 取得憑證，並修改 Nginx 設定。在 **VPS** 執行：
 
@@ -502,7 +502,7 @@ bun run check:deployment -- \
 
 截圖前遮住公司 IP、SSH 使用者名稱、email、Token 與密鑰。對外公開的服務網域可以保留。
 
-完整作業清單在 `exercises/17-vps-deployment/README.md`。
+這些截圖是驗收的依據；完整作業清單在 `exercises/17-vps-deployment/README.md`。
 
 ### 本單元使用的正本
 

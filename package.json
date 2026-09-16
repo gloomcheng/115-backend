@@ -28,6 +28,7 @@
     "research:japan-web:refresh": "npm run research:japan-web && npm run research:japan-web:check",
     "research:industry-notes": "node scripts/collect-industry-field-notes.mjs",
     "review:oreilly:web": "npm run research:industry-notes && node scripts/oreilly-review-harness.mjs",
+    "check:reading-windows": "node scripts/reading-window-harness.mjs",
     "copy:baseline": "astro build && node scripts/copy-integrity.mjs --record",
     "copy:check": "astro build && node scripts/copy-integrity.mjs",
     "setup:hooks": "git config core.hooksPath .githooks"

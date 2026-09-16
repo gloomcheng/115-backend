@@ -6,6 +6,7 @@ description: "把網址拆成可以觀察的零件，再確認哪些資料進了
 
 import Terminal from '../../components/Terminal.astro';
 import Callout from '../../components/Callout.astro';
+import { withBase } from '../../lib/paths';
 
 先把這個網址貼進 Terminal：
 
@@ -13,7 +14,7 @@ import Callout from '../../components/Callout.astro';
 curl -v 'https://httpbin.org/get?course=115&topic=uri#fragment'
 `}</Terminal>
 
-先找 `> GET`。你會看到 `path` 與 `query` 出現在 Request Target；`#fragment` 不會出現在送給 Server 的那一行。這一個差異，就是本章要確認的事。
+先找 `> GET`。你會看到 path（資源路徑）與 query（查詢參數）出現在 Request Target；`#fragment`（網頁錨點只留在 Client 不送出）不會出現在送給 Server 的那一行。這一個差異，就是本單元要確認的事。
 
 <svg viewBox="0 0 900 250" role="img" aria-labelledby="url-claim-title url-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
   <title id="url-claim-title">ELI5 URL 的 path 與 query 會進入 Request，fragment 留在 Client</title>
@@ -36,23 +37,27 @@ curl -v 'https://httpbin.org/get?course=115&topic=uri#fragment'
   <text x="740" y="160" text-anchor="middle" fill="#ef795e" font-size="14">沒有 #fragment</text>
 </svg>
 
+---
+
 ## 01. URI 是總稱，URL 是其中一種定位方式
 
-你在瀏覽器網址列輸入的字串，通常叫 URL。它告訴 Client 要使用哪種協定、找哪個主機、請哪個資源。
+你在瀏覽器網址列輸入的字串，通常叫 URL。它告訴 Client 要使用哪種協定、找哪個主機、請求哪個資源。
 
-URI 是較大的總稱：只要一個字串能識別某個資源，就可以稱為 URI。URL 是帶有定位方式的 URI。`https://example.com/users/alice` 同時是 URI 與 URL；`urn:isbn:9780131103627` 可以識別一本書，但不告訴瀏覽器要連哪台主機，因此不是用來直接連線的 URL。
+URI 是較大的總稱：只要一個字串能識別某個資源，就可以稱為 URI。URL 是帶有定位方式的 URI。例如 `https://example.com/users/alice` 同時是 URI 與 URL；而 `urn:isbn:9780131103627` 可以識別一本書的國際標準書號，但不告訴瀏覽器要連哪台主機，因此不是用來直接建立連線的 URL。
 
-這一週先使用一個實務上夠用的 URL 形狀：
+這條 RFC 3986 規範定義了通用的 URI 語法結構，最常見的標準形狀如下：
 
 <Terminal title="URI — common URL shape" flavor="output">{`
 scheme://[userinfo@]host[:port]/path?query#fragment
 `}</Terminal>
 
-RFC 3986 定義的是 URI 的通用語法。文件若要精確談語法，看到 `URI` 就先不要自行換成「網址」；「網址」是課堂上方便使用的日常說法。
+從標準結構來看，`userinfo@`（例如 `user:password@`）雖然在語法上被允許放在主機名稱前面，但現代網路規格早已強烈棄用這種寫法；永遠不要把密碼、Token 或 API Key 暴露在網址列中。
 
-## 02. 把一個 URL 拆成六個位置
+---
 
-拿這個例子逐段看：
+## 02. 把一個 URL 拆成六個位置與傳輸責任
+
+拿這個具體的 URL 逐段拆解：
 
 <svg viewBox="0 0 920 340" role="img" aria-labelledby="url-parts-title url-parts-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
   <title id="url-parts-title">ELI5 URL 的六個部分</title>
@@ -102,13 +107,21 @@ RFC 3986 定義的是 URI 的通用語法。文件若要精確談語法，看到
 
 `host` 是完整的主機名稱。`api.example.com` 裡的 `api` 常被叫作 subdomain，`example.com` 常被叫作 domain；這是命名與 DNS 的分工，不要把它們和 HTTP path 混在一起。
 
-`http` 預設使用 port `80`，`https` 預設使用 port `443`。其他 scheme 也有自己的常見入口，例如 `ftp` 常見 port `21`；這些是協定或服務的約定，不是 URL 語法自己決定的數字。URL 沒寫出來，不代表連線沒有 port；Client 仍然要依 scheme 選擇連線入口。寫成 `https://api.example.com:8443` 時，`8443` 才是明確指定的非預設 port。
+`http` 預設使用 port `80`，`https` 預設使用 port `443`。其他 scheme 也有自己的常見入口，例如本機開發常見 port `8000` 或 `3000`；這些是協定或作業系統通訊埠的約定。URL 沒寫出來，不代表連線沒有 port；Client 仍然會依照 scheme 自動選用預設入口。
 
-如果 URL 沒寫 path，Client 會請求 `/`。Server 要不要把 `/` 對應到 `index.html`，是 web server 或框架的設定，不是 URL 規則自動補上的檔名。
+如果 URL 沒寫 path，Client 會預設請求 `/`。Server 要不要把 `/` 對應到首頁或 `index.html`，是後端程式或伺服器的路由設定，不是 URL 規格自動決定的事。
+
+### 百分比編碼（Percent-Encoding）的必要性
+
+在網路線路傳輸時，URL 只能包含 ASCII 字元集中的未保留字元（英文字母、數字與少數符號）。
+
+如果網址中包含中文字、特殊符號或空白鍵，Client 必須先將字元轉換為 UTF-8 位元組，再以百分比編碼（Percent-Encoding）表示。例如中文字「台」會被編碼為 `%E5%8F%B0`，空白鍵會被編碼為 `%20`。如果未經編碼直接送出，許多終端工具或舊版伺服器將直接拒絕處理並回傳 400 錯誤。
+
+---
 
 ## 03. URL 怎麼變成 Request Target
 
-瀏覽器或 `curl` 解析 URL 後，會把其中需要送給 Server 的部分組成 Request。`scheme` 與 `host` 會影響連線；在 HTTP/1.1 的一般 Request 中，Request Target 主要看到 path 與 query，Host 則放在 Header。
+接著瀏覽器或 `curl` 解析 URL 後，會把其中需要送給 Server 的部分組成 Request。`scheme` 與 `host` 會影響連線；在 HTTP/1.1 的一般 Request 中，Request Target 主要看到 path 與 query，Host 則放在 Header。
 
 <Terminal title="HTTP — URL becomes a request" flavor="output">{`
 URL:
@@ -124,18 +137,22 @@ Request:
 這裡有三個可驗證的界線：
 
 - `https` 決定 Client 使用 TLS 保護連線。
-- `httpbin.org` 出現在 `Host` Header，讓 Server 知道這個 Request 要交給哪個 host。
-- `#fragment` 沒有被送出。它是 Client 讀完 Response Body 後，用來定位內容的提示。
+- `httpbin.org` 出現在 `Host` Header，讓 Server 知道這個 Request 要交給哪個 host。在同一台主機掛載多個網站的虛擬主機環境中，`Host` 欄位是後端判斷目標站點的唯一依據。
+- `#fragment` 沒有被送出。它是 Client 讀完 Response Body 後，用來在瀏覽器畫面上滾動定位內容的提示錨點。
 
 <Callout type="important" title="Fragment 不是秘密通道">
   Fragment 不送到 Server，不代表整個 URL 都不會留下紀錄。`path` 與 `query` 可能出現在 Browser history、Server log、proxy log 與分析工具中。密碼、Token、API key 不要放在 URL；改用 HTTPS 也不會讓它們從 log 消失。
 </Callout>
 
+回到資料傳輸的本質，URL 與 Header 負責定位與控制，而實體資料則需要另外的承載空間。
+
+---
+
 ## 04. Header 與 Body 放的不是同一種資料
 
-Header 是 Request 或 Response 的附加欄位。它描述這個訊息的格式、來源、快取條件或認證資訊。Body 是訊息內容本身；不是每一個 Request 都有 Body。
+Header 是 Request 或 Response 的附加欄位資訊。它描述這個訊息的格式、來源、快取條件或認證資訊。Body 則是訊息內容本身；不是每一個 Request 都有 Body。
 
-一個讀取 Request 可能只有 Request Line 與 Header：
+一個讀取 Request 通常只有 Request Line 與 Header：
 
 <Terminal title="HTTP — GET has no request body" flavor="output">{`
 > GET /users/alice HTTP/1.1
@@ -144,59 +161,125 @@ Header 是 Request 或 Response 的附加欄位。它描述這個訊息的格式
 >
 `}</Terminal>
 
-一個建立資料的 Request 可能把 JSON 放在 Body：
+一個建立資料的 Request 則會把資料放在 Body：
 
 <Terminal title="HTTP — POST body" flavor="output">{`
 > POST /users HTTP/1.1
 > Host: api.example.com
 > Content-Type: application/json
+> Content-Length: 16
 >
 > {"name":"alice"}
 `}</Terminal>
 
-空白行把 Header 與 Body 分開。`Content-Type` 告訴 Server 怎麼讀 Body；它不會把 Body 變成 URL，也不會替 Server 決定資料一定有效。
+空白行把 Header 與 Body 分開。根據 HTTP 規格，連續兩組 CRLF 標記著 Header 的終點。
+
+在常見的 Header 欄位中，`Content-Type` 告訴接收端如何解析 Body（例如 `application/json` 代表 JSON 物件，`application/x-www-form-urlencoded` 代表傳統表單），而 `Content-Length` 則指明 Body 的確切位元組長度。
+
+<Callout type="note" title="單元 12 的狀態保持">
+  當使用者完成登入時，伺服器通常會在 Response Header 中回傳 <code>Set-Cookie</code>，或是要求前端在未來的 Request Header 帶上 <code>Authorization</code> Token。
+</Callout>
+
+除了登入狀態之外，後端程式在日常開發中最頻繁處理的，就是如何精確解析網址中的路徑與查詢參數。
+
+---
 
 ## 05. Path parameter、query parameter 與 FastAPI 路由
 
-目前範例 API 有這條路由：
+在後續單元用 Python (FastAPI) 撰寫後端伺服器時，我們會定義路由來接收 Client 的請求：
 
-<Terminal title="Python — existing route" flavor="output">{`
-@app.get("/users/{name}")
-def get_user(name: str):
-    ...
+<Terminal title="Python — FastAPI parameter types" flavor="output">{`
+from fastapi import FastAPI
+
+app = FastAPI()
+
+# Path parameter: identifies a specific item resource
+@app.get("/items/{item_id}")
+def get_item(item_id: int):
+    return {"item_id": item_id, "type": "path_parameter"}
+
+# Query parameter: filters or sorts resources
+@app.get("/items")
+def search_items(category: str, limit: int = 10):
+    return {"category": category, "limit": limit, "type": "query_parameter"}
 `}</Terminal>
 
-當你送出 `GET /users/alice`，FastAPI 把 path 中的 `alice` 放進 `name`。這是 path parameter。
+當 Client 送出 `GET /items/42` 時，FastAPI 會自動把路徑中的 `42` 提取並轉換為整數 `item_id`，這就是 Path Parameter（路徑參數），專門用於定位單一具體資源。
 
-Query parameter 在 `?` 後面：
+當 Client 送出 `GET /items?category=books&limit=5` 時，跟在 `?` 後面的鍵值對會被解析為函數參數 `category` 與 `limit`，這就是 Query Parameter（查詢參數），專門用於篩選、排序或分頁。
 
-<Terminal title="HTTP — path and query" flavor="output">{`
-GET /users/alice?active=true HTTP/1.1
+如果需要由 Client 提供一整筆新的資料物件，則會改用 POST 搭配 Request Body：
+
+<Terminal title="Python — FastAPI request body" flavor="output">{`
+from pydantic import BaseModel
+
+class ItemCreate(BaseModel):
+    name: str
+    price: float
+
+@app.post("/items")
+def create_item(payload: ItemCreate):
+    return {"created_name": payload.name, "created_price": payload.price}
 `}</Terminal>
 
-`/users/alice` 仍然是 path；`active=true` 是 query。兩者最後怎麼影響資料，要看 Server 的 handler 是否讀取它。網址長得像有參數，不代表程式一定會使用參數。
+這三種資料傳遞方式的分工極其清晰：Path Parameter 定義「是誰」、Query Parameter 定義「怎麼篩選」、Request Body 承載「完整資料」。
 
-## 06. 用 curl 把每個界線找出來
+---
 
-依序執行：
+## 06. 終端實戰驗證：用 curl 觀察傳輸界線
 
-<Terminal title="bash — inspect URL boundaries">{`
+現在打開終端機，執行以下四組具代表性的指令，逐一驗證網址與封包在傳輸線路上的真實面貌：
+
+### 第一步：驗證 Fragment 永遠不進網路線
+
+執行帶有 `#fragment` 的網址：
+
+<Terminal title="bash — verify fragment">{`
 curl -v 'https://httpbin.org/get?course=115&topic=uri#fragment'
+`}</Terminal>
+
+觀察輸出中的 `> GET` 這一行：你會發現 Request Target 只有 `/get?course=115&topic=uri`，後方的 `#fragment` 被 curl 在本地直接忽略。
+
+### 第二步：驗證 Path 與 Query 的伺服器回顯
+
+向 httpbin 的萬用回顯路徑發出請求：
+
+<Terminal title="bash — path vs query echo">{`
 curl -v 'https://httpbin.org/anything/users/alice?active=true'
+`}</Terminal>
+
+觀察伺服器回傳的 JSON 結構：在 `url` 欄位中可以看到完整路徑與參數，而在 `args` 物件中可以看到伺服器把 `active: "true"` 正確解析為獨立參數。
+
+### 第三步：發送帶有 JSON Body 的 POST 請求
+
+用 curl 發送一個帶有 Header 與 Body 的完整 Request：
+
+<Terminal title="bash — post with json body">{`
 curl -i -X POST 'https://httpbin.org/anything/users' \\
   -H 'Content-Type: application/json' \\
-  -d '{"name":"alice"}'
+  -d '{"name":"alice","role":"student"}'
 `}</Terminal>
 
-每一次只記四件事：
+觀察輸出內容：在 Request Header 中帶上了 `Content-Type: application/json`，中間間隔了一個空白行，下方則是長度精確對應的 JSON Body 字串。
 
-1. URL 的 `scheme` 與 `host` 是什麼。
-2. `> GET` 或 `> POST` 的 Request Target 是什麼。
-3. 哪些資料在 Header，哪一段是 Body。
-4. `#fragment` 有沒有出現在送給 Server 的 Request。
+### 第四步：觀察百分比編碼的傳輸效果
+
+發送包含中文編碼的查詢參數：
+
+<Terminal title="bash — test percent encoding">{`
+curl -v 'https://httpbin.org/get?query=%E5%8F%B0%E7%81%A3'
+`}</Terminal>
+
+這時伺服器回傳的 JSON 會顯示接收到的 `args` 為 `query: "台灣"`，證明了線路上雖然只傳遞 ASCII 百分比碼，伺服器接收後能精準還原為原始中文。
+
+---
 
 ## 單元實作作業
 
-在 `exercises/02-url/` 完成一次 URL 拆解。截圖必須同時看得到你執行的 URL、`>` Request Line 與 `<` Status Line；在圖片上標出 `scheme`、`host`、`path`、`query`，並圈出你原本輸入但沒有送到 Server 的 `fragment`。
+在本地環境完成以下操作並記錄成果：
 
-最後用一句話回答：`#fragment` 為什麼沒有出現在 Request Target？
+1. 在 Terminal 執行帶有 query 與 fragment 的 curl 指令：`curl -v 'https://httpbin.org/get?student_id=YOUR_ID#my-anchor'`。截圖必須完整包含指令、`>` 開頭的 Request Line 以及 Server 回傳的 JSON 內容。
+2. 執行帶有 JSON Body 的 POST 指令：`curl -i -X POST 'https://httpbin.org/anything/submit' -H 'Content-Type: application/json' -d '{"student_id":"YOUR_ID","status":"done"}'`。截圖必須包含送出的 Header、空白行與回傳的狀態碼。
+3. 在繳交筆記中用文字說明：為什麼 `#my-anchor` 沒有出現在終端機的 `> GET` 請求行中？
+
+把作業截圖與簡答筆記存入 `exercises/02-url/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案，保持工作目錄乾淨。

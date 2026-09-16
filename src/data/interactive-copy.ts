@@ -72,4 +72,43 @@ export const interactiveCopy = {
       { label: '500', url: 'https://httpbin.org/status/500' },
     ],
   },
+  pythonServerAnatomy: {
+    eyebrow: 'COMMAND ANATOMY',
+    title: '解構指令零件：為什麼這行程式完全不用先寫 code？',
+    prompt: '點選或將滑鼠移至指令零件，撥開免寫程式的底層真相：',
+    copyPrompt: '複製指令',
+    copiedAlert: '已複製！',
+    tokens: [
+      {
+        id: 'python3',
+        label: 'python3',
+        role: '執行環境直譯器',
+        summary: '呼叫本機安裝的 Python 3 直譯器建立獨立行程（Process）。',
+        detail: '若電腦中未建立別名，部分系統可能使用 python 代替。它負責提供底層執行環境。',
+      },
+      {
+        id: 'm-flag',
+        label: '-m',
+        role: '模組執行旗標 (Module)',
+        summary: '告訴 Python：「不要去當前資料夾找 .py 檔案，直接去標準函式庫尋找內建模組」。',
+        detail: '縮寫自 module。這是 Python 官方提供將標準函式庫當成獨立命令列工具直接執行的開關。',
+      },
+      {
+        id: 'http-server',
+        label: 'http.server',
+        role: '官方內建模組 (免寫程式)',
+        summary: 'Python 標準函式庫隨附的 HTTP 靜態檔案伺服器腳本，完全不需要手動寫 code。',
+        detail:
+          '官方工程師早已在底層寫好了 TCP Socket 監聽、HTTP 封包解析與檔案回傳邏輯，不需要 pip install 任何第三方套件即可直接啟動。',
+      },
+      {
+        id: 'port',
+        label: '8000',
+        role: '監聽連線埠 (Port)',
+        summary: '指定本機伺服器在 8000 通訊門牌待命，省略不寫時預設亦為 8000。',
+        detail:
+          '若 8000 已被其他程式佔用，可以自由改為 8080 或 3000 等其他通訊埠（例如 python3 -m http.server 8080）。',
+      },
+    ],
+  },
 } as const

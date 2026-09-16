@@ -1,0 +1,68 @@
+---
+import { referencesData } from '../data/references'
+import Layout from '../layouts/Layout.astro'
+
+const { page, entries } = referencesData
+
+// Group entries by category in the declared order
+const grouped = page.categoryOrder
+  .map((cat) => ({
+    category: cat,
+    label: page.categoryLabels[cat],
+    items: entries.filter((item) => item.category === cat),
+  }))
+  .filter((group) => group.items.length > 0)
+---
+
+<Layout title={page.title} description={page.description}>
+  <header class="bg-[#f4c84f] px-6 py-12 sm:px-10 lg:px-12">
+    <div class="mx-auto max-w-[1200px]">
+      <p class="font-mono text-sm font-bold tracking-[.15em]">{page.kicker} / {page.reader}</p>
+      <h1 class="mt-4 text-5xl font-bold tracking-[-.06em] sm:text-6xl">{page.title}</h1>
+      <p class="mt-4 max-w-3xl text-xl font-semibold leading-8 text-[#335f78]">{page.description}</p>
+    </div>
+  </header>
+
+  <main class="bg-[#fffaf0] bg-[repeating-linear-gradient(0deg,transparent_0,transparent_8px,rgba(7,84,134,.11)_8px,rgba(7,84,134,.11)_10px)] px-6 py-12 sm:px-10 lg:px-12">
+    <div class="mx-auto max-w-[1200px] space-y-14">
+      {grouped.map((group) => (
+        <section>
+          <p class="border-b-2 border-[#075486] pb-3 font-mono text-xs font-bold tracking-[.18em] text-[#ef795e]">
+            {group.label}
+          </p>
+          <ul class="mt-6 space-y-6">
+            {group.items.map((entry) => (
+              <li class="grid gap-4 rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-6 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)]">
+                <div>
+                  <a
+                    href={entry.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    class="text-xl font-bold leading-snug tracking-[-.02em] underline decoration-[#ef795e] decoration-2 underline-offset-4 hover:text-[#ef795e]"
+                  >
+                    {entry.title} ↗
+                  </a>
+                  <p class="mt-2 text-sm font-semibold text-[#335f78]">{entry.author}</p>
+                  {entry.affiliation && (
+                    <p class="font-mono text-xs text-[#4f7892]">{entry.affiliation}</p>
+                  )}
+                  {entry.relatedWeeks && entry.relatedWeeks.length > 0 && (
+                    <p class="mt-3 font-mono text-xs font-bold text-[#ef795e]">
+                      {page.relatedWeeksPrefix}{entry.relatedWeeks.join(page.relatedWeeksSep)}{page.relatedWeeksSuffix}
+                    </p>
+                  )}
+                  {entry.license && (
+                    <p class="mt-1 font-mono text-xs text-[#4f7892]">
+                      {page.licenseLabel}: {entry.license}
+                    </p>
+                  )}
+                </div>
+                <p class="text-[15px] leading-7 text-[#274f67]">{entry.note}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  </main>
+</Layout>

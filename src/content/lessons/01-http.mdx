@@ -6,6 +6,7 @@ description: "從一組真實 Request 與 Response，認出方法、狀態碼與
 
 import CurlPlayground from '../../components/islands/CurlPlayground.tsx';
 import IdempotentDemo from '../../components/islands/IdempotentDemo.tsx';
+import CommandAnatomy from '../../components/islands/CommandAnatomy.tsx';
 import Terminal from '../../components/Terminal.astro';
 import Callout from '../../components/Callout.astro';
 import FieldNote from '../../components/FieldNote.astro';
@@ -21,40 +22,46 @@ curl -v https://httpbin.org/status/200
 
 ---
 
-## 01. Request 與 Response
+## 01. Request 與 Response：網路傳輸的純文字真相
 
 HTTP 的基本單位是一組 Request 與 Response。Client 先送 Request，Server 收到後才回 Response。
 
 <img src={withBase('/images/lessons/01/request-response.webp')} alt="ELI5 請求與回應封包傳輸示意圖" width="1672" height="941" loading="lazy" decoding="async" />
 
-用 `curl -v` 看真實內容時，畫面大致會出現這兩段：
+用 `curl -v` 把這一組 Request 與 Response 的真實內容印出來時，畫面大致會出現這兩段：
 
 <Terminal title="HTTP — wire view" flavor="output">{`
 > GET /status/200 HTTP/1.1
 > Host: httpbin.org
 > User-Agent: curl/8.x
+> Accept: */*
 >
 < HTTP/1.1 200 OK
+< Content-Type: text/html; charset=utf-8
 < Content-Length: 0
 `}</Terminal>
 
-`/status/200` 是這一行 Request Target 的 path。下一週會把它放回完整的 URI / URL，拆開 `scheme`、`host`、`port`、`path`、`query` 與 `fragment`，再看哪些部分真的進了 Request。
+`/status/200` 是這行 Request 的目標路徑（path），告訴 Server 你想要操作哪個位置；完整的網址結構會在下一個單元詳細拆解。
 
-Request 的第一行包含 Method、target 與 HTTP version。Response 的第一行包含 HTTP version、Status Code 與 reason phrase。Header 跟在第一行後面；空白行代表 Header 結束。
+觀察上面的封包結構：Request 的第一行包含 Method、目標路徑與協定版本。Response 的第一行包含協定版本、Status Code 與 reason phrase；`reason phrase` 是跟在狀態碼後的簡短文字，例如 `OK`。第一行後面是 Header，用來傳遞附加欄位資訊；空白行代表 Header 結束；空白行之後則是 Body，用來承載訊息本身的內容資料。
+
+這條傳輸在網路線上完全是純文字。不管是瀏覽器還是 curl，底層都是透過 TCP 連線把這一行行純文字以 CRLF（`\r\n`）換行送出；當接收端讀到連續兩個換行形成的空白行時，就知道所有 Header 已經結束，接下來是 Body。
 
 ### Stateless 到底少了什麼
 
-HTTP 是 stateless protocol。意思是每一個 Request 都必須帶足 Server 處理這次操作所需的資訊，協定不會自動替下一次 Request 保存「你剛才做過什麼」。
+HTTP 是無狀態協定（stateless protocol）。意思是每一次 Request 都是獨立的，協定本身不會替你保存上一次操作的狀態。
 
-這不代表每次 Response 後 TCP 連線一定斷掉，也不代表應用程式不能保存登入或購物車。Server 可以把狀態放進資料庫或 session；Client 也可以在後續 Request 帶 Cookie 或 Token。這些都是應用程式另外建立的機制。
+如果應用程式需要知道使用者的身分或購物車內容，不能依賴 HTTP 自動記住，必須由應用程式在每次 Request 自行帶上識別資料。這也是為什麼後續單元會介紹在 Header 帶上認證憑證。
 
 <Callout type="note" title="單元 12 再處理登入">
-  登入後，瀏覽器通常會在後續 Request 帶 Cookie 或 Token。這一週先認得 Header 的位置，不展開認證流程。
+  登入後，瀏覽器通常會在後續 Request 帶 Cookie 或 Token。這一單元先認得 Header 的位置，不展開認證流程。
 </Callout>
+
+在展開更多欄位前，先釐清這一去一回中的兩個角色：誰送出 Request，誰決定 Response。
 
 ---
 
-## 02. Client 與 Server
+## 02. Client 與 Server：決定權與責任邊界
 
 Client 是主動送出 Request 的程式。Server 在指定位置等待 Request，執行對應邏輯，再決定 Response。
 
@@ -62,51 +69,69 @@ Client 是主動送出 Request 的程式。Server 在指定位置等待 Request�
 
 Client 決定何時送出、使用哪個 Method、請求哪個 target，以及要帶哪些 Header 或 Body。瀏覽器、手機 App 與 `curl` 都可以是 Client。
 
-Server 決定這個 target 是否存在、目前使用者能不能操作、程式要做什麼，以及最後回哪個 Status Code。FastAPI 程式在 `localhost:8000` 等待時，它就是 Server。
+Server 決定這個 target 是否存在、目前使用者能不能操作、程式要做什麼，以及最後回哪個 Status Code。後續章節我們用 Python 寫的後端程式在等待請求時，它就是 Server。
 
-角色不是看機器大小。你的筆電可以同時跑 curl 與 FastAPI；前者是 Client process，後者是 Server process。
+角色不是看機器大小。你的筆電可以同時跑 curl 與後端程式；前者是發出請求的 Client，後者是處理請求的 Server。
+
+當系統發生錯誤時，責任分界非常清楚：如果是打錯網址、遺漏參數或格式錯誤，責任在 Client；如果是後端程式出錯、資料庫斷線或邏輯崩潰，責任在 Server。
 
 ---
 
-## 03. HTTP Methods
+## 03. HTTP Methods：不只是名字，而是行為契約
 
-Request 第一行的第一個單字是 Method。它描述 Client 想做的操作，不是裝飾用的標籤。
+Request 第一行的第一個單字是 Method。它描述 Client 想對指定資源執行的操作動作，不是裝飾用的標籤。這裡的資源（resource）指 Server 上可識別的一筆資料或內容。
 
 <img src={withBase('/images/lessons/01/http-methods.webp')} alt="ELI5 HTTP 五大動詞與冪等性示意圖" width="1672" height="941" loading="lazy" decoding="async" />
 
-- `GET /items`：讀取 items。
-- `POST /items`：在 items 集合下建立一筆新資料，或觸發一個不適合其他 Method 的處理。
-- `PUT /items/7`：用 Request 的內容替換指定資源。
-- `PATCH /items/7`：修改指定資源的一部分。
+這五個最核心的 HTTP Method 具有明確的語意分工：
+
+- `GET /items`：讀取 items 清單或單一資源，不應修改任何資料。
+- `POST /items`：在 items 集合下建立一筆新資料，或觸發一個非冪等的運算流程。
+- `PUT /items/7`：用 Request Body 帶來的完整內容，替換指定資源的全部狀態。
+- `PATCH /items/7`：修改指定資源的一部分欄位，例如只更新姓名或密碼。
 - `DELETE /items/7`：刪除指定資源。
 
-這些語意是 Client 與 Server 的共同約定。框架不會因為路由名稱叫 `GET /buy-item` 就自動阻止扣款；Server 仍然可以寫出違反 HTTP 語意的程式。
+這些語意是 Client 與 Server 之間的共同契約。後端工程師必須自覺遵守：如果把刪除帳號寫成 `GET /users/delete?id=1`，那麼搜尋引擎的爬蟲在抓取網頁時，就會在無意間觸發刪除操作，造成災難性後果。
 
-### Safe 與 idempotent
+### Safe 與 Idempotent 的嚴格區別
 
-Safe Method 只要求讀取，不應改變使用者要求的資源狀態。`GET`、`HEAD`、`OPTIONS` 屬於 safe methods。
+Safe Method 只要求讀取，不應改變伺服器上的資源狀態。`GET` 屬於 safe method。
 
-Idempotent 是另一件事：同一個 Request 執行一次或多次，Server 的預期效果相同。`GET`、`PUT`、`DELETE` 是 idempotent；`POST` 通常不是。刪除同一筆資料兩次時，第二次可能回 `404`，但資源最後仍然是「不存在」，所以 `DELETE` 仍可視為 idempotent。
+Idempotent（冪等性）指的是：同一個 Request 執行一次或多次，對伺服器資源產生的最終效果相同。`GET`、`PUT`、`DELETE` 屬於 idempotent 操作；`POST` 通常不是。
+
+例如刪除同一筆資料兩次：第一次刪除時，伺服器移除了該筆記錄；第二次再執行刪除時，伺服器可能回傳 404，但資料庫中「該筆資料不存在」的最終狀態完全相同。因此 `DELETE` 仍然是 idempotent 操作。
+
+相反地，如果用 `POST /orders` 建立訂單，連續送出兩次可能會在資料庫中產生兩筆不同的訂單，導致重複扣款。這正是為什麼線上付款時畫面常提示「請勿重複點擊送出」。
 
 <IdempotentDemo client:visible />
 
-敏感資料不要放進 URL query。URL 可能出現在瀏覽紀錄、Server log 與分析工具。這是資料位置與記錄面的問題，不是把 Method 換成 `POST` 就自動安全；連線仍要使用 HTTPS，Server 也不能記錄密碼。
+Client 送出 Method 提出操作動作；而 Server 處理完成後，則用 Status Code 回報處理結果。
 
 ---
 
-## 04. Status Codes
+## 04. Status Codes：責任歸屬的五大家族
 
-Response 第一行裡的三位數是 Status Code。它告訴 Client，Server 如何處理這次 Request。
+Response 第一行裡的三位數是 Status Code。它是 Server 用來告訴 Client 這次請求處理結果的狀態數字。
 
 <img src={withBase('/images/lessons/01/status-codes.webp')} alt="ELI5 HTTP 狀態碼責任判定示意圖" width="1672" height="941" loading="lazy" decoding="async" />
 
-- `1xx`：處理尚未完成，先回報目前進度或協定切換資訊。
-- `2xx`：Request 已成功處理。常見的是 `200 OK` 與 `201 Created`。
-- `3xx`：Client 還要採取另一個動作，常見的是依 `Location` 前往新網址。
-- `4xx`：Server 判定目前的 Request 無法照要求處理，例如 target 不存在、格式錯誤或權限不足。
-- `5xx`：Server 在處理一個可接受的 Request 時發生錯誤。
+狀態碼的第一個數字決定了責任與處理狀態的五大類別：
 
-第一碼只能先分類，不能取代完整代碼。`400`、`401`、`403`、`404` 都是 4xx，但修法不同。
+- `1xx (Informational)`：請求已接收，繼續處理中；最常見於 WebSocket 升級連線（`101 Switching Protocols`）。
+- `2xx (Successful)`：Request 已成功被伺服器接收、理解並接受。常見的有 `200 OK`、`201 Created`（通常伴隨 `Location` Header 指向新資源）與 `204 No Content`（操作成功但不需要回傳內容，常見於 DELETE）。
+- `3xx (Redirection)`：Client 還要採取另一個動作才能完成請求。最常見的是 `301 Moved Permanently`（永久轉址）與 `302 Found`（暫時轉址），瀏覽器會依 Response 裡的 `Location` Header 自動導向新網址。
+- `4xx (Client Error)`：Server 判定目前的 Request 無法照要求處理，責任在 Client。例如 `400 Bad Request`（語法錯誤）、`404 Not Found`（資源不存在）、`405 Method Not Allowed`（用了伺服器不支援的動詞）與 `422 Unprocessable Content`（資料驗證失敗）。
+- `5xx (Server Error)`：Server 在嘗試處理一個合法的 Request 時內部發生錯誤，責任在 Server。常見的有 `500 Internal Server Error`（後端程式未捕捉的 Exception）、`502 Bad Gateway`（反向代理找不到後端）與 `504 Gateway Timeout`（後端運算逾時）。
+
+Status Code 的第一碼只能先分類，不能取代完整代碼。`400`、`401`、`403`、`404` 都是 4xx，但修復手段完全不同。
+
+在所有 4xx 錯誤中，最容易混淆的是身分與權限的差別。
+
+<Callout type="important" title="401 與 403">
+  <code>401 Unauthorized</code> 通常表示 Request 缺少有效的認證資訊（例如未登入），Response 會用 <code>WWW-Authenticate</code> 說明認證方式。<code>403 Forbidden</code> 表示 Server 理解 Request，但拒絕執行；就算確認了身分，目前的使用者也沒有執行這項操作的權限。
+</Callout>
+
+`Unauthorized` 這個 reason phrase 容易讓人誤會成「沒有權限」，但 401 實務上處理的是「你是誰」（認證）的問題，403 才是「能不能做」（授權）的問題。判斷時看數字與協定語意，不要只翻譯英文單字。
 
 <FieldNote marker="418" eyebrow="FIELD NOTE 01" title="不是 419：茶壺把玩笑寫進 HTTP">
   1998 年 4 月 1 日發布的 RFC 2324 定義了 `418 I'm a teapot`：拿茶壺煮咖啡時，Server 可以拒絕。它原本是愚人節 RFC，不是一般 API 應該採用的錯誤語意。
@@ -120,69 +145,91 @@ curl -i https://httpbin.org/status/418
   來源：[RFC 2324](https://www.rfc-editor.org/rfc/rfc2324) · [RFC 9110 §15.5.19](https://www.rfc-editor.org/rfc/rfc9110.html#name-418-unused)
 </FieldNote>
 
-<Callout type="important" title="401 與 403">
-  <code>401 Unauthorized</code> 通常表示 Request 缺少有效的認證資訊，Response 會用 <code>WWW-Authenticate</code> 說明認證方式。<code>403 Forbidden</code> 表示 Server 理解 Request，但拒絕執行；即使補上目前使用者的認證資訊也不會得到這項權限。
-</Callout>
+<FieldNote marker="402" eyebrow="FIELD NOTE 02" title="402 Payment Required：為數位付費預留的位置">
+  HTTP 早在早期就預留了 `402 Payment Required`，原本設想瀏覽器未來能直接原生處理線上支付。雖然數十年來各家金流服務多半以自訂流程或重定向實現付款，使得 402 在一般網頁中極少出現；但在現代的微服務與 API 計費探索中，這個狀態碼依然是規格中極具啟發性的設計。不論業務流程如何變化，在網路傳輸層次上，它依然遵循標準的 Request 與 Response。
 
-`Unauthorized` 這個 reason phrase 容易讓人誤會成「沒有權限」，但 401 實務上處理的是認證問題。判斷時看數字與協定語意，不要只翻譯英文。
-
-<FieldNote marker="402" eyebrow="FIELD NOTE 02" title="Agent payment 正在把 402 變成真的流程">
-  HTTP 長期保留 `402 Payment Required`，卻沒有規定付款流程。x402 把它做成一次 Request / Response 握手：Server 先報價，Client 付款，再帶著付款證明重送同一個 Request。
-
-  <Terminal title="HTTP — x402 concept" flavor="output">{`
-GET /paid-api
-HTTP/1.1 402 Payment Required
-price + recipient + accepted payment options
-
-GET /paid-api + payment proof
-HTTP/1.1 200 OK
-  `}</Terminal>
-
-  目前業界談的 agent payment 不只一層：Coinbase x402 處理每次 API 呼叫怎麼付費；Google AP2 用簽署的 mandate 記錄使用者授權了什麼；Stripe 與 OpenAI 的 ACP 讓 Agent 接上商家的商品、checkout 與付款系統。三者都在處理 Agent 交易，但責任邊界不同。
-
-  來源：[Coinbase x402](https://docs.cdp.coinbase.com/x402/how-it-works) · [Google AP2](https://cloud.google.com/blog/products/ai-machine-learning/announcing-agents-to-payments-ap2-protocol) · [Stripe / OpenAI ACP](https://stripe.com/blog/developing-an-open-standard-for-agentic-commerce)
+  來源：[RFC 9110 §15.5.3](https://www.rfc-editor.org/rfc/rfc9110.html#name-402-payment-required)
 </FieldNote>
+
+在認識了各種狀態碼之後，不論伺服器回傳的是成功（2xx）還是錯誤（4xx），Client 最終都會收到一份包含 Status Line、Header 與 Body 的純文字 Response。接下來要解答的核心問題是：這些純文字封包，最後是如何在瀏覽器中變成視覺畫面的？
 
 ---
 
-## 05. Response 如何變成畫面
+## 05. Response 如何變成畫面：視角穿透
 
-瀏覽器是 HTTP Client，也有 HTML / CSS 排版引擎。它先送 Request，收到 Response 後再依 Header 與 Body 決定如何處理內容。
+瀏覽器正是負責把這些文字封包繪製成畫面的 HTTP Client。它具備 HTML / CSS 排版引擎與 JavaScript 執行環境，先送出 Request，收到 Response 後再依 Header 與 Body 決定如何呈現內容。
 
 <img src={withBase('/images/lessons/01/browser-vision.webp')} alt="ELI5 從封包到瀏覽器畫面繪製的視角穿透圖" width="1672" height="941" loading="lazy" decoding="async" />
 
-假設 Body 是：
+假設 Server 回傳的 Header 與 Body 是：
 
-<Terminal title="HTTP — response body" flavor="output">{`
-<h1>Hello</h1>
+<Terminal title="HTTP — response wire trace" flavor="output">{`
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+
+<h1 style="color: red;">Hello World</h1>
 `}</Terminal>
 
-Terminal 只會印出這串文字。瀏覽器看到 HTML 後，會解析元素並把 `Hello` 畫成標題。React 或 Vue 可以參與產生畫面，但 Server 送回來的仍是 Response：Status Line、Headers、空白行與 Body。
+Terminal 的 curl 只會忠實印出這串純文字。但瀏覽器收到這個 Response 時，會先檢查 `Content-Type` Header：發現是 `text/html`，便啟動 HTML 解析器建立 DOM 樹，計算樣式，最後在螢幕上繪製出一個紅色的「Hello World」大標題。
 
-後端除錯時要沿這條路查：Client 送了什麼、Server 收到什麼、Server 回了什麼、Client 最後如何顯示。不要直接把畫面上的錯誤全部歸給後端。
+如果 Server 回傳的是 `Content-Type: application/json`，瀏覽器預設就不會進行排版繪製，而是直接顯示 JSON 文字結構，或是交由前端 JavaScript 程式碼解析處理。
+
+後端除錯時要沿這條四步驟的鏈條逐一排查：Client 送了什麼、Server 收到什麼、Server 程式計算後回了什麼、Client 最後如何顯示。不要把畫面上的任何錯誤全部盲目歸咎給後端。
 
 ---
 
-## 06. 用 Terminal 驗證
+## 06. 終端實戰驗證：觀察真實連線與極簡 Server
 
-依序執行三次：
+現在打開兩個終端機視窗，進行 3 小時課堂的核心實作驗證。
 
-<Terminal title="bash — curl">{`
+### 第一步：觀察不同的狀態碼行為
+
+依序執行 `curl -v` 觀察伺服器回傳的不同狀態碼，特別注意 Status Line 以及 301 轉址時的 `Location` Header：
+
+<Terminal title="bash — inspect status codes">{`
 curl -v https://httpbin.org/status/200
 curl -v https://httpbin.org/status/404
 curl -v https://httpbin.org/status/301
 `}</Terminal>
 
-每次只記三件事：
+觀察 301 的輸出：Server 回傳了 `< HTTP/1.1 301 Moved Permanently`，並附帶了 `< Location: /redirect/1`。這證明了「轉址」並非魔法，而是 Server 明確要求 Client 重新發出請求去抓取新位置。
 
-1. `>` 開頭的 Request Line 是什麼。
-2. `<` 開頭的 Status Line 是什麼。
-3. `301` Response 裡的 `Location` Header 指向哪裡。
+接著如果加上 `-L` 參數，curl 就會像瀏覽器一樣自動追蹤轉址：
+
+<Terminal title="bash — follow redirect">{`
+curl -v -L https://httpbin.org/status/301
+`}</Terminal>
+
+這時終端機中會印出兩組完整的 Request 與 Response：第一組收到 301，第二組自動發往新網址並收到 200。
+
+### 第二步：親手啟動極簡 Python 伺服器
+
+在你的電腦上啟動一個最簡單的本機 HTTP 伺服器，親眼看見 Server 如何監聽與印出連線日誌：
+
+<Terminal title="bash — local python server">{`
+python3 -m http.server 8000
+`}</Terminal>
+
+<CommandAnatomy client:visible />
+
+接著打開另一個終端機視窗，向自己的電腦發出請求：
+
+<Terminal title="bash — local curl request">{`
+curl -v http://localhost:8000
+`}</Terminal>
+
+回到執行 Python 的終端機視窗，你會看到一行由 Python 伺服器印出的標準日誌：包含了發出請求的本機 IP、時間戳記、`"GET / HTTP/1.1"` 以及狀態碼 `200`。這代表你已經同時扮演了發送請求的 Client 與處理請求的 Server。
 
 <CurlPlayground client:visible />
 
+---
+
 ## 單元實作作業
 
-在 Terminal 執行 `200` 與 `404` 兩個網址。截圖必須同時看得到 `>` Request Line 與 `<` Status Line，並在圖片上標出哪個代碼由 Server 回傳。
+在本地環境完成以下三個驗證步驟，並整理至指定資料夾：
 
-把截圖存入 `exercises/01-http/`，再提交到 GitHub。提交前執行 `git status`，確認沒有把 `.env` 或虛擬環境一起送上去。
+1. 在 Terminal 分別執行 `curl -v https://httpbin.org/status/200` 與 `curl -v https://httpbin.org/status/404`。截圖必須同時清晰包含 `>` 開頭的 Request Line 與 `<` 開頭的 Status Line。
+2. 執行 `python3 -m http.server 8000`，並用另一個視窗以 `curl -v http://localhost:8000` 訪問。截圖必須拍下 Python 終端機輸出的存取紀錄日誌。
+3. 在截圖上清楚標註出：哪一行是由 Client 送出的動詞，哪一行是由 Server 決定的狀態碼。
+
+把截圖與筆記存入 `exercises/01-http/`，並以 Git 提交到你的儲存庫。提交前執行 `git status`，確認只包含作業繳交檔案，保持工作目錄乾淨。

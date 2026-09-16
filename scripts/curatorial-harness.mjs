@@ -3,7 +3,7 @@ import path from 'node:path'
 
 const requiredPages = [
   'src/pages/index.astro',
-  'src/pages/book.astro',
+  'src/pages/references.astro',
   'src/pages/glossary.astro',
   'src/pages/preparation.astro',
   'src/pages/lessons/[slug].astro',

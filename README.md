@@ -39,6 +39,14 @@ pip install "fastapi[standard]>=0.111.0"
 fastapi dev examples/http-api/main.py
 ```
 
+## 閱讀連續性稽核
+
+第一週正文的閱讀順序由兩段視窗稽核：移除標題、圖、列表與側欄後，逐一檢查相鄰段落是否共享可見概念，並檢查核心術語是否在首次使用處有局部解釋。完整的 forward / backward 編輯方法記在 `docs/editorial-review-01-http.md`。
+
+```bash
+npm run check:reading-windows
+```
+
 ## 18 週
 
 1. HTTP 方法與狀態碼 — 看懂 `curl -v`

@@ -62,6 +62,11 @@ const STAGES = [
     args: ['scripts/oreilly-review-harness.mjs'],
   },
   {
+    name: 'Two-Paragraph Reading Window Guard',
+    cmd: 'node',
+    args: ['scripts/reading-window-harness.mjs'],
+  },
+  {
     name: 'Image Legal & Quality Audit Guard',
     cmd: 'node',
     args: ['scripts/image-audit-harness.mjs'],

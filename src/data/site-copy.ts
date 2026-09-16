@@ -8,8 +8,8 @@ export const siteCopy = {
     { href: '/git', label: 'Git 版本管理', active: 'git' },
     { href: '/lessons/01-http', label: '單元講義', active: 'lessons' },
     { href: '/ai-engineering', label: 'AI 工程', active: 'ai' },
-    { href: '/book', label: '整冊閱讀', active: 'book' },
     { href: '/glossary', label: '詞彙字典', active: 'glossary' },
+    { href: '/references', label: '參考資料', active: 'references' },
   ],
   footer: {
     title: '網頁程式設計 115',
@@ -28,14 +28,6 @@ export const siteCopy = {
       '除另有標示外，文字、課程結構與原創插圖皆採 CC BY 4.0 授權。使用或改作時請標示作者與教材名稱。',
   },
   routes: {
-    book: {
-      title: '整冊閱讀',
-      description: '課程說明與十八週講義',
-      kicker: 'MONOGRAPH',
-      reader: 'FULL COURSE READER',
-      lead: '全學期課程講義，連貫閱讀。',
-      week: 'WEEK',
-    },
     glossary: {
       title: '詞彙字典',
       description: '課程用到的關鍵詞彙與標準定義',

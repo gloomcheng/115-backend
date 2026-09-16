@@ -20,10 +20,10 @@ const activeKey = path.startsWith('/preparation')
       ? 'lessons'
       : path.startsWith('/ai-engineering')
         ? 'ai'
-        : path.startsWith('/book')
-          ? 'book'
-          : path.startsWith('/glossary')
-            ? 'glossary'
+        : path.startsWith('/glossary')
+          ? 'glossary'
+          : path.startsWith('/references')
+            ? 'references'
             : ''
 ---
 
