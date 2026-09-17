@@ -45,23 +45,29 @@ HTTP 的基本單位是一組 Request 與 Response。Client 先送 Request，Ser
 
 觀察上面的封包結構：Request 的第一行包含 Method、目標路徑與協定版本。Response 的第一行包含協定版本、Status Code 與 reason phrase；`reason phrase` 是跟在狀態碼後的簡短文字，例如 `OK`。第一行後面是 Header，用來傳遞附加欄位資訊；空白行代表 Header 結束；空白行之後則是 Body，用來承載訊息本身的內容資料。
 
-這條傳輸在網路線上完全是純文字。不管是瀏覽器還是 curl，底層都是透過 TCP 連線把這一行行純文字以 CRLF（`\r\n`）換行送出；當接收端讀到連續兩個換行形成的空白行時，就知道所有 Header 已經結束，接下來是 Body。
+這條傳輸在網路線上完全是純文字。每一行結尾的換行，在 HTTP/1.1 規格中嚴格規定使用 **CRLF**（`\r\n`，共兩個位元組）：`CR`（Carriage Return，回車，`\r`）源自機械打字機把字車滾筒推回最左端，`LF`（Line Feed，換行，`\n`）則是將打字紙向上捲動一行。當接收端讀到連續兩組換行形成的空白行（即 `\r\n\r\n`）時，就知道所有 Header 已經結束，接下來是 Body。
 
-<Callout type="note" title="curl -v 開頭那幾行 * 是什麼？">
-  執行 `curl -v` 時，你會看到 `> GET` 之前有幾行以 `*` 開頭的輸出，例如：
+<Callout type="note" title="curl -v 開頭那幾行 * 是什麼？TCP 三向交握">
+  執行 `curl -v` 時，你會看到 `> GET` 之前有幾行以 `*` 開頭的輸出：
 
-  ```
+  ```text
   * Trying 54.208.105.16:443...
   * Connected to httpbin.org (54.208.105.16) port 443
   * SSL connection using TLSv1.3
   ```
 
-  這些是 TCP 連線建立的過程：Client 與 Server 在交換第一個 HTTP 字元之前，必須先完成一個三向交握（Three-Way Handshake），確認雙方都準備好才能傳輸。HTTPS 還會在 TCP 之上再多一層 TLS 金鑰協商。這一週先認得「`*` 行 = 連線建立、`>` 行 = Request、`<` 行 = Response」這個層次就夠了；TCP 三向交握的細節會在後續網路基礎單元展開。
+  HTTP 是應用層協定，傳輸時必須依賴底層的 **TCP（傳輸層協定）** 建立可靠連線。在 Client 送出第一個 HTTP 字元之前，雙方必須先透過三次封包往返確認彼此的收發能力，這就是 **TCP 三向交握（Three-Way Handshake）**：
+
+  1. **第一次交握（SYN）**：Client 向 Server 發送同步請求，說：「我想連線，這是我的初始序號。」（對應終端機的 `* Trying...`）
+  2. **第二次交握（SYN-ACK）**：Server 回應確認與同步，說：「我收到你的要求了，我也想連線，這是我的初始序號。」
+  3. **第三次交握（ACK）**：Client 回傳最後確認，說：「我收到你的確認了，連線正式建立！」（對應終端機的 `* Connected to...`）
+
+  三次回合確認雙方通道都暢通後，TCP 連線才算成功建立（若走 HTTPS 還會緊接著執行 TLS 加密協商）。直到連線就緒，終端機才會出現 `> GET`，正式開始發送第一行 HTTP 純文字。
 </Callout>
 
 ### Stateless 到底少了什麼
 
-HTTP 是無狀態協定（stateless protocol）。意思是每一次 Request 都是獨立的，協定本身不會替你保存上一次操作的狀態。
+在這條純文字傳輸鏈上，HTTP 是無狀態協定（stateless protocol）。意思是每一次 Request 都是獨立的，協定本身不會替你保存上一次操作的狀態。
 
 如果應用程式需要知道使用者的身分或購物車內容，不能依賴 HTTP 自動記住，必須由應用程式在每次 Request 自行帶上識別資料。這也是為什麼後續單元會介紹在 Header 帶上認證憑證。
 
