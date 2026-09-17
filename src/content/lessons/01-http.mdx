@@ -47,6 +47,18 @@ HTTP 的基本單位是一組 Request 與 Response。Client 先送 Request，Ser
 
 這條傳輸在網路線上完全是純文字。不管是瀏覽器還是 curl，底層都是透過 TCP 連線把這一行行純文字以 CRLF（`\r\n`）換行送出；當接收端讀到連續兩個換行形成的空白行時，就知道所有 Header 已經結束，接下來是 Body。
 
+<Callout type="note" title="curl -v 開頭那幾行 * 是什麼？">
+  執行 `curl -v` 時，你會看到 `> GET` 之前有幾行以 `*` 開頭的輸出，例如：
+
+  ```
+  * Trying 54.208.105.16:443...
+  * Connected to httpbin.org (54.208.105.16) port 443
+  * SSL connection using TLSv1.3
+  ```
+
+  這些是 TCP 連線建立的過程：Client 與 Server 在交換第一個 HTTP 字元之前，必須先完成一個三向交握（Three-Way Handshake），確認雙方都準備好才能傳輸。HTTPS 還會在 TCP 之上再多一層 TLS 金鑰協商。這一週先認得「`*` 行 = 連線建立、`>` 行 = Request、`<` 行 = Response」這個層次就夠了；TCP 三向交握的細節會在後續網路基礎單元展開。
+</Callout>
+
 ### Stateless 到底少了什麼
 
 HTTP 是無狀態協定（stateless protocol）。意思是每一次 Request 都是獨立的，協定本身不會替你保存上一次操作的狀態。
