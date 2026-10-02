@@ -111,7 +111,12 @@ export const chapters: Chapter[] = [
     summary: '對齊 OWASP Top 10：JWT 認證、中介軟體的權限邊界，以及密鑰不外洩的規則。',
     aiFocus: '模型看不到密鑰，也不能替你決定誰有權限；認證與授權仍由 Server 負責。',
     weeks: [
-      { w: 11, dates: '11/16–11/22', title: '登入 — 身份認證與 JWT（401 跟 403 差在哪）' },
+      {
+        w: 11,
+        dates: '11/16–11/22',
+        title: '登入 — 身份認證與 JWT',
+        href: '/lessons/11-auth',
+      },
       { w: 12, dates: '11/23–11/29', title: '中介軟體、權限與密鑰邊界' },
     ],
   },

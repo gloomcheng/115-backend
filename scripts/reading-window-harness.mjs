@@ -210,6 +210,31 @@ const CONCEPT_CONTRACTS_BY_WEEK = {
         /(database is locked[^。\n]*(拒絕|訊息|接住|知道|錯誤)|(拒絕|訊息|接住|知道|錯誤)[^。\n]*database is locked)/i,
     },
   ],
+  11: [
+    {
+      name: 'JWT',
+      term: /JWT/,
+      explanation:
+        /(JWT[^。\n]*(base64|HMAC|簽名|token|三段)|(base64|HMAC|簽名|token|三段)[^。\n]*JWT)/,
+    },
+    {
+      name: 'base64',
+      term: /base64/i,
+      explanation:
+        /(base64[^。\n]*(編碼|加密|還原|位元組|URL)|(編碼|加密|還原|位元組|URL)[^。\n]*base64)/i,
+    },
+    {
+      name: 'WWW-Authenticate',
+      term: /WWW-Authenticate/,
+      explanation:
+        /(WWW-Authenticate[^。\n]*(Header|401|認證|方式|要有)|(Header|401|認證|方式|要有)[^。\n]*WWW-Authenticate)/i,
+    },
+    {
+      name: 'stateless',
+      term: /無狀態/,
+      explanation: /(無狀態[^。\n]*(獨立|記住|Server)|(獨立|記住|Server)[^。\n]*無狀態)/,
+    },
+  ],
   10: [
     {
       name: 'loc',

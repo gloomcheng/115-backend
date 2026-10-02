@@ -1,0 +1,381 @@
+---
+title: "登入 — 身份認證與 JWT"
+week: 11
+description: "401 問的是「你是誰」，403 問的是「你能不能做」。而 JWT 沒有加密，只簽名。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+第一課講過：HTTP 是**無狀態**協定，每一個 Request 都是獨立的，Server 不會替你記住上一次是誰來的。
+
+這一課要處理那個無狀態留下來的洞。先登入：
+
+<Terminal title="Terminal 1 — bash — start the auth API">{`
+cd exercises/11-auth
+fastapi dev main.py --port 8004
+`}</Terminal>
+
+<Terminal title="Terminal 2 — bash — log in and keep the token">{`
+export TOKEN=$(curl -s -X POST http://127.0.0.1:8004/login \\
+  -H 'Content-Type: application/json' \\
+  -d '{"name":"iris","password":"lesson"}' \\
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])")
+
+echo "$TOKEN"
+`}</Terminal>
+
+<Callout type="note" title="為什麼要存成變數">
+  接下來每一段都要重複使用同一枚 token，所以先 `export` 成 `$TOKEN`。`export` 讓它成為環境變數，後面 `python` 子行程才讀得到；只是 `TOKEN=...` 賦值的話，子行程看不到。
+</Callout>
+
+<svg viewBox="0 0 940 440" role="img" aria-labelledby="auth-claim-title auth-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="auth-claim-title">無狀態的 HTTP 靠 Client 重複出示證明，分成兩個問題</title>
+  <desc id="auth-claim-description">Server 不記得上一個 Request 是誰。第一個問題是你是誰：沒有或壞掉的證明回 401 並附上 WWW-Authenticate。第二個問題是你能不能做：證明有效但權限不足回 403，不附 WWW-Authenticate。放棄重試與放棄執行是兩件事。</desc>
+  <defs>
+    <marker id="auth-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="20" width="900" height="52" rx="7" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
+  <text x="470" y="52" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">HTTP 是無狀態的：第二個 Request 到的時候，Server 已經不記得第一個是誰發的</text>
+  <path d="M470 72 V104" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#auth-arrow)" />
+  <rect x="290" y="108" width="360" height="56" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="470" y="133" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">你是誰？</text>
+  <text x="470" y="154" text-anchor="middle" fill="#274f67" font-size="13">證明有沒有、對不對、還沒過期</text>
+  <path d="M400 164 V200 M540 164 V200" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#auth-arrow)" />
+  <rect x="60" y="204" width="300" height="106" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="210" y="232" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">沒有、簽名不對、或過期</text>
+  <text x="210" y="266" text-anchor="middle" fill="#ef795e" font-size="24" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">401</text>
+  <text x="210" y="294" text-anchor="middle" fill="#ef795e" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">WWW-Authenticate 一定要有</text>
+  <rect x="580" y="204" width="300" height="106" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="730" y="232" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">證明有效</text>
+  <text x="730" y="266" text-anchor="middle" fill="#0b3d63" font-size="24" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200</text>
+  <text x="730" y="294" text-anchor="middle" fill="#274f67" font-size="13">進入第二個問題</text>
+  <path d="M730 310 V346" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#auth-arrow)" />
+  <rect x="290" y="350" width="360" height="56" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="470" y="375" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">你能不能做？</text>
+  <text x="470" y="396" text-anchor="middle" fill="#274f67" font-size="13">證明有效之後才問這個</text>
+  <path d="M400 406 H300 M540 406 H640" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#auth-arrow)" />
+  <rect x="60" y="404" width="240" height="34" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="180" y="427" text-anchor="middle" fill="#0b3d63" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200</text>
+  <rect x="640" y="404" width="240" height="34" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="760" y="427" text-anchor="middle" fill="#ef795e" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">403</text>
+</svg>
+
+---
+
+## 01. 無狀態留下來的洞
+
+第一課講過「每一次 Request 都是獨立的」，那個協定層的規則現在有具體後果了。
+
+登入之後拿到一枚 token，然後把它拿掉：
+
+<Terminal title="bash — the same route, with and without the token" flavor="output">{`
+> curl -i http://127.0.0.1:8004/private
+< HTTP/1.1 401 Unauthorized
+< www-authenticate: Bearer realm="lesson-11"
+
+{"detail":"Missing credentials"}
+
+> curl -i http://127.0.0.1:8004/private \\
+>   -H "Authorization: Bearer $TOKEN"
+< HTTP/1.1 200 OK
+
+{"secret":"only a signed-in user sees this","sub":"iris"}
+`}</Terminal>
+
+同一條路徑、同一個 Server、兩次不同的結果。**差別只在 Request 裡有沒有那個 Header。**
+
+這就是無狀態的實際樣貌：Server 沒有「登入狀態」這種東西可以保存。`POST /login` 那一次並沒有讓 Server 記住 iris —— 它只是**交給 Client 一份可以重複出示的證明**，之後每個 Request 都由 Client 自己帶上。
+
+<Callout type="important" title="這一課的主詞是 Client，不是 Server">
+  很多人以為「登入」是 Server 記住了你。實際上是 Client 記住了那枚 token，而且願意每次都帶著它。「登入狀態」存在 Client 端與網路上的那串字裡，不存在 Server 裡。
+</Callout>
+
+---
+
+## 02. JWT 是什麼：base64 加 HMAC，沒有別的
+
+這支 API 沒有安裝任何 JWT 套件。簽發與驗證都在 `exercises/11-auth/main.py` 裡，用的是 Python 標準庫：
+
+<Terminal title="exercises/11-auth/main.py — issuing a token" flavor="output">{`
+def sign(header: dict, payload: dict) -> str:
+    header_part = b64encode(json.dumps(header, separators=(",", ":")).encode())
+    payload_part = b64encode(json.dumps(payload, separators=(",", ":")).encode())
+    signature = b64encode(
+        hmac.new(SECRET, f"{header_part}.{payload_part}".encode(), hashlib.sha256).digest()
+    )
+    return f"{header_part}.{payload_part}.{signature}"
+`}</Terminal>
+
+三段，用點號隔開：
+
+<Terminal title="JWT — the shape" flavor="output">{`
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9 . eyJzdWIiOiJpcmlzIiwi... . Z-Se3QP8ajcLOd5j...
+└──────── header ──────────┘ └──────── payload ──────────┘ └──── signature ────┘
+        base64url              base64url                HMAC-SHA256
+`}</Terminal>
+
+<Callout type="note" title="為什麼不用套件">
+  這不是要你重新發明 JWT 庫，是要你看見它沒有魔術。整份「加密的登入憑證」實際上就是兩段 JSON 做 base64 編碼，加上一段用密鑰算出來的簽名。知道這三段怎麼組出來的，你才知道哪一段可以信任、哪一段不能。
+</Callout>
+
+---
+
+## 03. 最重要的一件事：payload 沒有加密
+
+現在做一個不需要密鑰的操作。`$TOKEN` 已經在 Terminal 2 拿到了，直接餵給 Python：
+
+<Terminal title="bash — decode a JWT with no key at all" flavor="output">{`
+$ python -c "
+import base64, json, sys
+
+def dec(segment):
+    return json.loads(base64.urlsafe_b64decode(segment + '=' * (-len(segment) % 4)))
+
+head, payload, sig = sys.argv[1].split('.')
+print('header :', dec(head))
+print('payload:', dec(payload))
+" "$TOKEN"
+header : {'alg': 'HS256', 'typ': 'JWT'}
+payload: {'sub': 'iris', 'role': 'student', 'iat': 1790951676, 'exp': 1790955276}
+`}</Terminal>
+
+**沒有金鑰。沒有 Server。沒有任何權限。**任何拿到這串 token 的人，都看得到 `role` 是 `student`、它是什麼時候發的、什麼時候到期。
+
+base64 不是加密。它是一種編碼——把位元組換成可以塞進 URL 的字元，**不需要密鑰就能還原**。第 02 課講過 `path` 裡的百分比編碼，那是同一類的東西。
+
+<Callout type="warning" title="所以永遠不要把秘密放進 JWT 的 payload">
+  密碼、身分證號碼、信用卡、內部使用者 ID 以外的機密——都不能放。JWT 的 payload 是公開的，任何中介（反向代理、CDN、log 收集器）只要看一眼 Header 就會記下來。
+
+  JWT 簽名的作用是**防篡改**，不是**防偷看**。要同時做到兩件事，需要 JWE 那類的加密格式，而那已經超出這門課的範圍。
+</Callout>
+
+---
+
+## 04. 簽名擋的是篡改
+
+既然 payload 不用密鑰就能還原，第二個問題就跟著來了：那可不可以**改**？
+
+可以，而且「可以改」正是第三段存在的理由：改完 payload 之後，第三段就對不上了。用 Python 把 `role` 從 `student` 改成 `admin`，然後把改過的 token 送回去：
+
+<Terminal title="bash — hand-edit the role" flavor="output">{`
+$ python - > /tmp/tampered.txt <<'PY'
+import base64, json, os
+
+head, payload, sig = os.environ["TOKEN"].split(".")
+data = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+data["role"] = "admin"
+tampered_payload = (
+    base64.urlsafe_b64encode(json.dumps(data, separators=(",", ":")).encode())
+    .rstrip(b"=")
+    .decode()
+)
+print(f"{head}.{tampered_payload}.{sig}")
+PY
+
+$ curl -i http://127.0.0.1:8004/admin \\
+>   -H "Authorization: Bearer $(cat /tmp/tampered.txt)"
+< HTTP/1.1 401 Unauthorized
+< www-authenticate: Bearer realm="lesson-11"
+
+{"detail":"Bad signature"}
+`}</Terminal>
+
+Server 收到的 `role` 已經是 `admin`，但它回的是 `401` 加 `Bad signature` —— 連「你是不是管理員」都還沒輪到判斷。
+
+所以 Server 做的只有一件事：用同一把密鑰對 `header.payload` 重新算一次簽名，然後比對。
+
+<Terminal title="exercises/11-auth/main.py — verifying a token" flavor="output">{`
+def read_token(token: str) -> dict:
+    header_part, payload_part, signature = token.split(".")
+    expected = b64encode(
+        hmac.new(SECRET, f"{header_part}.{payload_part}".encode(), hashlib.sha256).digest()
+    )
+    # Compare in constant time so the check does not leak the expected value.
+    if not hmac.compare_digest(signature, expected):
+        raise HTTPException(status_code=401, detail="Bad signature", headers=CHALLENGE)
+    ...
+`}</Terminal>
+
+你改了 payload，`header.payload` 就變了，算出來的簽名跟第三段不再相同。**Server 手上沒有任何東西可以還原你的 payload —— 但它有密鑰可以證明這段 payload 沒被動過。**
+
+<Callout type="important" title="簽名能證明沒被動過，不能證明是誰給你的">
+  簽名沒有「只有我能發出這枚 token」以外的意義。任何拿到密鑰的人都能簽發任何內容，而拿到 token 的人可以重複使用它到過期為止。這兩件事的差別，是第 12 課要處理的。
+</Callout>
+
+---
+
+## 05. 401 與 403：兩個問題，兩組證據
+
+現在回到這堂課的標題。先用學生 token 打一個只有管理員能用的路徑：
+
+<Terminal title="bash — authenticated but not allowed" flavor="output">{`
+> curl -i http://127.0.0.1:8004/admin \\
+>   -H 'Authorization: Bearer <學生的 token>'
+< HTTP/1.1 403 Forbidden
+< content-type: application/json
+
+{"detail":"Admins only"}
+`}</Terminal>
+
+`403`。**注意 Header：`www-authenticate` 不見了。**
+
+換成管理員的 token：
+
+<Terminal title="bash — authenticated and allowed" flavor="output">{`
+> curl -i http://127.0.0.1:8004/admin \\
+>   -H 'Authorization: Bearer <管理員的 token>'
+< HTTP/1.1 200 OK
+
+{"admin_panel":true,"sub":"root"}
+`}</Terminal>
+
+把四種情況並排：
+
+| 情況 | Status Code | `WWW-Authenticate` | 誰該修 |
+| --- | --- | --- | --- |
+| 沒帶 token | `401` | 有 | Client 要重新登入 |
+| 密碼錯 | `401` | 有 | 使用者要重打密碼 |
+| 簽名被改過 | `401` | 有 | 有人嘗試偽造，該記錄 |
+| 過期 | `401` | 有 | Client 換一枚新的 |
+| 有效但權限不足 | `403` | **沒有** | 使用者要換權限，或聯絡管理員 |
+
+<Callout type="important" title="Header 的差別不是裝飾，是規格要求">
+  RFC 9110 規定：Server 回 `401` 時 **MUST** 送出 `WWW-Authenticate`，說明要用哪種認證方式。`403` 沒有這項要求——而且不該有，因為它是認證成功之後的判斷，沒有「你該換一種方式認證」的意思。
+
+  Client 端可以用這個 Header 決定行為：看到 `401` 就跳登入頁，看到 `403` 就顯示「你沒有這個權限」。**不要用兩個都跳登入頁的寫法**，那會讓權限不足的使用者被無限次踢回登入頁，而且永遠不知道自己為什麼不行。
+</Callout>
+
+第 01 課提過 `401 Unauthorized` 這個 reason phrase 容易讓人誤會成「沒有權限」。現在你有實據了：**`401` 處理的是「你是誰」，`403` 才是「能不能做」。**
+
+---
+
+## 06. 過期：一枚簽名正確但沒用的 token
+
+簽名正確不代表還能用。這支 API 提供一個 `exp` 已經在過去的 token：
+
+<Terminal title="bash — a valid signature, an expired token" flavor="output">{`
+> curl -i http://127.0.0.1:8004/private \\
+>   -H 'Authorization: Bearer <過期的 token>'
+< HTTP/1.1 401 Unauthorized
+< www-authenticate: Bearer realm="lesson-11"
+
+{"detail":"Token expired"}
+`}</Terminal>
+
+還是 `401`。`payload` 裡有兩個時間欄位：
+
+<Terminal title="the two timestamps in the payload" flavor="output">{`
+{
+  "sub": "iris",
+  "role": "student",
+  "iat": 1790950261,
+  "exp": 1790953861
+}
+
+iat = issued at   簽發時間
+exp = expiration  到期時間
+`}</Terminal>
+
+**Server 必須自己檢查 `exp`。** 簽名有效只證明「這段 payload 沒被改過」，不證明「這段 payload 現在還成立」。這兩件事都是 Server 的責任，而 Client 完全查不出來 —— Client 只是把字串轉交出去。
+
+<Callout type="note" title="這是無狀態的代價">
+  因為 Server 不保存狀態，它無法「把你的登入清掉」。Token 到期或被竊取，唯一能做的就是讓它在時間上失效，或把密鑰換掉讓所有 token 一起失效。單元 12 會處理「怎麼讓已發出的 token 提前失效」這個問題。
+</Callout>
+
+---
+
+## 07. 終端實戰驗證：五種情況
+
+上面六節的結論都要自己重跑一次。Terminal 1 跑著 `fastapi dev main.py --port 8004`，Terminal 2 已經把 token 放進 `$TOKEN`，五個步驟都用同一枚：
+
+### 第一步：不帶 token
+
+<Terminal title="bash — step 1" flavor="output">{`
+> curl -i http://127.0.0.1:8004/private
+< HTTP/1.1 401 Unauthorized
+< www-authenticate: Bearer realm="lesson-11"
+
+{"detail":"Missing credentials"}
+`}</Terminal>
+
+### 第二步：解出 payload，不給密鑰
+
+<Terminal title="bash — step 2">{`
+python -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+print(json.loads(base64.urlsafe_b64decode(p + '=' * (-len(p) % 4))))
+" "$TOKEN"
+`}</Terminal>
+
+輸出會有 `role` 是 `student`，而剛才那個指令沒有用到任何金鑰。這就是第 03 節的結論。
+
+### 第三步：改了 role
+
+<Terminal title="bash — step 3">{`
+python - <<'PY' > /tmp/tampered.txt
+import base64, json, os
+head, payload, sig = os.environ["TOKEN"].split(".")
+data = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+data["role"] = "admin"
+new = base64.urlsafe_b64encode(json.dumps(data, separators=(",", ":")).encode()).rstrip(b"=").decode()
+print(f"{head}.{new}.{sig}")
+PY
+curl -i http://127.0.0.1:8004/admin -H "Authorization: Bearer $(cat /tmp/tampered.txt)"
+`}</Terminal>
+
+輸出是 `401` 加 `Bad signature`，和第 04 節一樣。
+
+### 第四步：用正確的學生 token 打 `/admin`
+
+<Terminal title="bash — step 4" flavor="output">{`
+> curl -i http://127.0.0.1:8004/admin -H "Authorization: Bearer $TOKEN"
+< HTTP/1.1 403 Forbidden
+
+{"detail":"Admins only"}
+`}</Terminal>
+
+這一條是 `403`，而且沒有 `www-authenticate`，和第 05 節的表一致。
+
+### 第五步：用過期的 token
+
+<Terminal title="bash — step 5" flavor="output">{`
+> EXPIRED=$(curl -s -X POST http://127.0.0.1:8004/login-expired \\
+>   -H 'Content-Type: application/json' -d '{"name":"iris"}' \\
+>   | python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])")
+
+> curl -i http://127.0.0.1:8004/private -H "Authorization: Bearer $EXPIRED"
+< HTTP/1.1 401 Unauthorized
+
+{"detail":"Token expired"}
+`}</Terminal>
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下操作並記錄成果。
+
+1. 登入拿到 token，截圖必須包含完整的三段 token。**用一句話回答：這三段分別是什麼？**
+2. 不給任何金鑰，用 `base64` 解出 payload，截圖必須包含 `role`、`iat`、`exp`。回答：JWT 的 payload 有加密嗎？
+3. 不帶 token 打 `/private`，截圖必須包含 `401` **與 `WWW-Authenticate`**。
+4. 手動把 payload 裡的 `role` 改成 `admin` 再送 `/admin`，截圖必須包含 `401` 與 `Bad signature`。回答：Server 是用什麼方法發現被改過的？
+5. 用正確的學生 token 打 `/admin`，截圖必須包含 `403`。**對照第 3 步，寫出這兩個回應的 Header 差異。**
+6. 用過期的 token 打 `/private`，截圖必須包含 `401` 與 `Token expired`。回答：簽名有效和 token 還能用，是同一件事嗎？
+7. 用一句話回答：`401` 與 `403` 各自在問什麼問題？把答案寫成「誰該去修什麼」。
+8. 回答：如果你把 `{"user_id": 7, "is_admin": true}` 放進 payload，Server 會怎麼處理 `is_admin`？這和第 10 課最後那個未宣告欄位是同一個問題嗎？
+
+把作業截圖與簡答筆記存入 `exercises/11-auth/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
+
+### 本單元使用的正本
+
+- [RFC 9110 §15.5.2 — 401 Unauthorized](https://www.rfc-editor.org/rfc/rfc9110.html#name-401-unauthorized)
+- [RFC 9110 §15.5.4 — 403 Forbidden](https://www.rfc-editor.org/rfc/rfc9110.html#name-403-forbidden)
+- [RFC 9110 §11.6.1 — WWW-Authenticate](https://www.rfc-editor.org/rfc/rfc9110.html#name-www-authenticate)
+- [RFC 7519 — JSON Web Token (JWT)](https://www.rfc-editor.org/rfc/rfc7519.html)
+- [RFC 8725 — JSON Web Token Best Current Practices](https://www.rfc-editor.org/rfc/rfc8725.html)
+- [OWASP — Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
+- [OWASP — REST Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html)
