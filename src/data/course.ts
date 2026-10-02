@@ -164,7 +164,13 @@ export const chapters: Chapter[] = [
         title: '怎麼看 log',
         href: '/lessons/15-logging',
       },
-      { w: 16, dates: '12/21–12/27', title: '用 Docker 包起來', note: '12/25 行憲紀念日放假' },
+      {
+        w: 16,
+        dates: '12/21–12/27',
+        title: '用 Docker 包起來',
+        note: '12/25 行憲紀念日放假',
+        href: '/lessons/16-docker',
+      },
       {
         w: 17,
         dates: '12/28–01/03',

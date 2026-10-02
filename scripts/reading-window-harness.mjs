@@ -241,6 +241,38 @@ const CONCEPT_CONTRACTS_BY_WEEK = {
         /(SIGNING_KEY|簽發金鑰)[^。\n]*(環境變數|拒絕啟動|Git|指紋)|(環境變數|拒絕啟動|Git|指紋)[^。\n]*(SIGNING_KEY|簽發金鑰)/,
     },
   ],
+  16: [
+    {
+      name: 'image',
+      term: /image/,
+      explanation:
+        /(image[^。\n]*(檔案系統|容器|快照|安裝|搬走)|(檔案系統|容器|快照|安裝|搬走)[^。\n]*image)/,
+    },
+    {
+      name: 'container network',
+      term: /127\.0\.0\.1/,
+      explanation:
+        /(127\.0\.0\.1[^。\n]*(容器|主機|自己|位址|埠)|(容器|主機|自己|位址|埠)[^。\n]*127\.0\.0\.1)/,
+    },
+    {
+      name: 'port publish',
+      term: /-p 127\.0\.0\.1:8016:8000|埠對應|發布成主機/,
+      explanation:
+        /(埠對應|發布成主機|-p 127\.0\.0\.1:8016:8000)[^。\n]*(容器|主機|8000|8016)|(容器|主機|8000|8016)[^。\n]*(埠對應|發布成主機)/,
+    },
+    {
+      name: 'healthcheck',
+      term: /health ?check|健康檢查|HEALTHCHECK/i,
+      explanation:
+        /(健康檢查|health ?check|HEALTHCHECK)[^。\n]*(容器內部|8000|失敗|不健康|restart|start_period)|(容器內部|8000|失敗|不健康|restart|start_period)[^。\n]*(健康檢查|health ?check|HEALTHCHECK)/i,
+    },
+    {
+      name: '.dockerignore',
+      term: /\.dockerignore/,
+      explanation:
+        /(\.dockerignore|COPY)[^。\n]*(沒有|不進|image|build context|擋)|(沒有|不進|image|build context|擋)[^。\n]*(\.dockerignore|COPY)/,
+    },
+  ],
   15: [
     {
       name: 'access log',
