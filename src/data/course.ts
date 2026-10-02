@@ -87,7 +87,12 @@ export const chapters: Chapter[] = [
         title: 'JSON 與執行期驗證 — 422 是怎麼來的',
         href: '/lessons/07-json-validation',
       },
-      { w: 8, dates: '10/26–11/01', title: 'CRUD：新增、查詢、修改、刪除' },
+      {
+        w: 8,
+        dates: '10/26–11/01',
+        title: 'CRUD — 四個 method 各自對資料庫做一次操作',
+        href: '/lessons/08-crud',
+      },
       { w: 9, dates: '11/02–11/08', title: '期中考試週', exam: true, note: '期中考週' },
       { w: 10, dates: '11/09–11/15', title: '驗證與錯誤' },
     ],

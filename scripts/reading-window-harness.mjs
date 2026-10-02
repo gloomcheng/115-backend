@@ -210,6 +210,26 @@ const CONCEPT_CONTRACTS_BY_WEEK = {
         /(database is locked[^。\n]*(拒絕|訊息|接住|知道|錯誤)|(拒絕|訊息|接住|知道|錯誤)[^。\n]*database is locked)/i,
     },
   ],
+  8: [
+    {
+      name: 'CRUD',
+      term: /CRUD/,
+      explanation:
+        /(CRUD[^。\n]*(Create|Read|Update|Delete|四種|字母)|(Create|Read|Update|Delete|四種|字母)[^。\n]*CRUD)/,
+    },
+    {
+      name: 'idempotent',
+      term: /idempotent/i,
+      explanation:
+        /(idempotent[^。\n]*(冪等|最終狀態|兩次|一次)|(冪等|最終狀態|兩次|一次)[^。\n]*idempotent)/i,
+    },
+    {
+      name: 'Location',
+      term: /\bLocation\b/,
+      explanation:
+        /(Location[^。\n]*(Header|新資源|URL|猜)|(Header|新資源|URL|猜)[^。\n]*Location)/,
+    },
+  ],
   6: [
     {
       name: 'REST',

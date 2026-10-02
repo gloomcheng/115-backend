@@ -1,14 +1,14 @@
 ---
-title: "REST — 為什麼 POST /users 不是 GET"
+title: "資源建模與 REST — 集合、成員與 201"
 week: 6
-description: "同一組 users 資源，換一個 method，Server 做的事與回來的 Status Code 就換一個。"
+description: "集合與成員是兩種不同的目標；換一個 method，Server 做的事與回來的 Status Code 就換一個。"
 ---
 
 import Terminal from '../../components/Terminal.astro';
 import Callout from '../../components/Callout.astro';
 import FieldNote from '../../components/FieldNote.astro';
 
-第二單元把 URL 拆成零件，結論是：`path` 指出你要操作的資源路徑，`method` 寫在 Request Line 的第一個位置。這一單元要回答一個具體問題：為什麼 `POST /users` 不能寫成 `GET`？
+第三課你學會路由表是一筆資料，第四課你寫了自己第一條路由，第五課你讓資料活過了行程結束。這一課把前面三件事接起來：**`path` 指向資料庫裡的一筆東西，`method` 決定你對它做什麼。**
 
 先把課堂 API 啟動起來：
 

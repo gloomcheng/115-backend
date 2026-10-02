@@ -1,0 +1,417 @@
+---
+title: "CRUD — 四個 method 各自對資料庫做一次操作"
+week: 8
+description: "集合路徑終於派上用場。建立、回報位置、修改、刪除——每一個 method 都對應資料庫裡的一次操作。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+第六課你看到 `GET /users` 回 `405 allow: POST`，因為那條集合路徑還沒有「列出全部」的路由。第七課講了 `422` 怎麼來的。第五課你已經讓資料活過了行程結束。
+
+這一課把三件事接起來：**`path` 指向資料庫裡的一筆東西，`method` 決定你對它做什麼。**
+
+CRUD 這四個字母是 Create、Read、Update、Delete。整個 Web 後端的寫入操作基本上都是這四種，加上第 06 課講過的「讀取全部」。它們每一種都要對到一條 SQL，所以程式放在 `exercises/08-crud/main.py`，儲存的資料庫就是第五課那個 `sqlite3` 檔案。
+
+<Terminal title="Terminal 1 — bash — start the CRUD API">{`
+cd exercises/08-crud
+rm -f users.db
+fastapi dev main.py --port 8002
+`}</Terminal>
+
+<svg viewBox="0 0 940 400" role="img" aria-labelledby="crud-claim-title crud-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="crud-claim-title">五個 method，五種對資料庫的操作</title>
+  <desc id="crud-claim-description">GET /users 列出整個集合回 200 與陣列；POST /users 新增一筆回 201；GET /users/一筆 讀一筆；PUT 整筆取代；PATCH 改部分欄位；DELETE 刪除回 204。每一列右邊對應資料庫的一條 SQL。</desc>
+  <defs>
+    <marker id="crud-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <text x="150" y="40" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">Request</text>
+  <text x="440" y="40" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">Status</text>
+  <text x="760" y="40" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">資料庫做的事</text>
+  <g>
+    <rect x="20" y="56" width="260" height="50" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+    <text x="36" y="86" fill="#075486" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">GET /users</text>
+    <path d="M288 81 H368" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#crud-arrow)" />
+    <rect x="384" y="56" width="112" height="50" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+    <text x="440" y="86" text-anchor="middle" fill="#0b3d63" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200</text>
+    <path d="M504 81 H584" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#crud-arrow)" />
+    <rect x="600" y="56" width="320" height="50" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+    <text x="616" y="86" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">SELECT name, role FROM users</text>
+  </g>
+  <g>
+    <rect x="20" y="116" width="260" height="50" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+    <text x="36" y="146" fill="#075486" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">POST /users</text>
+    <path d="M288 141 H368" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#crud-arrow)" />
+    <rect x="384" y="116" width="112" height="50" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+    <text x="440" y="146" text-anchor="middle" fill="#0b3d63" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">201</text>
+    <path d="M504 141 H584" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#crud-arrow)" />
+    <rect x="600" y="116" width="320" height="50" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+    <text x="616" y="146" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">INSERT INTO users VALUES (?, ?)</text>
+  </g>
+  <g>
+    <rect x="20" y="176" width="260" height="50" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+    <text x="36" y="206" fill="#075486" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{'GET /users/{name}'}</text>
+    <path d="M288 201 H368" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#crud-arrow)" />
+    <rect x="384" y="176" width="112" height="50" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+    <text x="440" y="206" text-anchor="middle" fill="#0b3d63" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200</text>
+    <path d="M504 201 H584" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#crud-arrow)" />
+    <rect x="600" y="176" width="320" height="50" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+    <text x="616" y="206" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">SELECT ... WHERE name = ?</text>
+  </g>
+  <g>
+    <rect x="20" y="236" width="260" height="50" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+    <text x="36" y="266" fill="#075486" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{'PUT /users/{name}'}</text>
+    <path d="M288 261 H368" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#crud-arrow)" />
+    <rect x="384" y="236" width="112" height="50" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+    <text x="440" y="266" text-anchor="middle" fill="#0b3d63" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200</text>
+    <path d="M504 261 H584" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#crud-arrow)" />
+    <rect x="600" y="236" width="320" height="50" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+    <text x="616" y="266" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">UPDATE ... SET name=?, role=?</text>
+  </g>
+  <g>
+    <rect x="20" y="296" width="260" height="50" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+    <text x="36" y="326" fill="#075486" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{'DELETE /users/{name}'}</text>
+    <path d="M288 321 H368" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#crud-arrow)" />
+    <rect x="384" y="296" width="112" height="50" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+    <text x="440" y="326" text-anchor="middle" fill="#0b3d63" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">204</text>
+    <path d="M504 321 H584" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#crud-arrow)" />
+    <rect x="600" y="296" width="320" height="50" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+    <text x="616" y="326" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">DELETE FROM users WHERE name = ?</text>
+  </g>
+  <text x="470" y="380" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">Status Code 不是你選的，是那條 SQL 執行完的結果。</text>
+</svg>
+
+---
+
+## 01. 集合路徑終於派上用場
+
+第六課那個 `405 allow: POST` 是這樣來的：集合路徑 `/users` 登錄了，但只有 `POST`。現在補上讀取：
+
+<Terminal title="Terminal 2 — bash — the collection, empty" flavor="output">{`
+> curl -i http://127.0.0.1:8002/users
+< HTTP/1.1 200 OK
+< content-length: 2
+
+[]
+`}</Terminal>
+
+`200`，Body 是空陣列。**這兩件事合起來才是重點**：路由存在（所以不是 `405`），資料真的沒有（所以不是 `404`），而且 Body 是一個合法的空集合，不是 `null` 也不是 `""`。
+
+<Callout type="warning" title="空集合和查不到，是兩個不同的答案">
+  一個空的資源集合回 `200` 加 `[]`；一個不存在的資源回 `404`。寫 Client 的時候，這兩件事的處理方式完全不同：前者要畫出「還沒有任何東西」，後者要畫出「這個東西不存在」。把它們混成同一個回應，Client 就沒辦法分辨。
+</Callout>
+
+---
+
+## 02. 建立一筆，並且告訴 Client 它住在哪裡
+
+<Terminal title="bash — create" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8002/users \\
+>   -H 'Content-Type: application/json' -d '{"name":"iris","role":"student"}'
+< HTTP/1.1 201 Created
+< content-length: 32
+
+{"name":"iris","role":"student"}
+`}</Terminal>
+
+第六課留了一個問題：那支練習 API 的 `201` 沒有 `Location`，而 RFC 9110 說 Server 應該回報新資源的 URL。你可以在自己的 API 裡補上：
+
+<Terminal title="main.py — returning the created resource's URL" flavor="output">{`
+@app.post("/users", status_code=201)
+def create_user(payload: UserIn):
+    ...
+    return JSONResponse(
+        status_code=201,
+        content={"name": payload.name, "role": payload.role},
+        headers={"Location": f"/users/{payload.name}"},
+    )
+`}</Terminal>
+
+有了 `Location`，Client 就不必猜：它讀 `Location`，接著 `GET` 那個網址就知道剛建立的東西現在是什麼狀態。沒有的話，Client 只能從 Body 的欄位反推，而 Body 裡要是沒有識別欄位，就連推都推不出來。
+
+現在重複建立同一個名字：
+
+<Terminal title="bash — the same name twice" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8002/users \\
+>   -H 'Content-Type: application/json' -d '{"name":"iris"}'
+< HTTP/1.1 409 Conflict
+
+{"detail":"User already exists"}
+`}</Terminal>
+
+**`409`。** 這個狀態碼在第七課出現過一次——當時我們說 RFC 9110 把「與資源目前狀態衝突」的位置指派給它，而實務上常常被 `422` 頂替。現在它是對的位置，因為這裡就是主鍵衝突。
+
+而且它是 SQLite 擋下來的，不是 Python 檢查的：
+
+<Terminal title="bash — the rule lives in the schema" flavor="output">{`
+$ sqlite3 users.db ".schema users"
+CREATE TABLE users ( name TEXT PRIMARY KEY NOT NULL, role TEXT);
+`}</Terminal>
+
+`name TEXT PRIMARY KEY` 這行是第五課說的「規則與資料同住」。`sqlite3.IntegrityError` 是引擎丟出來的，你的 route 只是把它翻譯成 `409`。
+
+<Callout type="important" title="為什麼這裡是 409 而不是 422">
+  Request 本身完全合法：`{"name":"iris"}` 語法對、型別對、欄位齊全。問題是**目標資源已經在那裡**。這正是 409 的定義範圍，把它說成「內容無法處理」會讓 Client 誤以為改資料就能解決。
+</Callout>
+
+---
+
+## 03. 讀回來：兩條不同的路
+
+<Terminal title="bash — member then collection" flavor="output">{`
+> curl -s http://127.0.0.1:8002/users/iris
+{"name":"iris","role":"student"}
+
+> curl -s http://127.0.0.1:8002/users
+[{"name":"iris","role":"student"}]
+`}</Terminal>
+
+兩條都是 `200`，但回來的東西不同：`/users/{name}` 回一個物件，`/users` 回一個陣列。**差別在 path 有沒有帶 `{name}`**——成員路徑識別一筆，集合路徑識別一整組。
+
+這一課把它們記成一張表：
+
+| 目標 | 識別什麼 | Body 是什麼 |
+| --- | --- | --- |
+| `/users` | 一整組 users | 陣列，可能是空的 |
+| `/users/{name}` | 群組裡的其中一筆 | 一個物件，或 `404` |
+
+---
+
+## 04. 修改：PUT 換掉整筆，PATCH 換掉部分
+
+這兩個 method 的差別很容易記錯，而且它直接對應到 SQL 的一個差別。
+
+<Terminal title="bash — PUT sends every field" flavor="output">{`
+> curl -i -X PUT http://127.0.0.1:8002/users/iris \\
+>   -H 'Content-Type: application/json' -d '{"name":"iris","role":"ta"}'
+< HTTP/1.1 200 OK
+
+{"name":"iris","role":"ta"}
+`}</Terminal>
+
+`PUT` 送的是 `role:"ta"`，它把整筆狀態換掉。現在只用 `PATCH` 改一個欄位：
+
+<Terminal title="bash — PATCH sends only what changes" flavor="output">{`
+> curl -i -X PATCH http://127.0.0.1:8002/users/iris \\
+>   -H 'Content-Type: application/json' -d '{"role":"student"}'
+< HTTP/1.1 200 OK
+
+{"name":"iris","role":"student"}
+`}</Terminal>
+
+對照兩次的 SQL 就清楚了：
+
+| method | 送什麼 | SQL |
+| --- | --- | --- |
+| `PUT` | 整筆狀態 | `UPDATE users SET name = ?, role = ? WHERE name = ?` |
+| `PATCH` | 只有要改的欄位 | `UPDATE users SET role = ? WHERE name = ?` |
+
+<Callout type="important" title="PUT 送空值會清掉欄位">
+  `PUT` 的語意是「這份 Body 就是這筆資源現在的全部狀態」。所以 `PUT -d '{"name":"iris"}'`（沒有 `role`）會把 `role` 設成 `null`，而不是保留原本的值。`PATCH` 才是不動沒提到的欄位。這是為什麼 Client 端「編輯表單只改一個欄位」要用 `PATCH`，用 `PUT` 會把沒送出來的欄位清掉。
+</Callout>
+
+送一個不存在的欄位試試：
+
+<Terminal title="bash — PATCH ignores nothing it was told it does not know" flavor="output">{`
+> curl -s -o /dev/null -w '%{http_code}\n' \\
+>   -X PATCH http://127.0.0.1:8002/users/iris \\
+>   -H 'Content-Type: application/json' -d '{"nickname":"x"}'
+422
+`}</Terminal>
+
+`422`，因為這支 route 只認 `name` 與 `role`，而且沒有任何欄位可以改。這是第七課講過的：驗證發生在 handler 之前還是之後，決定了 Client 拿到 `422` 還是 `500`。這裡是前者。
+
+---
+
+## 05. 刪除兩次，都回 204
+
+<Terminal title="bash — delete, then delete again" flavor="output">{`
+> curl -i -X DELETE http://127.0.0.1:8002/users/iris
+< HTTP/1.1 204 No Content
+
+> curl -i -X DELETE http://127.0.0.1:8002/users/iris
+< HTTP/1.1 204 No Content
+`}</Terminal>
+
+驗證段落講完了，接下來是刪除。同一筆刪兩次，**兩次都是 `204`。** 這個選擇需要一個理由，而理由不在這支 route 裡。
+
+刪除不存在的東西該回 `204` 還是 `404`？這題連教科書都直接承認沒有共識。Full Stack Open 的原文：
+
+<Terminal title="Full Stack Open — no consensus on this one" flavor="output">{`
+"There's no consensus on what status code should be returned to a DELETE
+request if the resource does not exist. The only two options are 204 and
+404. For the sake of simplicity, our application will respond with 204 in
+both cases."
+`}</Terminal>
+
+<Callout type="note" title="這支 API 選 204 的理由">
+  第 01 課講過 `DELETE` 是 idempotent：刪兩次的**最終狀態**相同，那筆資料都不在了。「最終狀態」是重點——不是「有沒有東西被刪掉」。回 `204` 表示「你要的狀態已經達成」，回 `404` 表示「你要的東西不存在」，那是另一個問題。
+
+  真實系統兩種都有。你串接別人的 API 時，先讀它的文件；這正是第十四課的主題。
+</Callout>
+
+但**讀取**就不一樣了。刪掉之後再讀：
+
+<Terminal title="bash — reading after delete" flavor="output">{`
+> curl -i http://127.0.0.1:8002/users/iris
+< HTTP/1.1 404 Not Found
+
+{"detail":"User not found"}
+`}</Terminal>
+
+`404`。刪除的「目標狀態」和讀取的「目標狀態」在這裡被明確區分開了：刪除要的是「它不在」，讀取要的是「它在那裡」。
+
+最後回到資料庫確認：
+
+<Terminal title="bash — the rows are actually gone">{`
+$ sqlite3 users.db "SELECT COUNT(*) FROM users;"
+0
+$ curl -s http://127.0.0.1:8002/users
+[]
+`}</Terminal>
+
+`204` 是「我沒有 Body 給你」，不是「我沒做事」。資料庫裡確實少了那一筆。
+
+---
+
+## 06. 把五個 method 對起來
+
+這一課沒有新規則，只有一張對照表。寫 Client 或寫 route 的時候，照著它對：
+
+| method | 目標 | 對資料庫 | 正常回 | 目標不存在時 |
+| --- | --- | --- | --- | --- |
+| `GET` | `/users` | `SELECT` 全部 | `200` + 陣列 | 不適用，集合永遠存在 |
+| `GET` | `/users/{name}` | `SELECT` 一筆 | `200` + 物件 | `404` |
+| `POST` | `/users` | `INSERT` | `201` + 新資源 | `409`（主鍵重複） |
+| `PUT` | `/users/{name}` | `UPDATE` 全部欄位 | `200` | `404` |
+| `PATCH` | `/users/{name}` | `UPDATE` 部分欄位 | `200` | `404` |
+| `DELETE` | `/users/{name}` | `DELETE` | `204` | `204`（本課的選擇） |
+
+第二欄和第五欄是這一課真正要記的兩件事：**path 決定你識別哪一個目標，method 決定你對它做什麼。** Status Code 是那條 SQL 執行完的結果，不是你挑的。
+
+順帶確認一下這條集合路徑現在接受什麼：
+
+<Terminal title="bash — the allow header has grown" flavor="output">{`
+> curl -s -o /dev/null -w 'GET  /users -> %{http_code}\n' http://127.0.0.1:8002/users
+GET  /users -> 200
+
+> curl -i -X PUT http://127.0.0.1:8002/users -H 'Content-Type: application/json' -d '{"name":"x"}'
+< HTTP/1.1 405 Method Not Allowed
+< allow: GET, POST
+`}</Terminal>
+
+第六課時這裡是 `allow: POST`。現在多了讀取，`allow` 變成 `GET, POST`——**路由表改了，`allow` 跟著變**，而那個 Header 是第 04 課說的「Server 照著自己的表列出可用的 method」。
+
+<Callout type="note" title="為什麼 PUT 沒有集合版本">
+  `/users` 加上一個 `PUT`，語意上等於「把整組 users 換掉」。這在實務上幾乎沒人做，而且危險——它會清掉所有沒列在 Body 裡的成員。這一課的 route 沒有登錄它，所以 Server 誠實地回 `405` 加上 `allow` 告訴你它接受什麼。
+</Callout>
+
+---
+
+## 07. 終端實戰驗證：五個 method 各跑一次
+
+Terminal 1 跑著 `fastapi dev main.py --port 8002`。先清空資料：
+
+<Terminal title="bash — clean start">{`
+rm -f users.db
+`}</Terminal>
+
+（重啟 Terminal 1 的 Server 讓它重新建立資料表。）
+
+### 第一步：空集合
+
+<Terminal title="bash — step 1" flavor="output">{`
+> curl -i http://127.0.0.1:8002/users
+< HTTP/1.1 200 OK
+< content-length: 2
+
+[]
+`}</Terminal>
+
+### 第二步：建立兩次
+
+<Terminal title="bash — step 2" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8002/users \\
+>   -H 'Content-Type: application/json' -d '{"name":"iris","role":"student"}'
+< HTTP/1.1 201 Created
+
+> curl -i -X POST http://127.0.0.1:8002/users \\
+>   -H 'Content-Type: application/json' -d '{"name":"iris"}'
+< HTTP/1.1 409 Conflict
+
+{"detail":"User already exists"}
+`}</Terminal>
+
+### 第三步：讀成員，再讀集合
+
+<Terminal title="bash — step 3">{`
+curl -s http://127.0.0.1:8002/users/iris
+curl -s http://127.0.0.1:8002/users
+`}</Terminal>
+
+一個物件、一個陣列。
+
+### 第四步：PUT 與 PATCH
+
+<Terminal title="bash — step 4" flavor="output">{`
+> curl -s -X PUT http://127.0.0.1:8002/users/iris \\
+>   -H 'Content-Type: application/json' -d '{"name":"iris","role":"ta"}'
+{"name":"iris","role":"ta"}
+
+> curl -s -X PATCH http://127.0.0.1:8002/users/iris \\
+>   -H 'Content-Type: application/json' -d '{"role":"student"}'
+{"name":"iris","role":"student"}
+`}</Terminal>
+
+### 第五步：刪兩次，然後讀
+
+<Terminal title="bash — step 5" flavor="output">{`
+> curl -i -X DELETE http://127.0.0.1:8002/users/iris
+< HTTP/1.1 204 No Content
+
+> curl -i -X DELETE http://127.0.0.1:8002/users/iris
+< HTTP/1.1 204 No Content
+
+> curl -i http://127.0.0.1:8002/users/iris
+< HTTP/1.1 404 Not Found
+
+{"detail":"User not found"}
+`}</Terminal>
+
+### 第六步：用 sqlite3 確認
+
+<Terminal title="bash — step 6">{`
+sqlite3 users.db "SELECT COUNT(*) FROM users;"
+curl -s http://127.0.0.1:8002/users
+`}</Terminal>
+
+`0` 與 `[]`。
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下操作並記錄成果。
+
+1. 執行 `sqlite3 users.db ".schema users"`，截圖必須包含 `PRIMARY KEY NOT NULL`。寫出：`409` 這個回應是 Python 的檢查，還是 SQLite 的規則？
+2. 建立兩筆你自己的資料，截圖必須包含兩個 `201`。然後對同一個名字再建立一次，截圖必須包含 `409` 與完整 Body。
+3. 讀取單一成員與整個集合各一次，截圖兩者並排。回答：為什麼一個是物件、一個是陣列？這和 path 有沒有帶 `{name}` 有什麼關係？
+4. 對同一筆資料各送一次 `PUT`（帶完整欄位）與 `PATCH`（只帶一個欄位），截圖兩次回應與資料庫裡的結果。回答：兩條 SQL 的差別在哪？
+5. 送 `PUT` 但**省略** `role` 欄位，截圖資料庫裡 `role` 變成什麼。用一句話回答：這就是 `PUT` 與 `PATCH` 最重要的差別嗎？
+6. 刪除同一筆兩次，截圖必須包含兩個 `204`。再讀一次，截圖必須包含 `404`。用 `sqlite3 users.db "SELECT COUNT(*) FROM users;"` 截圖確認。
+7. 執行 `curl -i -X PUT http://127.0.0.1:8002/users -H 'Content-Type: application/json' -d '{"name":"x"}'`，截圖必須包含 `405` 與 `allow` Header 的完整值。寫出：這個 `allow` 和第六課看到的那個有什麼不同？
+8. 完成第 06 節那張對照表，把「目標不存在時」那一欄全部填滿。其中 `DELETE` 那一格是本課的選擇，不是唯一答案——寫出你的理由。
+
+把作業截圖與簡答筆記存入 `exercises/08-crud/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.db` 一起 commit 進去。
+
+### 本單元使用的正本
+
+- [RFC 9110 §9.3.2 — PUT](https://www.rfc-editor.org/rfc/rfc9110.html#name-put)
+- [RFC 9110 §9.3.4 — PATCH](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.3.4)
+- [RFC 9110 §15.3.3 — 204 No Content](https://www.rfc-editor.org/rfc/rfc9110.html#name-204-no-content)
+- [RFC 9110 §15.5.10 — 409 Conflict](https://www.rfc-editor.org/rfc/rfc9110.html#name-409-conflict)
+- [SQLite — CREATE TABLE 與 PRIMARY KEY / NOT NULL 約束](https://www.sqlite.org/lang_createtable.html)
+- [FastAPI — Custom Response](https://fastapi.tiangolo.com/advanced/custom-response/)
+- [Full Stack Open — Node.js and Express](https://fullstackopen.com/en/part3/node_js_and_express)
