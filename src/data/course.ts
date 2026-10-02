@@ -158,7 +158,12 @@ export const chapters: Chapter[] = [
     summary: 'Docker 容器化標準：GET /health 探針、結構化 Log 分析與期末真實服務交付。',
     aiFocus: '模型可以寫部署檔，但你要用健康檢查、Log 與外部 curl 驗收。',
     weeks: [
-      { w: 15, dates: '12/14–12/20', title: '怎麼看 log' },
+      {
+        w: 15,
+        dates: '12/14–12/20',
+        title: '怎麼看 log',
+        href: '/lessons/15-logging',
+      },
       { w: 16, dates: '12/21–12/27', title: '用 Docker 包起來', note: '12/25 行憲紀念日放假' },
       {
         w: 17,

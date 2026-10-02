@@ -1,0 +1,323 @@
+---
+title: "怎麼看 log"
+week: 15
+description: "Client 拿到 500 只會得到三個字。真正的線索在 Server 終端機，而它和 access log 之間隔著一個 request id。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+單元 07 講過一句話：`422` 把答案寫給 Client，`500` 把答案寫在 Server 自己的終端機。單元 12 又補了一次：中介軟體裡的例外和 handler 裡的例外，從 Client 看到的一樣都是 `500`。
+
+這一課就是去把那個終端機打開看。
+
+<Terminal title="Terminal 1 — bash — start the API">{`
+cd exercises/15-logging
+fastapi dev main.py --port 8008
+`}</Terminal>
+
+<svg viewBox="0 0 940 500" role="img" aria-labelledby="log-claim-title log-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="log-claim-title">一個 500 會在終端機留下兩段互不相干的文字</title>
+  <desc id="log-claim-description">Client 只收到 Internal Server Error 三個字。Server 終端機上，access log 有一行記錄路徑與狀態碼，那行沒有任何錯誤細節；traceback 另有數十行指出出錯的檔案與行號，卻完全沒有提到這次請求。兩段文字之間隔著數十行其他輸出，沒有任何共同的識別碼。request id 是把它們接起來的唯一方法。</desc>
+  <defs>
+    <marker id="log-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="250" y="14" width="440" height="60" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="470" y="40" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">Client 收到的全部內容</text>
+  <text x="470" y="62" text-anchor="middle" fill="#ef795e" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">Internal Server Error</text>
+  <path d="M470 74 V100" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#log-arrow)" />
+  <text x="484" y="92" text-anchor="start" fill="#274f67" font-size="12">HTTP/1.1 500</text>
+  <rect x="80" y="104" width="380" height="96" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="270" y="132" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">access log 一行</text>
+  <text x="270" y="160" text-anchor="middle" fill="#274f67" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">GET /boom HTTP/1.1 500</text>
+  <text x="270" y="184" text-anchor="middle" fill="#274f67" font-size="13">知道哪條路徑壞了，不知道為什麼</text>
+  <rect x="500" y="104" width="360" height="96" rx="7" fill="#ffe29a" stroke="#ef795e" stroke-width="3" />
+  <text x="680" y="132" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">traceback 數十行</text>
+  <text x="680" y="160" text-anchor="middle" fill="#274f67" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">main.py line 45 in boom</text>
+  <text x="680" y="184" text-anchor="middle" fill="#274f67" font-size="13">知道為什麼，不提這次請求</text>
+  <path d="M270 200 V268" fill="none" stroke="#075486" stroke-width="2" stroke-dasharray="5 4" />
+  <path d="M680 200 V268" fill="none" stroke="#075486" stroke-width="2" stroke-dasharray="5 4" />
+  <text x="475" y="238" text-anchor="middle" fill="#ef795e" font-size="14" font-weight="700">之間夾著數十行不相干的輸出</text>
+  <text x="475" y="260" text-anchor="middle" fill="#274f67" font-size="13">而且兩段都沒有 request id</text>
+  <rect x="230" y="278" width="480" height="64" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" stroke-dasharray="6 5" />
+  <text x="470" y="306" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">request id r0001 是唯一能把它們接起來的東西</text>
+  <text x="470" y="330" text-anchor="middle" fill="#274f67" font-size="13">由中介軟體指派，同時寫進 access log 和應用程式 log</text>
+  <rect x="80" y="368" width="380" height="104" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="270" y="396" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">access log 的用處</text>
+  <text x="270" y="422" text-anchor="middle" fill="#274f67" font-size="13">哪條路徑、多少次、多久</text>
+  <text x="270" y="446" text-anchor="middle" fill="#274f67" font-size="13">是誰在呼叫你的 API</text>
+  <rect x="500" y="368" width="360" height="104" rx="7" fill="#ffe29a" stroke="#ef795e" stroke-width="3" />
+  <text x="680" y="396" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">應用程式 log 的用處</text>
+  <text x="680" y="422" text-anchor="middle" fill="#274f67" font-size="13">這一次業務上發生了什麼</text>
+  <text x="680" y="446" text-anchor="middle" fill="#ef795e" font-size="13">以及你不該寫進去的東西</text>
+</svg>
+
+---
+
+## 01. 先打一個壞掉的請求
+
+這支 API 有一條 `/boom`，它會丟一個例外。Terminal 2 打它：
+
+<Terminal title="Terminal 2 — bash — the request that breaks" flavor="output">{`
+> curl -i http://127.0.0.1:8008/boom
+< HTTP/1.1 500 Internal Server Error
+< content-type: text/plain; charset=utf-8
+
+Internal Server Error
+`}</Terminal>
+
+**Client 拿到的全部訊息就是 `Internal Server Error` 這五個字。**沒有檔名、沒有行號、沒有「是 `ValueError` 還是 `KeyError`」。
+
+這是刻意的。單元 10 說過，把例外細節寫進回應是資安漏洞 —— traceback 會洩漏你的檔案路徑、套件版本和內部結構。所以框架只給一句通用話語，真正的資訊留在 Server 端。
+
+<Callout type="important" title="所以 debug 的第一步永遠是看 Server，不是一直重送">
+  你可以重送這個 Request 一百次，`Internal Server Error` 都不會變多一個字。
+
+  所有的線索都在 Terminal 1。**這一堂課的整個重點就是：怎麼在 Terminal 1 裡把它找出來。**
+</Callout>
+
+---
+
+## 02. Terminal 1 裡有兩段文字
+
+回到 Terminal 1。`/boom` 那一行附近有東西：
+
+<Terminal title="Terminal 1 — the access log line" flavor="output">{`
+INFO:     127.0.0.1:49945 - "GET /boom HTTP/1.1" 500 Internal Server Error
+`}</Terminal>
+
+這一行的意思是：有一個來自 `127.0.0.1` 的 `GET`，路徑是 `/boom`，結果是 `500`。
+
+然後往下找，你會找到真正有用的東西：
+
+<Terminal title="Terminal 1 — the traceback, further down" flavor="output">{`
+Traceback (most recent call last):
+  File ".../starlette/concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+  File ".../anyio/to_thread.py", line 65, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File ".../anyio/_backends/_asyncio.py", line 2706, in run_sync_in_worker_thread
+    return await future
+  File ".../anyio/_backends/_asyncio.py", line 1100, in run
+    result = context.run(func, *args)
+  File "/Users/gloomcheng/Workspace/courses/115-backend/exercises/15-logging/main.py", line 45, in boom
+    raise ValueError("something the handler could not handle")
+ValueError: something the handler could not handle
+`}</Terminal>
+
+**倒數第三行才是答案**：`main.py` 第 45 行，`boom` 裡，丟的是 `ValueError`。
+
+<Callout type="note" title="為什麼 traceback 那麼長，而且前面全都不是你的程式">
+  `boom` 是同步函式，框架把它丟到執行緒裡跑才有動。要離開同步世界，就必須經過 `anyio` 這一層執行緒包裝器，traceback 因此把每一層都記下來。
+
+  **看 traceback 的規則很簡單：從下往上讀，跳過所有不是你寫的檔案。**第一個屬於你的路徑通常就是真正出錯的位置。這一招在實務上適用於每一種例外，不只 Python。
+</Callout>
+
+---
+
+## 03. 兩段文字沒有共用任何東西
+
+這是這一課最實際的問題。回到 Terminal 1，把 `/boom` 那行和 traceback 對照：
+
+| | 告訴你什麼 | 有沒有提到這次請求 |
+| --- | --- | --- |
+| access log 那一行 | 路徑、方法、狀態碼、來源 IP | 有 |
+| traceback 那幾十行 | 檔案、行號、例外型別、訊息 | **沒有** |
+
+traceback 裡沒有路徑、沒有狀態碼、沒有時間戳、沒有 client IP。它甚至不知道自己是為哪一次請求而印的。
+
+<Callout type="warning" title="實際工作裡這代表什麼">
+  假設你的 API 每分鐘 800 個請求，其中一個偶發拋例外。你會拿到：
+
+  - access log 裡一行 `POST /checkout 500`
+  - 幾十行 traceback，其中一行是 `File ".../payment.py", line 88`
+
+  這兩段之間可能夾著**幾百行**別人的請求輸出。你要自己讀完那幾百行，才能確定這段 traceback 對應的是哪一次請求。
+
+  伺服器一忙，這件事就從「麻煩」變成「不可能」。**下一節就是解決它。**
+</Callout>
+
+---
+
+## 04. 用 request id 把它們接起來
+
+解法是給每個 Request 一個識別碼，讓同一個 Request 產生的所有 log 都帶著它。
+
+先看還沒有的時候長什麼樣。這支 API 的 `/users` 有一行應用程式 log：
+
+<Terminal title="bash — an application log line" flavor="output">{`
+2026-10-03 00:12:01,971 INFO  notes listing users count=1 request_id=-
+`}</Terminal>
+
+`request_id=-`。**減號代表沒有。**這行 log 說明了「有列出使用者」，但你無法把它和任何一次特定請求對起來。
+
+現在加上中介軟體。`main.py` 裡已經寫好了：
+
+<Terminal title="exercises/15-logging/main.py — assigning an id per request" flavor="output">{`
+@app.middleware("http")
+async def assign_request_id(request: Request, call_next):
+    # Section 04: this is the line that makes an application log line
+    # joinable to an access log line. Without it, request_id is "-".
+    request.state.request_id = f"r{next(ids):04d}"
+    response = await call_next(request)
+    response.headers["x-request-id"] = request.state.request_id
+    return response
+`}</Terminal>
+
+`next(ids)` 是標準函式庫的計數器，每個 Request 拿一個編號。編號存在 `request.state` 上，handler 讀得到，回應也順便帶出去。
+
+再打一次：
+
+<Terminal title="bash — the id now appears in both places" flavor="output">{`
+> curl -i http://127.0.0.1:8008/users
+< HTTP/1.1 200 OK
+< x-request-id: r0001
+
+{"items":[{"name":"iris","role":"student"}]}
+
+Terminal 1:
+2026-10-03 00:13:23,255 INFO  notes listing users count=1 request_id=r0001
+`}</Terminal>
+
+**`r0001` 現在同時出現在回應的 Header 和應用程式 log 裡。**
+
+<Callout type="important" title="這個 Header 是 debug 的入口">
+  當使用者回報「剛剛好像有錯」，你問他兩件事：時間，和**回應裡的 `x-request-id`**。有了 `r0001`，你只要在 Server 的 log 裡 `grep r0001`，這一次請求發生的所有事就都在一起了。
+
+  這是為什麼這個 Header 值得加——它把「使用者說有問題」變成「可查詢的證據」。很多團隊會用 UUID 而不是計數器，理由是**多台機器各自計數會撞號**。單機教學用計數器就夠了，生產環境請記得這件事。
+</Callout>
+
+<Callout type="note" title="access log 還是沒有 request id">
+  `x-request-id` 這個 Header 是你的中介軟體自己加的，**框架的 access log 不會自動把它印出來**。想把 id 放進 access log，得自己寫 log 格式，或改用會讀取它的日誌中介軟體。
+
+  所以實務上會分成三層：`x-request-id` 給使用者回報、`應用程式 log` 帶 id 給你自己查、`access log` 給你統計數量。三者互補，不能互相取代——下面這節就是 access log 獨有的東西。
+</Callout>
+
+---
+
+## 05. access log 獨有的兩件事
+
+應用程式 log 是你自己寫的，所以想寫什麼就寫什麼。**access log 是框架寫的，它回答兩個你無法自己知道的問題。**
+
+第一個是**每一條路徑被叫了幾次、多久**。這支 API 有一條 `/slow`，它會睡 0.4 秒：
+
+<Terminal title="Terminal 2 — bash — a deliberately slow route" flavor="output">{`
+> curl -s -o /dev/null -w '%{http_code} in %{time_total}s\n' http://127.0.0.1:8008/slow
+200 in 0.401847s
+
+Terminal 1:
+INFO:     127.0.0.1:49563 - "GET /slow HTTP/1.1" 200 OK
+`}</Terminal>
+
+那個 access log 行**沒有時間**——uvicorn 預設的 access log 格式不含 duration。你可以在啟動時加上：
+
+<Terminal title="Terminal 1 — restart with timing in the access log" flavor="output">{`
+uvicorn main:app --log-config <(echo '{
+  "version": 1,
+  "formatters": {"default": {"format": "%(asctime)s %(levelname)s %(message)s"}},
+  "handlers": {"default": {
+    "class": "logging.StreamHandler",
+    "formatter": "default",
+    "stream": "ext://sys.stdout"
+  }},
+  "loggers": {
+    "uvicorn.access": {"handlers": ["default"], "level": "INFO", "propagate": false}
+  }
+}')
+`}</Terminal>
+
+跑起來之後，access log 每行會帶上時間戳：
+
+<Terminal title="Terminal 1 — the same requests with timing visible" flavor="output">{`
+2026-10-03 00:15:51,776 INFO 127.0.0.1:50135 - "GET /health HTTP/1.1" 200
+2026-10-03 00:15:51,790 INFO 127.0.0.1:50136 - "GET /users/ghost HTTP/1.1" 404
+`}</Terminal>
+
+現在送一個帶 query string 的請求，這是這一節真正要提醒的事：
+
+<Terminal title="Terminal 2 — bash — a query string carrying a credential" flavor="output">{`
+> curl -s -o /dev/null 'http://127.0.0.1:8009/users?token=SECRETVALUE&page=2'
+`}</Terminal>
+
+<Terminal title="Terminal 1 — where that token just went" flavor="output">{`
+2026-10-03 00:16:27,184 INFO 127.0.0.1:50183 - "GET /users?token=SECRETVALUE&page=2 HTTP/1.1" 200
+`}</Terminal>
+
+**`SECRETVALUE` 已經在 log 裡了，而這完全不是刻意做的。**uvicorn 的 access log 預設就印整條路徑，包含 query string。
+
+<Callout type="warning" title="query string 經常就是憑證">
+  `?token=...`、`?api_key=...`、`?password=...`、`?email=...`、`?reset=...` 全部會原樣進 log。而 log 的讀取權限通常比資料庫寬鬆、保留期限比資料庫長、而且會被複製到監控、告警與第三方服務。
+
+  **憑證不該放在 query string。**它會進 browser history、進 referer、進中間 proxy 的快取，也會進 log。真的需要傳 token，用 `Authorization` Header —— 單元 11 用的就是那個。
+
+  這是本節唯一需要記住的設定事實：**access log 印不印 query string，不是可以隨意開關的顯示選項，而是你資料管線的一部分。**
+</Callout>
+
+第二件是**來源**。access log 開頭那個 `127.0.0.1:49563` 是連線的來源位址。單元 04 講過，透過反向代理時你看到的會是 proxy 的位址而不是使用者的，要拿到真實 IP 得讀 `X-Forwarded-For`——**而那個 Header 是可以被偽造的**，只有在後面確實有一台可信的 proxy 時才該採用它。單元 17 部署時會再遇到一次。
+
+---
+
+## 06. 一個寫錯的 log，和一個寫對的 log
+
+這支 API 還有一條 `/admin`，它寫了一行**危險的** log：
+
+<Terminal title="Terminal 1 — the line you must never ship" flavor="output">{`
+2026-10-03 00:12:52,872 INFO  notes admin viewed with token=Bearer eyJhbGciOiJIUzI1NiJ9.demo
+`}</Terminal>
+
+**它把 token 印出來了。**單元 11 說過 JWT 的 payload 任何人都能解出來，而簽名是唯一的保護。把 token 寫進 log，等於是把憑證交給每一個有 log 讀取權限的人，並且永久留在備份裡。
+
+<Callout type="warning" title="log 是敏感資料的放大器">
+  一份 log 通常的讀取權限比資料庫寬鬆、保留期限比資料庫長、而且會被複製到監控系統、告警系統與第三方服務。
+
+  **你永遠不該寫進 log 的東西：**密碼、token、API key、信用卡號、身分證號碼、完整的 request body（裡面什麼都可能混著上面那些）。
+
+  要記「有人用 token 進來了」，記識別就好：`request_id` 和 `sub`。單元 12 的 `require_admin` 手上剛好就有 `subject`。
+</Callout>
+
+<Callout type="important" title="把 log 想成給半年後的你看的文件">
+  判斷一行 log 好不好，標準不是「現在讀得懂嗎」，是**半年後、程式碼已經改過三次、你自己已經不記得這段邏輯的時候，你還能靠它還原當時發生了什麼**。
+
+  一行合格的 log 有三件事：**發生了什麼**（一句話）、**發生在哪**（request id、路由或資源）、**足夠還原的細節**（數量、耗時、呼叫結果）——而**沒有任何憑證**。
+</Callout>
+
+---
+
+## 07. 終端實戰驗證
+
+那行 log 的問題值得單獨重跑一次。Terminal 1 跑著 `fastapi dev main.py --port 8008`，Terminal 2 跑下面六組。**Terminal 1 不要捲動太多**，看不見就會以為沒東西。
+
+1. 在 Terminal 2 打 `curl -i http://127.0.0.1:8008/boom`。截圖必須包含 `500` 與 `Internal Server Error`。**這是 Client 拿到的全部。**
+2. 接著到 Terminal 1 找到 `"GET /boom HTTP/1.1" 500` 那一行，截圖必須**單獨包含那一行**。
+3. 然後在 Terminal 1 繼續往下找到 `ValueError: something the handler could not handle`，截圖必須包含 `main.py` 與 `line 45`。**回答：這兩張截圖之間，Terminal 1 還有幾行不相干的輸出？**
+4. 接著 `curl -i http://127.0.0.1:8008/users`，截圖必須包含 `x-request-id: r0001`（或之後的編號），並且 Terminal 1 的 log 必須出現同一個編號。**回答：這個編號現在出現在哪兩個地方？**
+5. 然後 `curl -i http://127.0.0.1:8008/users/iris`，記下它的 `x-request-id`，再到 Terminal 1 `grep` 那個編號。截圖必須包含「0 筆結果」。**回答：這代表這條路由有寫 log 嗎？這和 log 有問題有關嗎？**
+6. 最後 `curl -i http://127.0.0.1:8008/admin`，到 Terminal 1 找到 `admin viewed with token=` 那一行，截圖必須包含它。**回答：這行 log 應該怎麼改寫，才不會洩漏憑證又保留診斷價值？**
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下八項操作，每一項的截圖與簡答都記錄下來。
+
+1. `/boom` 的完整 `curl -i` 截圖（必須含 `500` 與 `Internal Server Error`）+ Terminal 1 的 access log 那一行截圖 + traceback 結尾兩行截圖（必須含 `main.py line 45` 與 `ValueError`）。回答：Client 拿到五個字，Server 拿到幾十行，中間少的是什麼？
+2. 用第 3 步數出來的那個行數回答：如果你的 API 每分鐘 800 個請求，這兩段文字之間會夾著幾行？回答之後說明為什麼這讓 debug 變成「不可能」。
+3. `GET /users` 的 `x-request-id` 與 Terminal 1 對應 log 的截圖。回答：`x-request-id` 這個 Header 存在的理由，跟 `access log` 的存在理由有什麼不同？
+4. 第 5 步 `grep` 結果為 0 筆的截圖。回答：`/users/iris` 沒有 log，這件事本身是問題嗎？該不該為了「每條路由都有 log」而加？
+5. `/admin` 那行含 token 的 log 截圖 + 你改寫後的版本（**只貼改寫後那行**）。回答：改寫後還剩多少診斷價值？丟掉的是什麼？
+6. 自己寫一條 log，必須包含：發生了什麼、一個 request id、一個數量。放在 `/users` 這條路由上，並在 Terminal 1 看到它。截圖必須包含那一行與對應的 `x-request-id`。
+7. 回答：以下四個東西各該不該寫進 log？各用一句話說明。`password`、`/users/iris` 這種資源路徑、`count=1` 這種數量、完整 request body。其中哪一個的答案會讓你猶豫？為什麼？
+8. 在 Terminal 2 打 `curl -s -o /dev/null 'http://127.0.0.1:8009/users?token=SECRETVALUE&page=2'`，然後在 Terminal 1 找到那一行。截圖必須包含 `SECRETVALUE`。回答：把 token 從 query string 搬到 `Authorization` Header 之後，這個 log 會變成什麼？用第 05 節的敏感資料論點說明為什麼這不只是美觀問題。
+
+把作業截圖與簡答筆記存入 `exercises/15-logging/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。**不要**把你自己的 token、密碼或任何真實憑證寫進 `main.py` 或任何會被提交的檔案。
+
+### 本單元使用的正本
+
+- [Python — `logging` 模組](https://docs.python.org/3/library/logging.html)
+- [Python — `logging.handlers` 與 `LogRecord` 欄位](https://docs.python.org/3/library/logging.handlers.html)
+- [uvicorn — Settings（`access-log`、`log-config`）](https://www.uvicorn.org/settings/)
+- [OWASP — Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
+- [MDN — `X-Forwarded-For`（來源 IP 與代理的可信度）](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Forwarded-For)
+- [RFC 9110 §15.6.1 — `Content-Type`](https://www.rfc-editor.org/rfc/rfc9110.html#name-content-type)

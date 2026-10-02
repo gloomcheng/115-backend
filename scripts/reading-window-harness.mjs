@@ -241,6 +241,32 @@ const CONCEPT_CONTRACTS_BY_WEEK = {
         /(SIGNING_KEY|簽發金鑰)[^。\n]*(環境變數|拒絕啟動|Git|指紋)|(環境變數|拒絕啟動|Git|指紋)[^。\n]*(SIGNING_KEY|簽發金鑰)/,
     },
   ],
+  15: [
+    {
+      name: 'access log',
+      term: /access log/,
+      explanation:
+        /(access log[^。\n]*(框架|路徑|狀態碼|次數|來源|誰)|(框架|路徑|狀態碼|次數|來源|誰)[^。\n]*access log)/,
+    },
+    {
+      name: 'traceback',
+      term: /traceback/,
+      explanation:
+        /(traceback[^。\n]*(檔案|行號|例外|讀|往上)|(檔案|行號|例外|讀|往上)[^。\n]*traceback)/,
+    },
+    {
+      name: 'request id',
+      term: /request id|request_id|x-request-id/,
+      explanation:
+        /(request[ _-]?id[^。\n]*(接|識別|grep|Header|對應|joinable)|(接|識別|grep|Header|對應)[^。\n]*request[ _-]?id)/i,
+    },
+    {
+      name: 'query string',
+      term: /query string/,
+      explanation:
+        /(query string[^。\n]*(憑證|token|敏感|log|路徑)|(憑證|token|敏感|log|路徑)[^。\n]*query string)/,
+    },
+  ],
   14: [
     {
       name: 'GraphQL',
