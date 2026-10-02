@@ -144,7 +144,7 @@ payload: {'sub': 'iris', 'role': 'student', 'iat': 1790951676, 'exp': 1790955276
 
 **沒有金鑰。沒有 Server。沒有任何權限。**任何拿到這串 token 的人，都看得到 `role` 是 `student`、它是什麼時候發的、什麼時候到期。
 
-base64 不是加密。它是一種編碼——把位元組換成可以塞進 URL 的字元，**不需要密鑰就能還原**。第 02 課講過 `path` 裡的百分比編碼，那是同一類的東西。
+base64 不是加密。它是一種編碼——把位元組換成可以塞進 URL 的字元，**不需要密鑰就能還原**。單元 2 講過 `path` 裡的百分比編碼，那是同一類的東西。
 
 <Callout type="warning" title="所以永遠不要把秘密放進 JWT 的 payload">
   密碼、身分證號碼、信用卡、內部使用者 ID 以外的機密——都不能放。JWT 的 payload 是公開的，任何中介（反向代理、CDN、log 收集器）只要看一眼 Header 就會記下來。
@@ -202,7 +202,7 @@ def read_token(token: str) -> dict:
 你改了 payload，`header.payload` 就變了，算出來的簽名跟第三段不再相同。**Server 手上沒有任何東西可以還原你的 payload —— 但它有密鑰可以證明這段 payload 沒被動過。**
 
 <Callout type="important" title="簽名能證明沒被動過，不能證明是誰給你的">
-  簽名沒有「只有我能發出這枚 token」以外的意義。任何拿到密鑰的人都能簽發任何內容，而拿到 token 的人可以重複使用它到過期為止。這兩件事的差別，是第 12 課要處理的。
+  簽名沒有「只有我能發出這枚 token」以外的意義。任何拿到密鑰的人都能簽發任何內容，而拿到 token 的人可以重複使用它到過期為止。這兩件事的差別，是單元 12 要處理的。
 </Callout>
 
 ---
@@ -248,7 +248,7 @@ def read_token(token: str) -> dict:
   Client 端可以用這個 Header 決定行為：看到 `401` 就跳登入頁，看到 `403` 就顯示「你沒有這個權限」。**不要用兩個都跳登入頁的寫法**，那會讓權限不足的使用者被無限次踢回登入頁，而且永遠不知道自己為什麼不行。
 </Callout>
 
-第 01 課提過 `401 Unauthorized` 這個 reason phrase 容易讓人誤會成「沒有權限」。現在你有實據了：**`401` 處理的是「你是誰」，`403` 才是「能不能做」。**
+單元 1 提過 `401 Unauthorized` 這個 reason phrase 容易讓人誤會成「沒有權限」。現在你有實據了：**`401` 處理的是「你是誰」，`403` 才是「能不能做」。**
 
 ---
 
@@ -366,7 +366,7 @@ curl -i http://127.0.0.1:8004/admin -H "Authorization: Bearer $(cat /tmp/tampere
 5. 用正確的學生 token 打 `/admin`，截圖必須包含 `403`。**對照第 3 步，寫出這兩個回應的 Header 差異。**
 6. 用過期的 token 打 `/private`，截圖必須包含 `401` 與 `Token expired`。回答：簽名有效和 token 還能用，是同一件事嗎？
 7. 用一句話回答：`401` 與 `403` 各自在問什麼問題？把答案寫成「誰該去修什麼」。
-8. 回答：如果你把 `{"user_id": 7, "is_admin": true}` 放進 payload，Server 會怎麼處理 `is_admin`？這和第 10 課最後那個未宣告欄位是同一個問題嗎？
+8. 回答：如果你把 `{"user_id": 7, "is_admin": true}` 放進 payload，Server 會怎麼處理 `is_admin`？這和單元 10 最後那個未宣告欄位是同一個問題嗎？
 
 把作業截圖與簡答筆記存入 `exercises/11-auth/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
 

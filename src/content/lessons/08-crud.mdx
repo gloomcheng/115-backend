@@ -11,7 +11,7 @@ import Callout from '../../components/Callout.astro';
 
 這一課把三件事接起來：**`path` 指向資料庫裡的一筆東西，`method` 決定你對它做什麼。**
 
-CRUD 這四個字母是 Create、Read、Update、Delete。整個 Web 後端的寫入操作基本上都是這四種，加上第 06 課講過的「讀取全部」。它們每一種都要對到一條 SQL，所以程式放在 `exercises/08-crud/main.py`，儲存的資料庫就是第五課那個 `sqlite3` 檔案。
+CRUD 這四個字母是 Create、Read、Update、Delete。整個 Web 後端的寫入操作基本上都是這四種，加上單元 6 講過的「讀取全部」。它們每一種都要對到一條 SQL，所以程式放在 `exercises/08-crud/main.py`，儲存的資料庫就是第五課那個 `sqlite3` 檔案。
 
 <Terminal title="Terminal 1 — bash — start the CRUD API">{`
 cd exercises/08-crud
@@ -247,7 +247,7 @@ both cases."
 `}</Terminal>
 
 <Callout type="note" title="這支 API 選 204 的理由">
-  第 01 課講過 `DELETE` 是 idempotent：刪兩次的**最終狀態**相同，那筆資料都不在了。「最終狀態」是重點——不是「有沒有東西被刪掉」。回 `204` 表示「你要的狀態已經達成」，回 `404` 表示「你要的東西不存在」，那是另一個問題。
+  單元 1 講過 `DELETE` 是 idempotent：刪兩次的**最終狀態**相同，那筆資料都不在了。「最終狀態」是重點——不是「有沒有東西被刪掉」。回 `204` 表示「你要的狀態已經達成」，回 `404` 表示「你要的東西不存在」，那是另一個問題。
 
   真實系統兩種都有。你串接別人的 API 時，先讀它的文件；這正是第十四課的主題。
 </Callout>
@@ -302,7 +302,7 @@ GET  /users -> 200
 < allow: GET, POST
 `}</Terminal>
 
-第六課時這裡是 `allow: POST`。現在多了讀取，`allow` 變成 `GET, POST`——**路由表改了，`allow` 跟著變**，而那個 Header 是第 04 課說的「Server 照著自己的表列出可用的 method」。
+第六課時這裡是 `allow: POST`。現在多了讀取，`allow` 變成 `GET, POST`——**路由表改了，`allow` 跟著變**，而那個 Header 是單元 4 說的「Server 照著自己的表列出可用的 method」。
 
 <Callout type="note" title="為什麼 PUT 沒有集合版本">
   `/users` 加上一個 `PUT`，語意上等於「把整組 users 換掉」。這在實務上幾乎沒人做，而且危險——它會清掉所有沒列在 Body 裡的成員。這一課的 route 沒有登錄它，所以 Server 誠實地回 `405` 加上 `allow` 告訴你它接受什麼。
