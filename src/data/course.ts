@@ -135,7 +135,12 @@ export const chapters: Chapter[] = [
       '先用測試把你自己的契約變成門禁，再讀別人的契約：SOAP、REST、GraphQL、gRPC、tRPC 怎麼表示型別與錯誤，以及為什麼 400 與 409 與 422 沒有標準答案。',
     aiFocus: '模型可以照抄一種錯誤格式；你要能指出對方的契約少了什麼。',
     weeks: [
-      { w: 13, dates: '11/30–12/06', title: '測試 — 讓你交付的契約每次都會被檢查' },
+      {
+        w: 13,
+        dates: '11/30–12/06',
+        title: '測試 — 讓契約每次都被檢查',
+        href: '/lessons/13-testing',
+      },
       {
         w: 14,
         dates: '12/07–12/13',

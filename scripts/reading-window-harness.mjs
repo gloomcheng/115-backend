@@ -241,6 +241,31 @@ const CONCEPT_CONTRACTS_BY_WEEK = {
         /(SIGNING_KEY|簽發金鑰)[^。\n]*(環境變數|拒絕啟動|Git|指紋)|(環境變數|拒絕啟動|Git|指紋)[^。\n]*(SIGNING_KEY|簽發金鑰)/,
     },
   ],
+  13: [
+    {
+      name: 'assert',
+      term: /assert/,
+      explanation:
+        /(assert[^。\n]*(敘述|為真|停下|報錯|關鍵字)|(敘述|為真|停下|報錯|關鍵字)[^。\n]*assert)/,
+    },
+    {
+      name: 'TestClient',
+      term: /TestClient/,
+      explanation:
+        /(TestClient[^。\n]*(繞過|網路|socket|port|不經過)|(繞過|網路|socket|port|不經過)[^。\n]*TestClient)/,
+    },
+    {
+      name: 'fixture',
+      term: /fixture/,
+      explanation: /(fixture[^。\n]*(準備|宣告|乾淨|參數)|(準備|宣告|乾淨|參數)[^。\n]*fixture)/i,
+    },
+    {
+      name: 'mutation',
+      term: /改壞|故意製造/,
+      explanation:
+        /(改壞|故意製造)[^。\n]*(失敗|抓|斷言|錯誤)|(失敗|抓|斷言|錯誤)[^。\n]*(改壞|故意製造)/,
+    },
+  ],
   11: [
     {
       name: 'JWT',

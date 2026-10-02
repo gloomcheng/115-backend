@@ -1,0 +1,359 @@
+---
+title: "測試 — 讓契約每次都被檢查"
+week: 13
+description: "測試的價值不是「通過」，是「程式碼改錯時會失敗」。所以這一課的證據是一場故意製造的失敗。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+單元 04 的最後一句是：怎麼自己寫出那種測試，單元 13 會處理。那條測試斷言兩件事，`status_code == 200` 和 `response.json() == {"ok": True}`。
+
+這一課要回答的問題不是「測試怎麼寫」，而是**「怎麼知道一條測試有用」**。
+
+`tests/` 裡面已經有一份寫好的測試，先跑一次：
+
+<Terminal title="bash — the suite is green">{`
+cd exercises/13-testing
+pytest -q
+.......                                                                  [100%]
+7 passed, 1 warning in 2.12s
+`}</Terminal>
+
+七條全過。這證明的事情比你想的少。**綠色只證明「現在沒有壞」，不證明「壞的時候會被抓到」。**
+
+<svg viewBox="0 0 940 470" role="img" aria-labelledby="test-claim-title test-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="test-claim-title">一條測試的價值要看它抓不抓得到故意製造的錯誤</title>
+  <desc id="test-claim-description">同一個被改壞的 /health 路由，只斷言狀態碼的測試會通過，因為狀態碼仍然是 200。斷言 Body 的測試會失敗，而且失敗訊息直接指出 ok 的值從 true 變成了 yes 字串。兩條測試看到的是同一個壞掉的程式碼，結果相反。</desc>
+  <defs>
+    <marker id="test-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+    <marker id="test-arrow-coral" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#ef795e" />
+    </marker>
+  </defs>
+  <rect x="230" y="16" width="480" height="86" rx="7" fill="#ffe29a" stroke="#ef795e" stroke-width="3" />
+  <text x="470" y="46" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">故意把 /health 改壞</text>
+  <text x="470" y="72" text-anchor="middle" fill="#274f67" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{`return {"ok": True}`}</text>
+  <text x="470" y="92" text-anchor="middle" fill="#ef795e" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{`return {"ok": "yes"}`}</text>
+  <path d="M330 102 V150 H250 V182" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#test-arrow)" />
+  <path d="M610 102 V150 H690 V182" fill="none" stroke="#ef795e" stroke-width="3" marker-end="url(#test-arrow-coral)" />
+  <text x="252" y="140" text-anchor="start" fill="#274f67" font-size="13">狀態碼沒變</text>
+  <text x="688" y="140" text-anchor="end" fill="#ef795e" font-size="13">值變了</text>
+  <rect x="60" y="186" width="380" height="150" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="250" y="216" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">只斷言狀態碼</text>
+  <text x="250" y="242" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">assert status_code == 200</text>
+  <text x="250" y="292" text-anchor="middle" fill="#ef795e" font-size="26" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">PASSED</text>
+  <text x="250" y="318" text-anchor="middle" fill="#274f67" font-size="13">測試沒有做到它的工作</text>
+  <rect x="500" y="186" width="380" height="150" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="690" y="216" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">同時斷言 Body</text>
+  <text x="690" y="242" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{`assert json() == {"ok": True}`}</text>
+  <text x="690" y="292" text-anchor="middle" fill="#0b3d63" font-size="26" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">FAILED</text>
+  <text x="690" y="318" text-anchor="middle" fill="#274f67" font-size="13">直接指出 ok 的值不對</text>
+  <rect x="60" y="364" width="820" height="88" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="470" y="394" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">兩條測試看到的是同一個壞掉的程式碼，結果相反</text>
+  <text x="470" y="422" text-anchor="middle" fill="#274f67" font-size="14">所以「測試通過」不是證據，「測試在程式碼被改壞時失敗」才是</text>
+  <text x="470" y="442" text-anchor="middle" fill="#274f67" font-size="14">要證明一條測試有用，唯一的办法是先把它對著一個壞掉的程式碼跑一次</text>
+</svg>
+
+---
+
+## 01. 先製造一個錯誤
+
+拿 `/health` 開刀。單元 04 已經說過它是這個 API 的契約中心：路徑、方法、狀態碼、Body 四列，四列都不能動。
+
+現在動第四列。把 `main.py` 裡 `health()` 回傳的 `True` 改成字串 `"yes"`：
+
+<Terminal title="exercises/13-testing/main.py — the route before and after" flavor="output">{`
+@app.get("/health")
+def health():
+    return {"ok": "yes"}
+`}</Terminal>
+
+**路由沒有壞。**路徑還是 `/health`，方法還是 `GET`，狀態碼還是 `200`。它只是不再履行 Body 那一列的承諾。
+
+<Callout type="warning" title="這個改動看起來多像一個無傷大雅的小錯">
+  `"yes"` 在 Python 裡是 truthy，和 `True` 一樣會讓 `if response["ok"]:` 通過。多數程式碼會繼續正常運作，所以這個錯誤在 production 通常不會立刻爆炸——它會安靜地存活，然後在某個讀取該欄位的 Client 上炸開，而那已經是很久以後、而且不在同一個 codebase 裡。
+
+  這是 `200` 這個狀態碼的極限：它只保證「路由有執行」，不保證「執行的結果符合契約」。
+</Callout>
+
+---
+
+## 02. 現在跑測試
+
+<Terminal title="bash — the suite notices">{`
+> pytest -q
+.F.....                                                                  [100%]
+=================================== FAILURES ===================================
+_____________________ test_health_body_is_exactly_ok_true ______________________
+
+    def test_health_body_is_exactly_ok_true(client):
+        response = client.get("/health")
+
+>       assert response.json() == {"ok": True}
+E       AssertionError: assert {'ok': 'yes'} == {'ok': True}
+E
+E         Differing items:
+E         {'ok': 'yes'} != {'ok': True}
+
+tests/test_contract.py:39: AssertionError
+7 passed, 1 failed, 1 warning in 0.84s
+`}</Terminal>
+
+`.F.....` — 七個點中間夾著一個 `F`。**是那個斷言 Body 的測試失敗，不是那個斷言狀態碼的測試。**
+
+那個 `F` 落在哪一條測試上，`pytest -v` 會直接寫出來：
+
+<Terminal title="bash — which test failed, by name" flavor="output">{`
+> pytest -v
+tests/test_contract.py::test_health_returns_200 PASSED                   [ 14%]
+tests/test_contract.py::test_health_body_is_exactly_ok_true FAILED       [ 28%]
+tests/test_contract.py::test_health_sets_content_type_json PASSED        [ 42%]
+tests/test_contract.py::test_missing_note_returns_404_with_reason PASSED [ 57%]
+tests/test_contract.py::test_create_then_read_round_trips PASSED         [ 71%]
+tests/test_contract.py::test_list_reports_a_count_that_matches_the_items PASSED [ 85%]
+tests/test_contract.py::test_create_without_name_is_rejected PASSED      [100%]
+`}</Terminal>
+
+只看第一行和第二行就好。`test_health_returns_200` **PASSED**。
+
+<Callout type="important" title="這一對測試就是整個單元">
+  它們問的是同一條路徑、同一個 `client`，跑在同一個 process 裡，看到的是同一份壞掉的程式碼。一條說「沒事」，另一條說「壞了」。
+
+  差別只有一行：`assert response.status_code == 200` 對上一個壞掉的 Route 還成立，而 `assert response.json() == {"ok": True}` 不成立。
+
+  **所以「我寫了測試」這句話本身沒有資訊量。**有意義的是「我寫的測試抓得到哪一類的壞法」。
+</Callout>
+
+---
+
+## 03. 一個反方向的實驗
+
+現在做相反的事：把 Body 那一條斷言刪掉，只留狀態碼，然後**再跑一次那個壞掉的程式碼**。手動開一個新的 Terminal，在 `exercises/13-testing` 底下先刪掉 `tests/test_contract.py` 裡的 `test_health_body_is_exactly_ok_true` 整條測試，再執行 `pytest -q`。
+
+`7 passed`。**API 是壞的，整個測試套件全綠。**
+
+這是初學者最常遇到的情況：一個沒有測試的專案看起來比壞掉的專案還可靠，因為壞掉的專案至少會告訴你哪裡不對。
+
+<Callout type="note" title="所以綠色要怎麼讀">
+  綠色代表的是「這個程式碼的行為和上次跑測試時一樣」。它不保證那個行為是對的，只保證它沒變。
+
+  這就是為什麼 `git log` 和測試必須一起看：**測試回答「現在是什麼樣子」，Git 回答「什麼時候變成這樣子的」。**兩個合起來才知道有沒有人做錯事。
+</Callout>
+
+刪掉一條測試之後，壞掉的程式碼看起來是完全健康的。這就是問題。**接下來把 `main.py` 還原，讓 `True` 回來，確認測試重新全綠：**
+
+<Terminal title="bash — restore and confirm" flavor="output">{`
+> pytest -q
+.......                                                                  [100%]
+7 passed, 1 warning in 0.62s
+`}</Terminal>
+
+---
+
+## 04. 測試裡的 `assert` 到底在做什麼
+
+`<Callout>` 之外沒有框架魔法。把上面那條失敗的測試攤開看，它其實只是三行：取得 response、取出 Body、拿它跟契約比。
+
+<Terminal title="tests/test_contract.py — the whole test" flavor="output">{`
+def test_health_body_is_exactly_ok_true(client):
+    response = client.get("/health")
+
+    assert response.json() == {"ok": True}
+`}</Terminal>
+
+`assert` 是 Python 語言本身的關鍵字，意思是「如果這個不為真，就讓這條測試在這裡停下來並報錯」。**沒有註冊、沒有設定檔、沒有 runner 的特殊理解。**
+
+這件事值得停下來，因為它決定了測試的形狀：**每一條測試就是一個你希望為真的敘述。**寫不出那個敘述，代表你還不知道這條路徑的契約是什麼。
+
+<Terminal title="bash — an assertion can fail without any framework help" flavor="output">{`
+$ python -c "
+data = {'ok': 'yes'}
+print(data == {'ok': True})
+print(data['ok'] == True)
+"
+False
+False
+
+$ python -c "
+data = {'ok': 'yes'}
+assert data == {'ok': True}
+"
+Traceback (most recent call last):
+  File "<string>", line 2, in <module>
+AssertionError
+`}</Terminal>
+
+`{"ok": "yes"} == {"ok": True}` 是 `False`，而且因為 `==` 對 `True` 和 `1` 的處理方式，這種寫法**不會**出現 Python 那個 `1 == True` 的陷阱。
+
+<Callout type="important" title="用 `==` 比整個 Body，不要逐欄位比">
+  `assert response.json()["ok"] is True` 會漏掉一件事：多出來的欄位。`assert response.json() == {"ok": True}` 會。
+
+  Body 是契約的一部分，**多出來的欄位也是違約**——它會出現在文件裡，Client 會開始依賴它，然後你就再也刪不掉了。單元 06 講 `201` 的 `Location` 時是同一個道理。
+</Callout>
+
+---
+
+## 05. 逐條契約寫成一條條測試
+
+現在把 `tests/test_contract.py` 和 `main.py` 對著看。每一條測試對應契約表的一列：
+
+| 契約 | 測試 | 違約時會不會被抓到 |
+| --- | --- | --- |
+| `/health` 回 `200` | `test_health_returns_200` | 抓不到 `{"ok": "yes"}` |
+| `/health` 的 Body 是 `{"ok": true}` | `test_health_body_is_exactly_ok_true` | **抓得到** |
+| `/health` 的 `content-type` 是 JSON | `test_health_sets_content_type_json` | 路由回傳字串時抓得到 |
+| 沒有的 note 回 `404` 與理由 | `test_missing_note_returns_404_with_reason` | 狀態碼與 Body 都會被抓 |
+| `POST` 之後讀得回同一筆 | `test_create_then_read_round_trips` | 抓得到 |
+| `count` 和 `items` 一致 | `test_list_reports_a_count_that_matches_the_items` | 抓得到 |
+| 沒有 `name` 回 `422` | `test_create_without_name_is_rejected` | 抓得到 |
+
+第二列是唯一在第一節那個實驗裡失效的測試，而它正是單元 04 特別指出的那一條。
+
+<Callout type="note" title="一個 fixture，三種用法">
+  那個 `client` 參數來自檔案開頭的 `client` fixture：
+
+  ```python
+  @pytest.fixture
+  def client():
+      return TestClient(app, base_url="https://api.test")
+  ```
+
+  它做兩件事：每條測試拿到一份**乾淨的** `NOTES`（`test_create_then_read_round_trips` 建立的資料不會漏到下一條），以及把 `base_url` 固定成 `https://api.test`，讓你在測試裡也能觀察到 scheme 和 host 怎麼來的——`examples/http-api/tests/test_main.py` 就有這樣一條斷言。
+
+  fixture 就是「這條測試需要先準備什麼」的宣告。沒有 pytest 你也能用 `with` 和 `try/finally` 手寫，pytest 只是讓它變成宣告式。
+</Callout>
+
+<Terminal title="bash — run one test by name or by keyword" flavor="output">{`
+> pytest -q -k health
+......                                                                  [100%]
+6 passed, 1 deselected, 1 warning in 1.02s
+
+> pytest -q -k test_health_returns_200
+.                                                                        [100%]
+1 passed, 6 deselected, 1 warning in 0.84s
+`}</Terminal>
+
+`-k` 是關鍵字篩選。改壞程式碼之後只跑那一條，比跑全部七條快得多。
+
+---
+
+## 06. 測試是這門課唯一不需要開伺服器的地方
+
+注意一件事：上面每一條指令都沒有先啟動 `fastapi dev`。`pytest -q` 在沒有任何 Server 執行的情況下就會跑完。
+
+<Terminal title="bash — no server is running, and it still works" flavor="output">{`
+$ pgrep -f "fastapi dev" || echo "no server running"
+no server running
+
+$ pytest -q
+.......                                                                  [100%]
+7 passed, 1 warning in 1.00s
+`}</Terminal>
+
+`TestClient` 把 Request 直接送進應用程式本身，**不經過網路、不經過 socket、不佔用 port**。上一課的 `SIGNING_KEY` 也不需要設定，因為 `main.py` 裡沒有那個檢查。
+
+| 你想驗證的 | 用什麼 |
+| --- | --- |
+| 封包的實際樣子、Header、狀態碼 | `curl` 打在跑著的 Server 上 |
+| 這條路由的契約有沒有被改壞 | `pytest` |
+| 部署出去的整體健康狀態 | 單元 15 的 log、單元 16 的 health check |
+
+<Callout type="important" title="測試取代不了 curl">
+  `curl` 看到的是真實的 HTTP 文字：`Request Line`、`Header`、`Status Line`。單元 01 到 04 觀察到的每一件事都只有 `curl` 看得見。
+
+  `TestClient` 繞過了那一層。你可以用它斷言 `content-type`，但你看不到 wire 上的位元組。
+
+  兩者都要有，理由不同：`curl` 證明「這條路徑在網路上是通的」，`pytest` 證明「它的行為沒有被改壞」。
+</Callout>
+
+---
+
+## 07. 一條測試最常寫錯的地方
+
+`test_create_then_read_round_trips` 斷言的是兩個 `status_code` 和一個 Body，但它的價值在於**順序**：
+
+<Terminal title="tests/test_contract.py — the round trip" flavor="output">{`
+def test_create_then_read_round_trips(client):
+    create_response = client.post(
+        "/notes",
+        json={"name": "test-note", "title": "From a test", "body": "written by pytest"},
+    )
+    read_response = client.get("/notes/test-note")
+
+    assert create_response.status_code == 201
+    assert read_response.status_code == 200
+    assert read_response.json() == {
+        "title": "From a test",
+        "body": "written by pytest",
+    }
+`}</Terminal>
+
+它先 `POST` 再 `GET`，而且 `GET` 讀的是剛才 `POST` 出去的那個名字。**它斷言的是「寫進去的讀得回來」，不是「某個值等於某個值」。**
+
+`test_list_reports_a_count_that_matches_the_items` 也是同一個想法：
+
+<Terminal title="tests/test_contract.py — asserting a relationship, not a number" flavor="output">{`
+def test_list_reports_a_count_that_matches_the_items(client):
+    response = client.get("/notes")
+
+    payload = response.json()
+    # Asserting the relationship, not a hardcoded number, so the test keeps
+    # holding when the fixture data changes.
+    assert payload["count"] == len(payload["items"])
+`}</Terminal>
+
+如果這裡寫成 `assert payload["count"] == 1`，那它斷言的是「fixture 資料剛好只有一筆」。有人加一筆 note 資料，它就會紅——**但 API 沒有壞。**測試紅了而程式碼沒壞，跟測試綠了而程式碼壞了一樣糟。
+
+<Callout type="warning" title="會不會壞，和壞了沒被抓到，同樣重要">
+  一條會在正常改動下失敗的測試會被開發者學會忽略，等於沒有測試。寫斷言時問自己的是：**這條敘述在程式碼正確的時候，會不會為真？**如果不是，它就不該存在。
+</Callout>
+
+---
+
+## 08. 終端實戰驗證
+
+Terminal 不需要開 `fastapi dev`。整個單元都在同一個目錄：
+
+```bash
+cd exercises/13-testing
+```
+
+1. 先跑一次全部：`pytest -q`。截圖必須包含 `7 passed`。這是還沒動過的基準。
+2. 接著跑詳細版：`pytest -v`。截圖必須包含七行測試名稱與 `PASSED`。這張截圖是第 05 節那张契約表的證據來源。
+3. 現在改 `main.py`：把 `health()` 裡的 `True` 改成 `"yes"`，然後 `pytest -q`。截圖必須包含 `.F.....`、`AssertionError`、`{'ok': 'yes'} != {'ok': True}`。
+4. 然後 `pytest -v`，截圖必須**同時**包含 `test_health_returns_200 PASSED` 與 `test_health_body_is_exactly_ok_true FAILED`。這是整個單元最重要的一張截圖。
+5. 接著只跑那條狀態碼測試：`pytest -q -k test_health_returns_200`。截圖必須包含 `1 passed`。**API 是壞的，這條測試卻過了。**
+6. 然後把 `tests/test_contract.py` 裡的 `test_health_body_is_exactly_ok_true` 整條刪掉，再跑 `pytest -q`。截圖必須包含 `6 passed`，而 `main.py` 仍然是壞的。用一句話回答：這跟沒有測試有差別嗎？
+7. 把 `main.py` 還原，把刪掉的測試寫回來，`pytest -q` 確認回到 `7 passed`。
+8. 最後用 `python -c "assert {'ok': 'yes'} == {'ok': True}"` 確認沒有 pytest 也會失敗。截圖必須包含 `AssertionError`。
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下八項操作，每一項的截圖與簡答都記錄下來。
+
+1. `pytest -q` 的綠燈截圖（必須含 `7 passed`）+ `pytest -v` 的詳細截圖（必須含七行測試名稱）。
+2. 把 `{"ok": True}` 改成 `{"ok": "yes"}` 之後的 `pytest -q` 截圖，必須含 `.F.....` 與 `AssertionError`。
+3. `pytest -v` 在壞掉的程式碼上的截圖，必須同時含 `test_health_returns_200 PASSED` 與 `test_health_body_is_exactly_ok_true FAILED`。用一句話回答：為什麼同一個壞掉的 API，一條說好一條說壞？
+4. 只跑狀態碼那條測試的截圖（必須含 `1 passed`）+ 刪掉 Body 斷言後全套件的截圖（必須含 `6 passed`）。回答：第 04 節說「綠色代表行為沒變」，那這兩張截圖分別證明了什麼？
+5. 自己寫一條**新的**測試，斷言 `GET /notes` 回的 `count` 必須是整數且不小於 `items` 的長度。截圖必須包含 `1 passed`，然後把 `count` 改成字串 `"1"`，截圖必須包含 `1 failed`。
+6. 寫一條測試，斷言 `POST /notes` 送出缺少 `name` 的 Body 時，回應的 `content-type` 必須是 `application/json`。截圖必須包含通過，然後把 `raise HTTPException(status_code=422, ...)` 改成 `return {"detail": "name is required"}`，截圖必須包含失敗。回答：狀態碼從 `422` 變成 `200` 時，哪一條斷言先發現？
+7. 回答：為什麼 `test_list_reports_a_count_that_matches_the_items` 斷言的是 `count == len(items)`，而不是 `count == 1`？各自在什麼情況下會誤報？
+8. 回答：這一課沒有任何一步需要先啟動 `fastapi dev`。用第 06 節那張表說明，為什麼 `pytest` 取代不了 `curl`，以及 `curl` 取代不了 `pytest`。
+
+把作業截圖與簡答筆記存入 `exercises/13-testing/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。**不要**提交任何被改壞的 `main.py` 或被刪掉斷言的 `tests/test_contract.py`；那兩個檔案必須維持第 1 步的狀態。
+
+### 本單元使用的正本
+
+這一課的每一條主張都對應到下面其中一份文件：
+
+- [pytest — Get Started](https://docs.pytest.org/en/stable/getting-started.html)
+- [pytest — How to use fixtures](https://docs.pytest.org/en/stable/how-to/fixtures.html)
+- [pytest — How to invoke pytest / `-k` keyword selection](https://docs.pytest.org/en/stable/how-to/invocation.html)
+- [FastAPI — Testing](https://fastapi.tiangolo.com/tutorial/testing/)
+- [Python — `assert` statement](https://docs.python.org/3/reference/simple_stmts.html#the-assert-statement)
+- [unittest — Assert methods (distinguishing `assertEquals` from `assertTrue`)](https://docs.python.org/3/library/unittest.html#assert-methods)
