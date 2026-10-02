@@ -1,7 +1,7 @@
 {
   "extends": "astro/tsconfigs/strict",
   "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist"],
+  "exclude": ["dist", "exercises/14-api-families/trpc-contract.ts"],
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "react"

@@ -241,6 +241,36 @@ const CONCEPT_CONTRACTS_BY_WEEK = {
         /(SIGNING_KEY|簽發金鑰)[^。\n]*(環境變數|拒絕啟動|Git|指紋)|(環境變數|拒絕啟動|Git|指紋)[^。\n]*(SIGNING_KEY|簽發金鑰)/,
     },
   ],
+  14: [
+    {
+      name: 'GraphQL',
+      term: /GraphQL/,
+      explanation:
+        /(GraphQL[^。\n]*(查詢|schema|欄位|回應|家族)|(查詢|schema|欄位|回應|家族)[^。\n]*GraphQL)/,
+    },
+    {
+      name: 'WSDL',
+      term: /WSDL/,
+      explanation: /(WSDL[^。\n]*(契約|stub|產生|檔案)|(契約|stub|產生|檔案)[^。\n]*WSDL)/,
+    },
+    {
+      name: 'proto',
+      term: /`\.proto`|notes\.proto/,
+      explanation:
+        /(\.proto|notes\.proto)[^。\n]*(契約|gRPC|原始碼|stub|宣告)|(契約|gRPC|原始碼|stub|宣告)[^。\n]*(\.proto|notes\.proto)/,
+    },
+    {
+      name: 'over-fetching',
+      term: /over-fetching/,
+      explanation:
+        /(over-fetching[^。\n]*(REST|欄位|回應|丟掉|減少)|(REST|欄位|回應|丟掉|減少)[^。\n]*over-fetching)/,
+    },
+    {
+      name: 'null',
+      term: /`null`/,
+      explanation: /(`null`[^。\n]*(值|錯誤|schema|找不到)|(值|錯誤|schema|找不到)[^。\n]*`null`)/,
+    },
+  ],
   13: [
     {
       name: 'assert',

@@ -1,0 +1,364 @@
+---
+title: "API 家族 — SOAP、REST、GraphQL、gRPC、tRPC 怎麼讀"
+week: 14
+description: "五個家族都在回答同一個問題：怎麼把型別與錯誤交給 Client。差別在契約放在哪裡，以及答錯時會不會有人知道。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+<svg viewBox="0 0 940 520" role="img" aria-labelledby="fam-claim-title fam-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="fam-claim-title">五個 API 家族把契約放在不同位置，所以同一個錯誤會得到不同答案</title>
+  <desc id="fam-claim-description">一個 Client 多要一個不存在的欄位。REST 把多餘欄位安靜丟掉並回 200。SOAP 由 WSDL 在建置期產生 stub，型別錯誤在建置期就被抓到。GraphQL 在查詢字串裡指名不存在的欄位並附上建議。gRPC 由 proto 檔產生 stub，型別錯誤在建置期被抓。tRPC 由 TypeScript 型別推導，錯誤在型別檢查期被抓。三個家族把這個錯誤提前到寫程式時攔下，兩個留到執行期才發現，而 REST 完全沉默。</desc>
+  <defs>
+    <marker id="fam-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+    <marker id="fam-arrow-coral" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#ef795e" />
+    </marker>
+  </defs>
+  <rect x="270" y="14" width="400" height="52" rx="7" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
+  <text x="470" y="36" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">Client 多要一個不存在的欄位</text>
+  <text x="470" y="56" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{`{"name":"bob","nickname":"b"}`}</text>
+  <path d="M300 66 V104 H150 V136" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#fam-arrow)" />
+  <path d="M400 66 V104 H310 V136" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#fam-arrow)" />
+  <path d="M470 66 V136" fill="none" stroke="#ef795e" stroke-width="3" marker-end="url(#fam-arrow-coral)" />
+  <path d="M540 66 V104 H630 V136" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#fam-arrow)" />
+  <path d="M640 66 V104 H790 V136" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#fam-arrow)" />
+  <rect x="40" y="140" width="220" height="126" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="150" y="168" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">REST</text>
+  <text x="150" y="194" text-anchor="middle" fill="#274f67" font-size="13">契約在文件</text>
+  <text x="150" y="222" text-anchor="middle" fill="#ef795e" font-size="13" font-weight="700">丟掉，回 200</text>
+  <text x="150" y="246" text-anchor="middle" fill="#274f67" font-size="12">沒有任何人知道</text>
+  <rect x="290" y="140" width="200" height="126" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="390" y="168" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">SOAP</text>
+  <text x="390" y="194" text-anchor="middle" fill="#274f67" font-size="13">契約是 WSDL</text>
+  <text x="390" y="222" text-anchor="middle" fill="#0b3d63" font-size="13" font-weight="700">建置期就紅</text>
+  <text x="390" y="246" text-anchor="middle" fill="#274f67" font-size="12">stub 由檔案產生</text>
+  <rect x="520" y="140" width="200" height="126" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="620" y="168" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">GraphQL</text>
+  <text x="620" y="194" text-anchor="middle" fill="#274f67" font-size="13">契約在 schema</text>
+  <text x="620" y="222" text-anchor="middle" fill="#0b3d63" font-size="13" font-weight="700">指名欄位</text>
+  <text x="620" y="246" text-anchor="middle" fill="#274f67" font-size="12">仍回 200 加重試</text>
+  <rect x="750" y="140" width="150" height="126" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="825" y="168" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">gRPC</text>
+  <text x="825" y="194" text-anchor="middle" fill="#274f67" font-size="13">契約是 proto</text>
+  <text x="825" y="222" text-anchor="middle" fill="#0b3d63" font-size="13" font-weight="700">建置期就紅</text>
+  <text x="825" y="246" text-anchor="middle" fill="#274f67" font-size="12">二進位編碼</text>
+  <rect x="290" y="292" width="200" height="60" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="390" y="316" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">tRPC</text>
+  <text x="390" y="338" text-anchor="middle" fill="#274f67" font-size="12">型別檢查期就紅</text>
+  <path d="M390 266 V288" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#fam-arrow)" />
+  <path d="M150 266 V400 H470" fill="none" stroke="#ef795e" stroke-width="3" marker-end="url(#fam-arrow-coral)" />
+  <path d="M620 266 V400 H470" fill="none" stroke="#ef795e" stroke-width="3" marker-end="url(#fam-arrow-coral)" />
+  <rect x="40" y="404" width="430" height="98" rx="7" fill="#fffaf0" stroke="#ef795e" stroke-width="3" stroke-dasharray="6 5" />
+  <text x="255" y="434" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">兩個家族讓這個錯誤安靜發生</text>
+  <text x="255" y="460" text-anchor="middle" fill="#274f67" font-size="13">REST 完全不回答，GraphQL 回答了但狀態碼仍是 200</text>
+  <text x="255" y="482" text-anchor="middle" fill="#274f67" font-size="13">三個家族在寫程式時就攔下來</text>
+  <rect x="510" y="404" width="390" height="98" rx="7" fill="#fffdf7" stroke="#075486" stroke-width="3" />
+  <text x="705" y="434" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">真正要問的不是哪個比較好</text>
+  <text x="705" y="460" text-anchor="middle" fill="#274f67" font-size="13">是這份契約的作者把什麼換掉了</text>
+  <text x="705" y="482" text-anchor="middle" fill="#274f67" font-size="13">那個取捨決定它會在哪裡壞掉</text>
+</svg>
+
+前三個單元你一直在讀 REST 的契約。這一課換一個角度：**同一個「拿到三筆筆記」的需求，五個家族會各自把它寫成什麼樣子，然後用什麼方式拒絕你。**
+
+先啟動一支同時提供 REST 與 GraphQL 的 API：
+
+<Terminal title="Terminal 1 — bash — start the API">{`
+cd exercises/14-api-families
+fastapi dev main.py --port 8007
+`}</Terminal>
+
+這支 API 有三筆資料：`welcome`、`api`，和一支 `name` 是 `title` 的空殼。
+
+---
+
+## 01. 先問一個錯的問題
+
+REST 讀資料的方式是：拿一條路徑，決定要什麼。`GET /notes` 沒有任何參數可以表達「我只要 name 和 title」。
+
+所以 Client 只能全部拿走，然後自己丟掉用不到的：
+
+<Terminal title="Terminal 2 — bash — REST over-fetch" flavor="output">{`
+> curl -s http://127.0.0.1:8007/notes
+{"items":[{"name":"welcome","title":"Welcome","tags":["intro","start"]},{"name":"api","title":"API design","tags":["rest"]}]}
+`}</Terminal>
+
+`tags` 在這個畫面上完全沒有用途。**REST 的回應形狀由 Server 決定，不由 Client 決定。**這個現象叫 over-fetching，它不是 bug，是 REST 這個設計的直接後果。
+
+現在走 GraphQL 那一條路，同一個 API、同一份資料：
+
+<Terminal title="bash — the same need, asked for by name" flavor="output">{`
+> curl -s -X POST http://127.0.0.1:8007/graphql \
+>   -H 'Content-Type: application/json' \
+>   -d '{"query":"{ notes { name title } }"}'
+{"data":{"notes":[{"name":"welcome","title":"Welcome"},{"name":"api","title":"API design"}]}}
+`}</Terminal>
+
+`tags` 不見了。**GraphQL 的回應形狀由查詢字串決定**，所以 over-fetching 在這個家族裡不是被減少，而是根本不發生。
+
+<Callout type="important" title="這是這一堂課的主詞">
+  同一份資料、同一個需求，兩個家族給了不同大小的回應。差別不在效能，在**契約放在哪裡**：
+
+  REST 把契約放在**文件**裡（`GET /notes` 永遠回三個欄位），Client 讀文件才知道要丟掉什麼。
+  GraphQL 把契約放在**型別系統**裡（`notes` 的回應型別由你選的欄位決定），Client 用錯欄位編譯期就發現。
+</Callout>
+
+<Callout type="note" title="GraphQL 換來了另一個問題">
+  over-fetching 消失的代價是 under-fetching：Client 想要 `name`、`title` 和「這個月有幾筆」三樣東西，就必須問三次，除非後端有 `notesWithStats` 這種聚合欄位可以一起選。
+
+  實務上兩者都存在，所以 REST 的路徑設計和 GraphQL 的 resolver 設計，長期下來複雜度是同一個級別。**GraphQL 不是把 REST 的問題解決掉，是把問題換到另一個位置。**
+</Callout>
+
+---
+
+## 02. 同一個錯誤，五種答案
+
+現在送一個**明確錯誤**的請求給 GraphQL：查一個不存在的欄位。
+
+<Terminal title="bash — asking for a field that does not exist" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8007/graphql \
+>   -H 'Content-Type: application/json' \
+>   -d '{"query":"{ notes { name nickname } }"}'
+< HTTP/1.1 200 OK
+
+{"data":null,"errors":[{"message":"Cannot query field 'nickname' on type 'Note'. Did you mean 'name'?","path":null}]}
+`}</Terminal>
+
+三件事值得停下來：
+
+1. **訊息指名了欄位**，還給了建議：`nickname` 不存在，`Did you mean 'name'?`
+2. **`data` 是 `null`**，不是部分結果。
+3. **狀態碼是 `200`，不是 `4xx`。**
+
+第三點最容易踩到。單元 07 講過 `4xx` 代表「這一次請求的問題」，而這裡確實是請求的問題，卻回 `200`。
+
+<Callout type="warning" title="GraphQL 為什麼常用 200">
+  因為一個查詢可以在**部分成功**的情況下回傳部分資料加部分錯誤。如果用狀態碼表達，`200` 代表全部成功、`4xx` 代表全部失敗，那「三個欄位成功、一個欄位失敗」就沒有代碼可用了。
+
+  這是一個真實的取捨，不是偷懶。**代價是 Client 不能只看狀態碼判斷成不成功**，必須檢查 Body 裡有沒有 `errors`。這一條要記到實務上：串接別人的 GraphQL API 時，`curl` 加 `-f` 是沒用的。
+</Callout>
+
+現在做同一件事給 REST。送一個**多餘的欄位**：
+
+<Terminal title="bash — the same mistake, REST's way" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8007/notes \
+>   -H 'Content-Type: application/json' \
+>   -d '{"name":"t1","title":"T","is_admin":true,"colour":"red"}'
+< HTTP/1.1 200 OK
+
+{"name":"t1","title":"T","tags":[]}
+`}</Terminal>
+
+**沒有錯誤。`is_admin` 和 `colour` 被安靜地丟掉了，狀態碼是 `200`。**
+
+<Callout type="important" title="這一對就是整個單元">
+  兩個家族收到同一種程度的錯誤輸入，答案完全不同：
+
+  | | REST | GraphQL |
+  | --- | --- | --- |
+  | 多要一個不存在的欄位 | 丟掉，`200` | 指名，`200` + `errors` |
+  | 少給一個必要欄位 | `422`（單元 07） | `errors`，`data: null` |
+  | 誰能提前發現 | 無 | Client 端型別檢查 |
+
+  **REST 對「多」的錯誤完全沉默，GraphQL 對「少」的錯誤也沉默。**沒有哪一個家族比較嚴謹，它們只是選擇了不同的沉默方式。
+
+  這也是為什麼單元 10 要教 `extra="forbid"`：REST 的沉默是可以自己關掉的，預設不關。
+</Callout>
+
+---
+
+## 03. 找不到資源：404 對 null
+
+單元 04 講過 `404` 有一個容易誤用的狀況：「路徑拼錯」和「東西不存在」回同一個狀態碼。GraphQL 對這件事的答案不同。
+
+<Terminal title="bash — REST: two different 404s" flavor="output">{`
+> curl -i http://127.0.0.1:8007/notes/ghost | rg -i '^HTTP|detail'
+< HTTP/1.1 404 Not Found
+{"detail":"Note not found"}
+
+> curl -i http://127.0.0.1:8007/nothing-here | rg -i '^HTTP|detail'
+< HTTP/1.1 404 Not Found
+{"detail":"Not Found"}
+`}</Terminal>
+
+同樣是 `404`，Body 不同。單元 07 講過 `detail` 是 FastAPI 的慣例，不同框架的 `404` Body 寫法不一樣，所以 Client 不該靠字串判斷。
+
+同一個「找不到」的問題，GraphQL 的答案不是狀態碼：
+
+<Terminal title="bash — GraphQL: a missing record is a value" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8007/graphql \
+>   -H 'Content-Type: application/json' \
+>   -d '{"query":"{ note(name: \"ghost\") { name } }"}'
+< HTTP/1.1 200 OK
+
+{"data":{"note":null}}
+`}</Terminal>
+
+`null`，沒有 `errors`。**「這筆不存在」在 GraphQL 裡是一個正常的值，不是錯誤。**
+
+<Callout type="note" title="這是 schema 的選擇，而且是有意的">
+  這支 API 的 schema 寫的是 `note(name: String!): Note`——回傳型別是 `Note` 而不是 `Note!`。`Note` 可以是 `null`，`Note!` 不行。
+
+  所以 `{"note":null}` 完全符合 schema。如果改成 `Note!`，GraphQL 就會強制回 `errors` 並把整個 `data` 變成 `null`，連其他成功的欄位一起拖下水。
+
+  **換一個 `!`，失誤的爆炸半徑就從一個欄位變成整個查詢。**這是讀別人的 GraphQL schema 時最該先看的一件事。
+</Callout>
+
+---
+
+## 04. SOAP：契約在檔案裡
+
+同一件事在 SOAP 那邊又不一樣了。SOAP 在單元 06 出現過一次，那時的重點是「把動作放進 Body」的取捨，而它真正特別的地方是**契約的產生地點**。
+
+SOAP 1.1 讓服務端先產出一份 WSDL（Web Services Description Language），裡面有每個 operation 的名稱、參數型別和回傳型別，然後**各家語言的 client stub 是從那份檔案自動產生的**，不是手寫的。
+
+| | 契約的載體 | Client 怎麼知道型別 |
+| --- | --- | --- |
+| REST | 文件（人寫的） | 沒有機制，靠人讀 |
+| GraphQL | schema（Server 端宣告） | 執行期驗證 + 工具產生的型別 |
+| SOAP | WSDL（Server 端產出） | **建置期**從檔案產生 stub |
+| gRPC | `.proto` | **建置期**從檔案產生 stub |
+| tRPC | TypeScript 型別 | **型別檢查期**推導 |
+
+<Callout type="important" title="SOAP 的真實優勢是「型別錯誤在建置期就爆」">
+  WSDL 一旦產出，Client stub 裡的每個型別都是真的編譯期型別。Client 寫 `getNote(bob).titel`（拼錯）會在編譯期紅，不會等到上線。
+
+  REST 完全沒有這個機制——`{"titel": "..."}` 送到 Server，Server 若沒宣告就丟掉（單元 10），你會到 production 才知道。
+
+  代價是 XML 肥大、瀏覽器不會用、很多防火牆擋掉。同一個「建立一個使用者」，`{"name":"bob"}` 是 14 個位元組，那個 SOAP envelope 是 267 個，約 19 倍。
+
+  它現在活在金融、醫療與政府的系統整合裡。**你會在文件、log 與工程師對話中遇到它，而且會需要讀 WSDL。**
+</Callout>
+
+這一課不要求你寫 SOAP。要求的是：看到 `<soapenv:Envelope>` 知道那是本家族的封裝，看到 `Fault` 知道那是本家族的錯誤。
+
+---
+
+## 05. gRPC 與 tRPC：契約檔，不是端點
+
+這兩個家族的東西放在 `exercises/14-api-families/` 裡，但不是可以跑起來的服務：
+
+- `notes.proto` — gRPC 的契約
+- `trpc-contract.ts` — tRPC 的契約
+
+**它們不在這一堂課執行，因為它們的價值在「讀」，不在「跑」。**而且它們都不走 JSON。gRPC 走 Protocol Buffers 的二進位編碼，跑在 HTTP/2 上；tRPC 走 JSON，但要求 Client 和 Server 是同一個 TypeScript 專案。
+
+`notes.proto` 的關鍵在這裡：
+
+<Terminal title="exercises/14-api-families/notes.proto" flavor="output">{`
+message Note {
+  string name = 1;
+  string title = 2;
+  repeated string tags = 3;
+}
+
+service NoteService {
+  rpc ListNotes(ListNotesRequest) returns (ListNotesResponse);
+  rpc GetNote(GetNoteRequest) returns (Note);
+}
+`}</Terminal>
+
+`rpc ListNumbers(ListNotesRequest) returns (ListNotesResponse)` 這一行同時說明了：方法名、輸入型別、輸出型別。**Client stub 是從這裡生成的**，所以 Client 呼叫 `getNote()` 少傳一個參數，編譯期就紅。
+
+<Callout type="note" title="和 SOAP 的差別：誰產生 spec">
+  SOAP 是**服務端**先產出 WSDL，你再去生成 stub。gRPC 是把 `.proto` 當成**原始碼**，Client 與 Server 各自從它生成自己的 stub，兩邊都不手寫。
+
+  這是「contract-first」和「code-first」的差別。你在 `trpc-contract.ts` 裡看到的正是 code-first：契約寫在 Server 的 router 裡，Client 的型別由 TypeScript **推導**出來，所以不需要產生器，但要求兩端同語言同專案。
+
+  **SOAP/gRPC 是跨語言的必要成本；tRPC 放棄跨語言，換掉整個產生步驟。**
+</Callout>
+
+---
+
+## 06. 五個家族放在一起的樣子
+
+<Terminal title="Terminal 2 — bash — put all five side by side" flavor="output">{`
+> curl -s http://127.0.0.1:8007/notes | wc -c
+161
+
+> curl -s -X POST http://127.0.0.1:8007/graphql \
+>   -H 'Content-Type: application/json' \
+>   -d '{"query":"{ notes { name title } }"}' | wc -c
+119
+
+> curl -s -X POST http://127.0.0.1:8007/graphql \
+>   -H 'Content-Type: application/json' \
+>   -d '{"query":"{ notes { name title tags } }"}' | wc -c
+170
+`}</Terminal>
+
+這三個數字是同一份資料的三種回應大小：REST 161、GraphQL 只要 name 和 title 給 119、GraphQL 加上 tags 給 170。
+
+<Callout type="important" title="數字很小，所以重點不是大小">
+  這裡省下 42 個位元組，毫無意義。真正的差別在**誰決定回應形狀**：
+
+  REST 的回應形狀寫死在 Server 裡，Client 拿到的永遠是全部欄位。
+  GraphQL 的回應形狀寫在查詢字串裡，Client 拿到的正好是它寫的。
+
+  當 Client 要的東西比 Server 願意提供的少時（行動 App 只顯示列表、不顯示內文），這個差別會變成幾百 KB。**先看懂契約在哪裡，再選家族。**
+</Callout>
+
+把五個家族壓成一張可以帶走的表：
+
+| | REST | SOAP | GraphQL | gRPC | tRPC |
+| --- | --- | --- | --- | --- | --- |
+| 傳輸格式 | JSON | XML | JSON | Protobuf（二進位） | JSON |
+| 契約載體 | 文件 | WSDL | schema | `.proto` | TS 型別 |
+| 誰決定回應形狀 | Server | Server | **Client** | Server | Server |
+| 錯誤怎麼表示 | 狀態碼 | `Fault` | `errors` 陣列 | gRPC status code | TRPCError |
+| 找不到資源 | `404` | `Fault` | `null` | `NOT_FOUND` | TRPCError |
+| 跨語言 | 天然 | 需要產生器 | 天然 | 需要產生器 | **不行** |
+| 瀏覽可直接呼叫 | 可以 | 幾乎不行 | 可以 | 不行 | 不行 |
+
+<Callout type="note" title="這一課真正要記的是那一句">
+  **沒有哪一個家族比較好。每一個都在某個軸上換取另一個軸。**
+
+  REST 換掉型別安全性，換到跨語言與可讀性。
+  SOAP 和 gRPC 換到建置期的型別安全，代價是產生器與二進位。
+  GraphQL 換到 Client 控制回應形狀，代價是聚合複雜度與「狀態碼不再代表成功」。
+  tRPC 換掉跨語言，換掉整個產生步驟。
+
+  你在職場上讀到一份 API 契約時，真正要問的是：**這份契約的作者把什麼換掉了？**因為那個取捨決定了它會在哪裡壞掉。
+</Callout>
+
+---
+
+## 07. 終端實戰驗證
+
+上面那張表是這一課唯一要背的東西。剩下五組指令是它的證據來源，Terminal 1 跑著 `fastapi dev main.py --port 8007`，Terminal 2 照順序跑：
+
+1. 先 `curl -s http://127.0.0.1:8007/notes`，截圖必須包含 `tags`。用一句話回答：這個欄位是誰決定要給的？
+2. 接著送 GraphQL 的 `{ notes { name title } }`，截圖必須**沒有** `tags`。回答：回應形狀現在由誰決定？
+3. 然後送 `{ notes { name nickname } }`，截圖必須包含 `200 OK`、`"data":null`、`Did you mean 'name'?`。回答：為什麼這裡不是 `422`？
+4. 再送 `POST /notes` 帶 `{"name":"t1","title":"T","is_admin":true,"colour":"red"}`，截圖必須包含 `200` 並且 Body **沒有** `is_admin`。和第 3 步並排，寫出這兩次的差異。
+5. 最後 `curl -s http://127.0.0.1:8007/notes | wc -c`、`{ notes { name title } } | wc -c`、`{ notes { name title tags } } | wc -c` 三個數字都要截圖。
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下八項操作，每一項的截圖與簡答都記錄下來。
+
+1. `GET /notes` 的完整回應截圖（必須含 `tags`）+ GraphQL 只要 `name title` 的截圖。回答：兩個回應的形狀分別由誰決定？
+2. 三個 `wc -c` 數字的截圖 + 回答：42 個位元組的差別在實務上什麼時候才會變成幾百 KB？
+3. GraphQL 查 `nickname` 的完整截圖（必須含 `200 OK`、`data` 為 `null`、`Did you mean`）+ 回答：為什麼 GraphQL 用 `200` 而不是 `4xx` 表達「查錯欄位」？
+4. REST 送多餘欄位的截圖（必須含 `200` 與 Body 沒有 `is_admin`）+ 和第 3 步並排對照 + 回答：單元 10 的 `extra="forbid"` 在這裡會發生什麼事？
+5. `GET /notes/ghost`（必須含 `404` 與 `Note not found`）與 GraphQL `{ note(name:"ghost") { name } }`（必須含 `null` 且**沒有** `errors`）兩張截圖。回答：把 schema 裡的 `note(...): Note` 改成 `Note!` 之後，第 5 步的 GraphQL 結果會變成什麼？
+6. `GET /nothing-here` 的截圖（必須含 `404` 與 `Not Found`）。和第 5 步的第一張並排，寫出這兩個 `404` 在語意上的差別，以及 Client 該如何分辨。
+7. 打開 `exercises/14-api-families/notes.proto` 與 `trpc-contract.ts`，各寫一句話說明它們**沒有**被這一堂課執行是為什麼。回答：`.proto` 與 TypeScript router，哪一個是「原始碼」、哪一個是「從原始碼產生的東西」？
+8. 回答：SOAP 的 WSDL 和 gRPC 的 `.proto` 都是「讓 Client stub 自動產生」的東西，這兩件事差別在哪？回答之後，用自己的話說明 tRPC 放棄了什麼、換來了什麼。
+
+把作業截圖與簡答筆記存入 `exercises/14-api-families/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。`main.py`、`notes.proto` 與 `trpc-contract.ts` 都是課堂教材，**不要**修改。
+
+### 本單元使用的正本
+
+- [GraphQL — Introduction to GraphQL / Learn Schema](https://graphql.org/learn/schema/)
+- [GraphQL — Execution and Responses（`errors` 與 `data` 的並存規則）](https://graphql.org/learn/response/)
+- [SOAP 1.1 Note（`Envelope` 與 `Fault` 的結構定義）](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/)
+- [Protocol Buffers — Language Guide（proto3）](https://protobuf.dev/programming-guides/proto3/)
+- [gRPC — Core Concepts（`.proto` 與 stub 產生）](https://grpc.io/docs/what-is-grpc/core-concepts/)
+- [tRPC — Server routers](https://trpc.io/docs/server/routers)
+- [RFC 9110 — HTTP Semantics（`404` 與狀態碼定義）](https://datatracker.ietf.org/doc/html/rfc9110)

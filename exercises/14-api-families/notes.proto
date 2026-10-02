@@ -1,0 +1,36 @@
+// Lesson 14 — the gRPC contract. This is a contract file, not a program.
+//
+// Nothing in this directory runs it. You read it, and the reading is the
+// lesson: compare it against the REST routes in main.py and the GraphQL
+// schema in the same file. Each one states the same three notes, in a
+// different shape, with a different failure mode.
+
+syntax = "proto3";
+
+package notes.v1;
+
+// The type system is declared here, in one file, before any code exists.
+message Note {
+  string name = 1;
+  string title = 2;
+  repeated string tags = 3;
+}
+
+message GetNoteRequest {
+  string name = 1;
+}
+
+message ListNotesRequest {}
+
+// The response carries no status code field. gRPC maps a method's outcome
+// onto its own enum instead, and the transport status is separate again.
+message ListNotesResponse {
+  repeated Note items = 1;
+}
+
+// Every method is named, has an input type and an output type, and the
+// client is generated from this declaration rather than hand-written.
+service NoteService {
+  rpc ListNotes(ListNotesRequest) returns (ListNotesResponse);
+  rpc GetNote(GetNoteRequest) returns (Note);
+}
