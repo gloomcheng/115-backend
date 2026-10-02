@@ -191,6 +191,25 @@ const CONCEPT_CONTRACTS_BY_WEEK = {
       explanation: /(404[^。\n]*(路由|命中|框架|不存在)|(路由|命中|框架|不存在)[^。\n]*404)/i,
     },
   ],
+  5: [
+    {
+      name: 'SQLite',
+      term: /SQLite/,
+      explanation:
+        /(SQLite[^。\n]*(檔案|規則|結構|引擎|頁面|page)|(檔案|規則|結構|引擎|頁面|page)[^。\n]*SQLite)/,
+    },
+    {
+      name: 'lost update',
+      term: /lost update/,
+      explanation: /(lost update[^。\n]*(丟|蓋|同時)|(丟|蓋|同時)[^。\n]*lost update)/i,
+    },
+    {
+      name: 'database is locked',
+      term: /database is locked/,
+      explanation:
+        /(database is locked[^。\n]*(拒絕|訊息|接住|知道|錯誤)|(拒絕|訊息|接住|知道|錯誤)[^。\n]*database is locked)/i,
+    },
+  ],
   6: [
     {
       name: 'REST',

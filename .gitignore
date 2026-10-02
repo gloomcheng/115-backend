@@ -34,3 +34,10 @@ output/playwright/
 
 # jetbrains setting folder
 .idea/
+
+# sqlite databases produced by lesson exercises
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+users.json

@@ -1,0 +1,345 @@
+---
+title: "存資料 — File 跟 SQLite 差在哪"
+week: 5
+description: "dict 活不過一次執行，文字檔活著但會安靜地弄丟你的資料，SQLite 會明確拒絕你。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+前四課你寫的路由，資料都放在一個 Python `dict` 裡。`examples/http-api/main.py` 的 `users` 就是這樣。
+
+<Terminal title="examples/http-api/main.py — the whole storage layer" flavor="output">{`
+users = {"alice": {"name": "Alice", "note": "First HTTP example"}}
+`}</Terminal>
+
+這一行撐得住四課，因為你還沒重啟過程式。這一課的重點只有一句話：**那個 `dict` 活不過一次執行。**
+
+這一課的三個程式都在 `exercises/05-persistence/`。`store.py` 每一個模式都只做兩件事之一——寫入或讀取——而且是**兩次不同的執行**。先全部跑一次：
+
+<Terminal title="bash — write, then read from a fresh process">{`
+cd exercises/05-persistence
+python store.py dict-add
+python store.py dict-list
+python store.py json-add
+python store.py json-list
+python store.py sqlite-add
+python store.py sqlite-list
+`}</Terminal>
+
+<svg viewBox="0 0 940 430" role="img" aria-labelledby="storage-claim-title storage-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="storage-claim-title">三種存法，同樣寫入，結果三樣</title>
+  <desc id="storage-claim-description">dict 寫入後第二個行程看不到資料；users.json 寫入後看得見，但兩個 writer 同時寫會安靜地丟掉一筆；notes.db 寫入後看得見，而且同時寫入時第二個 writer 收到 database is locked。</desc>
+  <defs>
+    <marker id="storage-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="20" width="280" height="46" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="160" y="49" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">dict（行程記憶體）</text>
+  <rect x="340" y="20" width="280" height="46" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="480" y="49" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">users.json（文字檔）</text>
+  <rect x="660" y="20" width="260" height="46" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="790" y="49" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">notes.db（SQLite）</text>
+  <text x="38" y="100" fill="#274f67" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">寫入 carol</text>
+  <text x="358" y="100" fill="#274f67" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">寫入 carol</text>
+  <text x="678" y="100" fill="#274f67" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">寫入 carol</text>
+  <path d="M160 112 V136" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#storage-arrow)" />
+  <path d="M480 112 V136" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#storage-arrow)" />
+  <path d="M790 112 V136" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#storage-arrow)" />
+  <rect x="20" y="142" width="280" height="112" rx="7" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
+  <text x="160" y="172" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">下一個行程看到</text>
+  <text x="160" y="204" text-anchor="middle" fill="#ef795e" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">alice</text>
+  <text x="160" y="232" text-anchor="middle" fill="#ef795e" font-size="14">carol 不見了</text>
+  <rect x="340" y="142" width="280" height="112" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="480" y="172" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">下一個行程看到</text>
+  <text x="480" y="204" text-anchor="middle" fill="#0b3d63" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">alice, carol</text>
+  <text x="480" y="232" text-anchor="middle" fill="#274f67" font-size="14">56 bytes 純文字</text>
+  <rect x="660" y="142" width="260" height="112" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="790" y="172" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">下一個行程看到</text>
+  <text x="790" y="204" text-anchor="middle" fill="#0b3d63" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">carol</text>
+  <text x="790" y="232" text-anchor="middle" fill="#274f67" font-size="14">8192 bytes，含結構</text>
+  <rect x="20" y="272" width="280" height="94" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="160" y="300" text-anchor="middle" fill="#ef795e" font-size="14" font-weight="700">同時寫入會怎樣</text>
+  <text x="160" y="330" text-anchor="middle" fill="#075486" font-size="15">不會發生</text>
+  <text x="160" y="352" text-anchor="middle" fill="#274f67" font-size="13">因為根本沒存下來</text>
+  <rect x="340" y="272" width="280" height="94" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="480" y="300" text-anchor="middle" fill="#ef795e" font-size="14" font-weight="700">同時寫入會怎樣</text>
+  <text x="480" y="330" text-anchor="middle" fill="#ef795e" font-size="15" font-weight="700">兩邊都報成功</text>
+  <text x="480" y="352" text-anchor="middle" fill="#ef795e" font-size="13">其中一筆消失，沒有人被告知</text>
+  <rect x="660" y="272" width="260" height="94" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="790" y="300" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">同時寫入會怎樣</text>
+  <text x="790" y="330" text-anchor="middle" fill="#075486" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">database is locked</text>
+  <text x="790" y="352" text-anchor="middle" fill="#274f67" font-size="13">明確拒絕，你會知道</text>
+  <text x="470" y="404" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">差別不在能不能存下來，在出事時會不會有人告訴你。</text>
+</svg>
+
+---
+
+## 01. dict 活不過一次執行
+
+先看前兩行輸出：
+
+<Terminal title="bash — the dict case" flavor="output">{`
+$ python store.py dict-add
+added carol to a dict, held by this process only
+
+$ python store.py dict-list
+dict sees: ['alice']
+`}</Terminal>
+
+`dict-add` 確實把 `carol` 放進去了。`dict-list` 也確實是一個新的執行——它看不到 `carol`，因為 `carol` 住在**剛才那個行程的記憶體裡**，而那個行程已經結束了。
+
+這就是為什麼 `fastapi dev` 沒有 `--reload` 時，你重啟一次 Server，先前 `POST /users` 建立的資料就會不見。`examples/http-api/main.py:8` 的 `users` 就是這種東西。
+
+<Callout type="important" title="這不是 bug，是 dict 的定義">
+  Python 的 `dict` 是一個執行行程內的物件。行程結束，它就結束。要讓資料活過行程結束，必須寫進**行程之外**的東西。接下來兩種寫法，都在做這件事。
+</Callout>
+
+---
+
+## 02. 文字檔：活下來了，但只是一串字
+
+<Terminal title="bash — the JSON case" flavor="output">{`
+$ python store.py json-add
+added carol to users.json
+
+$ python store.py json-list
+users.json sees: ['alice', 'carol']
+
+$ ls -l users.json
+-rw-r--r--  1 you  staff  56 users.json
+
+$ cat users.json
+{"alice": {"name": "Alice"}, "carol": {"name": "Carol"}}
+`}</Terminal>
+
+`carol` 活過了行程結束。檔案裡的 56 個位元組就是你用 `cat` 看到的東西——**沒有藏起來的東西**。你可以用任何文字編輯器改它，`git diff` 也看得懂它改了什麼。
+
+這是文字檔最大的優點，也是它最大的問題：因為它是純文字，**兩個程式同時改它時，沒有任何機制會告訴你其中一個改動不見了。**
+
+<Terminal title="bash — two writers, one text file">{`
+$ python json_race.py A & python json_race.py B & wait
+writer A: read the file, writing back in 1 second
+writer B: read the file, writing back in 1 second
+writer A: wrote the file
+writer B: wrote the file
+
+$ cat users.json
+{"alice": {"name": "Alice"}, "writer-B": {"name": "B"}}
+`}</Terminal>
+
+**`writer-A` 不見了，而兩個 writer 都說「我寫好了」。** 沒有錯誤訊息、沒有例外、沒有任何地方留下紀錄。
+
+`json_race.py` 只有四行，你可以自己去讀：兩個行程都「讀整個檔案 → 加一個 key → 寫回整個檔案」。B 讀到的版本裡還沒有 A 的改動，所以它寫回去的時候，把 A 的改動一併蓋掉了。這種「兩個同時寫入、彼此蓋掉」的結果就叫 lost update—— 資料蓋掉了，而且沒有人知道。
+
+<Callout type="warning" title="這一課最該記住的一句話">
+  資料不見了，而且沒有任何人被告知。這是文字檔最危險的地方——不是它存不住資料，是它在**存不住的那一次完全沒有聲音**。單元 08 CRUD 與單元 10 驗證會處理怎麼預防它。
+</Callout>
+
+---
+
+## 03. SQLite：檔案裡連結構一起存
+
+<Terminal title="bash — the SQLite case" flavor="output">{`
+$ python store.py sqlite-add
+added carol to notes.db
+
+$ python store.py sqlite-list
+notes.db sees: ['carol']
+
+$ ls -l notes.db
+-rw-r--r--  1 you  staff  8192 notes.db
+`}</Terminal>
+
+同一筆資料，檔案是 8192 bytes 而不是 56。多出來的不是資料，是**結構**。
+
+先確認這不是文字檔：
+
+<Terminal title="bash — the file itself" flavor="output">{`
+$ file notes.db
+notes.db: SQLite 3.x database, database pages 2, UTF-8, ...
+`}</Terminal>
+
+然後問它自己有什麼表：
+
+<Terminal title="bash — the structure lives inside the file" flavor="output">{`
+$ python store.py sqlite-schema
+CREATE TABLE notes (id INTEGER PRIMARY KEY, text TEXT NOT NULL)
+`}</Terminal>
+
+`NOT NULL`、`INTEGER PRIMARY KEY` 這些規則**寫在檔案裡**，不是寫在你的 Python 程式裡。這是關鍵差異：你的程式結束了、換了一個人維護，規則還在。
+
+<Callout type="note" title="為什麼一個檔案要 8192 bytes">
+  SQLite 把磁碟空間切成固定大小的 page（預設 4 KB），一次配置兩頁。空的資料庫也會佔掉這些空間。檔案大小不是資料量，這一點在單元 08 討論磁碟與容量時會再遇到。
+</Callout>
+
+---
+
+## 04. SQLite 會替你守住型別
+
+規則既然在檔案裡，就會被執行。試著塞一個不合型別的值：
+
+<Terminal title="bash — a type violation the file will not accept">{`
+$ sqlite3 notes.db "INSERT INTO notes (id, text) VALUES ('carol','x');"
+Error: stepping, datatype mismatch (20)
+
+$ sqlite3 notes.db "SELECT id, typeof(id) FROM notes;"
+1|integer
+`}</Terminal>
+
+`id` 宣告成 `INTEGER PRIMARY KEY`，餵 `'carol'` 進去被拒絕了，而且 `typeof(id)` 確認留下來的是 `integer`。
+
+同一件事用 JSON 做會怎樣？文字檔沒有「欄位型別」這種東西，因為它本來就只是字串。要擋下來，你得自己在 Python 裡寫檢查，而且每一個寫入的地方都要寫一次。
+
+<Callout type="important" title="這是資料庫的真正價值">
+  不是「資料存在檔案裡」——文字檔也有。是**規則跟資料放在同一個地方**，而且由同一個引擎執行。這一點到單元 08 講交易時會變得更清楚：規則和資料在同一處，才能一起被保護。
+</Callout>
+
+---
+
+## 05. 同時寫入：一個拒絕，一個不說話
+
+把第 02 節那個安靜的失敗，和 SQLite 放在同一個實驗裡。`hold_the_lock.py` 讓 writer A 獨佔寫入鎖三秒：
+
+<Terminal title="Terminal 1 — take the write lock">{`
+$ python hold_the_lock.py hold
+writer A: holding the write lock for 3 seconds
+`}</Terminal>
+
+三秒內在 Terminal 2 送出第二個 writer：
+
+<Terminal title="Terminal 2 — write anyway" flavor="output">{`
+$ python hold_the_lock.py write
+writer B: refused -> database is locked
+`}</Terminal>
+
+兩段都跑完之後，資料庫裡是什麼：
+
+<Terminal title="bash — nothing was silently lost">{`
+$ sqlite3 notes.db "SELECT id, text FROM notes;"
+1|carol
+2|writer A
+`}</Terminal>
+
+**writer B 被拒絕了，而這正是重點。** 它知道自己沒寫進去，所以它可以重試、可以回報給使用者、可以在 log 留下紀錄。
+
+把兩個實驗並排看：
+
+| | `users.json` | `notes.db` |
+| --- | --- | --- |
+| 兩個 writer 同時寫 | 兩邊都回報成功 | 第二個收到錯誤 |
+| 丟掉的資料 | 有，靜靜地丟 | 沒有 |
+| 你知道出事了嗎 | **不知道** | 知道 |
+
+<Callout type="important" title="拒絕比丟資料好">
+  `database is locked` 是一句你可以在程式裡接住的訊息。你可以讓它等待、可以重試、可以回 `503` 給 Client。一個沒有錯誤的資料遺失，你連從哪裡開始查都不知道。
+</Callout>
+
+---
+
+## 06. 什麼時候該用哪一種
+
+這一課不需要你背規則。只需要問三個問題：
+
+| 你在做的事 | 用哪一種 | 為什麼 |
+| --- | --- | --- |
+| 暫存資料、測試用、單一使用者 | `dict` | 行程結束就丟，正好是你要的 |
+| 設定檔、要進 Git 的資料、人工要能讀能改 | 文字檔 | `git diff` 看得懂，人手改得動 |
+| 會被讀寫的資料、多個程式會同時動它 | SQLite | 規則跟資料同住，並發時會拒絕你 |
+
+**判斷的關鍵不是資料量，是「會不會有別的程式同時寫」。** 單機、單一行程的筆記本工具，文字檔完全夠用，強迫自己上資料庫只會增加複雜度。反過來，一旦有第二個執行緒或第二個程式會動同一份資料，文字檔的安靜失敗就變成你必須處理的問題。
+
+真實系統還有第三層：一個跑在別台機器上的伺服器（PostgreSQL、MySQL），行為規則跟 SQLite 相同，但多了網路與權限。單元 08 會先讓你在本機的 SQLite 上把規則與交易看清楚，再談放到網路上。
+
+<Callout type="note" title="這門課用的是 Python 內建的 sqlite3">
+  `import sqlite3` 就有了，不需要安裝任何東西，也不需要啟動一個資料庫伺服器。它是一個函式庫，直接操作一個檔案。這是它最適合課堂練習的原因。
+</Callout>
+
+---
+
+## 07. 終端實戰驗證：三次對照
+
+上面每一節的結論都要自己重跑一次才會記住。三種存法、三組對照，全部在 `exercises/05-persistence/` 執行，先清掉舊檔案讓結果乾淨：
+
+<Terminal title="bash — clean start">{`
+cd exercises/05-persistence
+rm -f users.json notes.db
+`}</Terminal>
+
+### 第一步：dict 活不過執行
+
+<Terminal title="bash — step 1" flavor="output">{`
+$ python store.py dict-add
+added carol to a dict, held by this process only
+$ python store.py dict-list
+dict sees: ['alice']
+`}</Terminal>
+
+`carol` 不在裡面。ls 也證明它沒留下檔案。
+
+### 第二步：文字檔活著，而且你看得懂
+
+<Terminal title="bash — step 2">{`
+$ python store.py json-add && python store.py json-list
+$ ls -l users.json
+$ cat users.json
+`}</Terminal>
+
+`carol` 在裡面，而且檔案是純文字。
+
+### 第三步：SQLite 活著，而且檔案裡有規則
+
+<Terminal title="bash — step 3">{`
+$ python store.py sqlite-add && python store.py sqlite-list
+$ ls -l notes.db
+$ file notes.db
+$ python store.py sqlite-schema
+`}</Terminal>
+
+`CREATE TABLE notes (id INTEGER PRIMARY KEY, text TEXT NOT NULL)` 這行是從檔案裡讀出來的。
+
+### 第四步：把兩個 writer 的結果比一比
+
+<Terminal title="bash — step 4, text file">{`
+$ rm -f users.json
+$ python store.py json-add
+$ python json_race.py A & python json_race.py B & wait
+$ cat users.json
+`}</Terminal>
+
+對照第 02 節那個安靜的失敗：文字檔這邊兩邊都說寫好了，其中一筆不見了。
+
+<Terminal title="bash — step 4, SQLite">{`
+$ python hold_the_lock.py hold &
+$ python hold_the_lock.py write
+$ sqlite3 notes.db "SELECT id, text FROM notes;"
+`}</Terminal>
+
+writer B 被拒絕，而資料庫裡沒有任何一筆是缺的。
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下操作並記錄成果。所有截圖必須包含指令本身。
+
+1. 執行 `python store.py dict-add` 與 `python store.py dict-list`，截圖兩次輸出，並執行 `ls` 證明沒有留下任何檔案。
+2. 執行 `python store.py json-add` 與 `python store.py json-list`，截圖必須包含 `ls -l users.json` 的位元組數與 `cat users.json` 的完整內容。
+3. 執行 `python store.py sqlite-add` 與 `python store.py sqlite-list`，截圖必須包含 `ls -l notes.db`、`file notes.db` 與 `python store.py sqlite-schema`。
+4. 執行 `sqlite3 notes.db "INSERT INTO notes (id, text) VALUES ('carol','x');"`，截圖必須包含錯誤訊息。回答：這個錯誤是誰產生的？
+5. 執行 `python json_race.py A & python json_race.py B & wait` 再 `cat users.json`，截圖必須同時看得到「兩邊都報成功」與「檔案裡只剩一筆」。
+6. 在兩個 Terminal 分別執行 `python hold_the_lock.py hold` 與 `python hold_the_lock.py write`，截圖必須包含 `database is locked`。最後執行 `sqlite3 notes.db "SELECT id, text FROM notes;"`，截圖並確認沒有任何一筆是缺的。
+7. 用一段話回答：`users.json` 與 `notes.db` 都把資料存下來了，那 `notes.db` 多做的事是什麼？不要寫「比較安全」，寫出你親眼看到的那件事。
+8. 回答：你的期末專題會不會有兩個程式同時寫同一份資料？根據第 06 節那三個問題，你會選哪一種？
+
+把作業截圖與簡答筆記存入 `exercises/05-persistence/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.json` 或 `notes.db` 一起 commit 進去。
+
+### 本單元使用的正本
+
+- [SQLite — Documentation: File Format](https://www.sqlite.org/fileformat.html)
+- [SQLite — Documentation: Datatypes](https://www.sqlite.org/datatype3.html)
+- [SQLite — Documentation: Concurrency](https://www.sqlite.org/lockingv3.html)
+- [SQLite — Documentation: Transactions](https://www.sqlite.org/lang_transaction.html)
+- [Python — `sqlite3` 標準函式庫](https://docs.python.org/3/library/sqlite3.html)
+- [FastAPI — Bigger Applications and path routing](https://fastapi.tiangolo.com/tutorial/bigger-applications/)

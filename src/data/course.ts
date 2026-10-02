@@ -72,6 +72,7 @@ export const chapters: Chapter[] = [
         w: 5,
         dates: '10/05–10/11',
         title: '存資料 — File 跟 SQLite 差在哪',
+        href: '/lessons/05-persistence',
         note: '10/09 國慶補假',
       },
       {
