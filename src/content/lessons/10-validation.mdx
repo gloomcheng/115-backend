@@ -1,0 +1,360 @@
+---
+title: "驗證與錯誤 — 檢查寫在哪裡，決定 Client 拿到什麼"
+week: 10
+description: "同一份錯誤的 Body，送進兩條路由：一條回 422 並指出哪個欄位，另一條回 500 與 21 個位元組的純文字。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+第七課留下一句話：「用資料模型驗證會長什麼樣，單元 10 會處理。」第八課的 `UserIn` 已經是一個資料模型，但只看不出它改變了什麼。
+
+這一課要回答的是：**同一份壞掉的資料，送進兩條不同的路由，Client 會拿到兩個完全不同的答案。**
+
+<Terminal title="Terminal 1 — bash — start the validation API">{`
+cd exercises/10-validation
+fastapi dev main.py --port 8003
+`}</Terminal>
+
+<Terminal title="Terminal 2 — bash — one body, two routes">{`
+curl -i -X POST http://127.0.0.1:8003/strict \\
+  -H 'Content-Type: application/json' -d '{"name":123}'
+
+curl -i -X POST http://127.0.0.1:8003/loose \\
+  -H 'Content-Type: application/json' -d '{"name":123}'
+`}</Terminal>
+
+<svg viewBox="0 0 940 420" role="img" aria-labelledby="validation-claim-title validation-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="validation-claim-title">同一份壞資料，因為檢查位置不同而得到 422 或 500</title>
+  <desc id="validation-claim-description">Body 裡的 name 是數字而不是字串。送到 /strict，型別在進入 handler 之前就被擋下，回 422 與結構化的 loc 指向 body 的 name；送到 /loose，沒有型別宣告，len() 在 handler 裡拋出 TypeError，回 500 與純文字 Internal Server Error。</desc>
+  <defs>
+    <marker id="validation-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="290" y="20" width="360" height="52" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="470" y="52" text-anchor="middle" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">{'{"name":123}'}</text>
+  <path d="M430 72 V112 M510 72 V112" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#validation-arrow)" />
+  <rect x="20" y="118" width="410" height="96" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="225" y="146" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">/strict：型別宣告在進入 handler 之前</text>
+  <text x="225" y="176" text-anchor="middle" fill="#0b3d63" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">422 Unprocessable Entity</text>
+  <text x="225" y="200" text-anchor="middle" fill="#274f67" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">loc: ["body","name"]</text>
+  <rect x="510" y="118" width="410" height="96" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="715" y="146" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">/loose：沒有宣告，檢查在 handler 裡</text>
+  <text x="715" y="176" text-anchor="middle" fill="#ef795e" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">500 Internal Server Error</text>
+  <text x="715" y="200" text-anchor="middle" fill="#ef795e" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">TypeError: object of type 'int' has no len()</text>
+  <rect x="20" y="240" width="900" height="72" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="40" y="270" fill="#075486" font-size="16" font-weight="700">Client 端唯一能用的是第一列：它知道是哪個欄位、該畫紅哪一格。</text>
+  <text x="40" y="296" fill="#274f67" font-size="14">第二列只有一句 Internal Server Error，改資料一百次都不會變。</text>
+  <rect x="20" y="330" width="900" height="72" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="40" y="360" fill="#075486" font-size="16" font-weight="700">驗證有兩層，而且順序不能顛倒：</text>
+  <text x="40" y="386" fill="#274f67" font-size="14">形狀（型別、必填、長度）先擋掉不可能的輸入，規則（跨欄位、對資料庫）才輪得到你。</text>
+</svg>
+
+---
+
+## 01. 形狀：型別、必填、長度
+
+先看 `/strict` 那條路由怎麼宣告它的形狀：
+
+<Terminal title="exercises/10-validation/main.py — the model" flavor="output">{`
+class UserStrict(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    role: str | None = Field(default=None, max_length=20)
+`}</Terminal>
+
+`name: str` 是型別，`min_length=1` 與 `max_length=40` 是長度限制。這些宣告存在的期間，Server 就已經知道「什麼樣的 Body 可以進來」，而且**你的 handler 還沒開始跑**。
+
+四種壞資料，四個 `422`：
+
+<Terminal title="bash — four shapes of wrong" flavor="output">{`
+# 少一個欄位
+> curl -s -X POST http://127.0.0.1:8003/strict \\
+>   -H 'Content-Type: application/json' -d '{"role":"student"}'
+{"detail":[{"type":"missing","loc":["body","name"],
+  "msg":"Field required","input":{"role":"student"}}]}
+
+# 型別不對
+> curl -s -X POST http://127.0.0.1:8003/strict \\
+>   -H 'Content-Type: application/json' -d '{"name":123}'
+{"detail":[{"type":"string_type","loc":["body","name"],
+  "msg":"Input should be a valid string","input":123}]}
+
+# 空字串
+> curl -s -X POST http://127.0.0.1:8003/strict \\
+>   -H 'Content-Type: application/json' -d '{"name":""}'
+{"detail":[{"type":"string_too_short","loc":["body","name"],
+  "msg":"String should have at least 1 character","input":"",
+  "ctx":{"min_length":1}}]}
+
+# 太長
+> curl -s -X POST http://127.0.0.1:8003/strict \\
+>   -H 'Content-Type: application/json' -d '{"name":"xxxx...45"}'
+{"detail":[{"type":"string_too_long","loc":["body","name"],
+  "msg":"String should have at most 40 characters","input":"xxxx...",
+  "ctx":{"max_length":40}}]}
+`}</Terminal>
+
+四個 Body 的錯誤都不一樣，但 `type` 這個欄位讓它們可以被程式分類：
+
+| `type` | 意義 | Client 該做什麼 |
+| --- | --- | --- |
+| `missing` | 欄位沒送 | 把該欄位標成必填 |
+| `string_type` | 送錯型別 | 不要轉型，請使用者重輸入 |
+| `string_too_short` | 太短 | 顯示最小長度 |
+| `string_too_long` | 太長 | 顯示最大長度 |
+
+<Callout type="important" title="loc 才是重點">
+  `type` 讓程式分類，`loc` 讓畫面定位。`["body","name"]` 讀成「在 Body 的 `name` 欄位」。Client 拿它去對照表單欄位，就能把紅框畫在正確的那一格。第七課那個手寫的 `{"detail":"name is required"}` 只有一句話，做不到這件事。
+</Callout>
+
+---
+
+## 02. loc 會一路指進陣列裡
+
+如果 Body 有巢狀結構，loc 會把位置一節一節記下來。這條路由的模型是：
+
+<Terminal title="exercises/10-validation/main.py — a nested model" flavor="output">{`
+class Tags(BaseModel):
+    label: str
+    weight: int
+
+class PostStrict(BaseModel):
+    title: str
+    tags: list[Tags]
+`}</Terminal>
+
+送兩個 tag，第二個的 `weight` 寫成字串：
+
+<Terminal title="bash — the index is in the location" flavor="output">{`
+> curl -s -X POST http://127.0.0.1:8003/post-strict \\
+>   -H 'Content-Type: application/json' \\
+>   -d '{"title":"week 8","tags":[{"label":"a","weight":1},{"label":"b","weight":"heavy"}]}'
+{"detail":[{"type":"int_parsing",
+  "loc":["body","tags",1,"weight"],
+  "msg":"Input should be a valid integer, unable to parse string as an integer",
+  "input":"heavy"}]}
+`}</Terminal>
+
+**`["body","tags",1,"weight"]`。** 從左邊讀：`Body` → `tags` 陣列 → **索引 1**（第二個）→ `weight` 欄位。
+
+這就是 Client 表單能做到「把第二個 tag 的權重欄位標紅」的原因，也是沒有型別宣告時永遠做不到的事。
+
+---
+
+## 03. Body 本身壞掉時，loc 指向位置
+
+前三種是「Body 進來了，但裡面某個值不對」。還有一種是 Body 連形狀都不對：
+
+<Terminal title="bash — three broken bodies" flavor="output">{`
+# Body 是一個陣列，不是物件
+> curl -s -X POST http://127.0.0.1:8003/strict \\
+>   -H 'Content-Type: application/json' -d '[1,2,3]'
+{"detail":[{"type":"model_attributes_type","loc":["body"],
+  "msg":"Input should be a valid dictionary or object to extract fields from",
+  "input":[1,2,3]}]}
+
+# JSON 語法錯
+> curl -s -X POST http://127.0.0.1:8003/strict \\
+>   -H 'Content-Type: application/json' -d '{"name":'
+{"detail":[{"type":"json_invalid","loc":["body",8],
+  "msg":"JSON decode error","input":{},"ctx":{"error":"Expecting value"}}]}
+
+# 完全沒送 Body
+> curl -s -X POST http://127.0.0.1:8003/strict -H 'Content-Type: application/json'
+{"detail":[{"type":"missing","loc":["body"],"msg":"Field required","input":null}]}
+`}</Terminal>
+
+第二個的 `loc` 是 `["body", 8]`——**第 8 個字元**是壞掉的地方。數一下 `{"name":` 正好 8 個字元。
+
+`loc` 的形狀會變：欄位錯時是 `["body", 欄位名]`，語法錯時是 `["body", 位置]`。Client 端要能分辨這兩種，判斷方式就是看第二個成員是字串還是數字。
+
+<Callout type="note" title="四個錯誤都發生在 handler 之前">
+  注意這四個回應裡，你的 `create_strict` 一行都沒執行。Server 在比對路由之後、進入你的程式之前就把 Request 擋下來了。這是第 03 課那五個階段裡的第 03 階段。
+</Callout>
+
+---
+
+## 04. 為什麼 `/loose` 同一份資料會變 500
+
+現在換那條沒有型別宣告的路由。它的形狀是 `body: dict`，所以框架沒有任何東西可以檢查。
+
+<Terminal title="exercises/10-validation/main.py — the hand-written route" flavor="output">{`
+@app.post("/loose")
+def create_loose(body: dict):
+    if "name" not in body or not body["name"]:
+        raise HTTPException(status_code=422, detail="name is required")
+    if len(body["name"]) > 40:
+        raise HTTPException(status_code=422, detail="name must be 40 characters or fewer")
+    ...
+`}</Terminal>
+
+送一份缺欄位的 Body，它會得到和之前一樣的 `422`：
+
+<Terminal title="bash — the loose route still catches the obvious case" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8003/loose \\
+>   -H 'Content-Type: application/json' -d '{"role":"student"}'
+< HTTP/1.1 422 Unprocessable Entity
+
+{"detail":"name is required"}
+`}</Terminal>
+
+但送一份**型別錯**的，就不一樣了：
+
+<Terminal title="bash — the same body that strict handled with 422" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8003/loose \\
+>   -H 'Content-Type: application/json' -d '{"name":123}'
+< HTTP/1.1 500 Internal Server Error
+< content-type: text/plain; charset=utf-8
+< content-length: 21
+
+Internal Server Error
+`}</Terminal>
+
+`not body["name"]` 對整數 `123` 是 `False`，所以第一道檢查放行了。接著 `len(body["name"])` 對整數呼叫 `len()`，在 handler 裡拋出例外：
+
+<Terminal title="Terminal 1 — the traceback the client never sees" flavor="output">{`
+File ".../main.py", line 50, in create_loose
+  if len(body["name"]) > 40:
+     ^^^^^^^^^^^^^^^^^
+TypeError: object of type 'int' has no len()
+`}</Terminal>
+
+**同一個 Server、同一份 Body、兩個答案。** 差別只有一件事：型別是宣告在 handler 之前，還是只能靠 handler 裡的程式碼。
+
+<Callout type="important" title="這就是第七課那句話的完整版">
+  第 07 課說「422 不是自動產生的，它出現在錯誤還沒變成例外的位置」。這裡把兩個位置放在同一個行程裡比較：宣告型別的那個位置產生 `422` 與 `loc`，手寫檢查的那個位置產生 `500` 與一句沒有用處的純文字。
+</Callout>
+
+順帶回答一個常見問題：手寫檢查一定比較差嗎？不是。手寫的 `detail` 是你自己寫的字串，你可以放任何想放的訊息。差別在於**它只能在你想得到的情況下生效**——`/loose` 漏掉了「型別不是字串」這一支，因為那個情況需要 `isinstance` 而不是 `not`。
+
+---
+
+## 05. 規則：形狀對了，規則不過
+
+到目前為止驗證的都是形狀：型別、必填、長度。這些都能從宣告得出來，不需要看資料庫。
+
+**規則**是另一類問題。它需要知道資料庫裡有什麼：
+
+<Terminal title="what only a rule can answer" flavor="output">{`
+形狀：name 必須是字串、長度 1 到 40
+      → 宣告得出來，不需要資料庫
+
+規則：這個 email 還沒被別人用嗎？
+      這個使用者還有沒有未結清的訂單？
+      這個名稱在整組使用者裡唯一嗎？
+      → 必須查資料庫才知道
+`}</Terminal>
+
+`POST /users` 收到 `{"name":"iris"}` 一次，`201`。收到第二次，`409`——那是第八課看過的主鍵衝突，而它是由 SQLite 從 `name TEXT PRIMARY KEY` 丟出來的，不是一條可以寫在宣告裡的規則。
+
+<Callout type="warning" title="不要把規則塞進 422">
+  一個常見的偷懶做法是：只要驗證不過就丟 `422`，不管原因是形狀還是規則。這會讓 Client 無法分辨「把欄位改一下就好」和「這個值在系統裡已經被占用了」。第 07 課已經說過，實務上 `409` 常常被 `422` 頂替——**你有機會不要成為其中一個。**
+
+  判斷標準：把資料修好之後，重送一次會不會成功？會，就歸形狀或規則；不會（要換一個值、或要改系統狀態），就該是 `409`。
+</Callout>
+
+順序也不能顛倒。先擋形狀，再檢規則：
+
+<Terminal title="why shape comes first" flavor="output">{`
+先驗形狀 → 再查規則
+
+反過來會怎樣？
+  送 {"name": 123}
+  → 你的規則檢查先執行，len(123) 拋例外 → 500
+  → 而這個 Request 從頭到尾就不該進入規則檢查
+`}</Terminal>
+
+---
+
+## 06. 一個沒被擋下來的問題
+
+這一課最後要講一個**兩種驗證都擋不住**的問題。送一個多出來的欄位：
+
+<Terminal title="bash — the field nobody complained about" flavor="output">{`
+> curl -s -X POST http://127.0.0.1:8003/strict \\
+>   -H 'Content-Type: application/json' -d '{"name":"iris","admin":true}'
+{"name":"iris","role":null,"source":"strict"}
+`}</Terminal>
+
+`admin: true` 送進去了，沒有任何錯誤，回應裡也沒有 `admin`。**它被安靜地丟掉了。**
+
+這件事在兩個層級都沒有被擋下：
+
+- 形狀沒有擋，因為 `UserStrict` 沒有宣告 `admin`，而預設行為是忽略沒宣告的欄位
+- 規則沒有擋，因為根本沒有人問到它
+
+<Callout type="warning" title="這在授權上會出事">
+  如果你寫了一個只有 `user_id` 的表單，而 API 接受任何 JSON，一個被改過的 Client 可以送出 `{"user_id": 7, "is_admin": true}`。Server 不會拒絕——它會忽略那個欄位。但只要你的路由有任何一處用 `**body` 展開全部內容，或有一個沒被擋住的權限欄位在讀 request body，風險就變成真的。
+
+  要擋，宣告模型時要明確要求：例如禁止未宣告欄位。怎麼宣告、以及這件事在單元 12 的權限邊界裡怎麼延伸，都在那裡處理。
+</Callout>
+
+---
+
+## 07. 終端實戰驗證：同一份 Body 兩次
+
+`admin` 這件事要親眼看到才算數。Terminal 1 跑著 `fastapi dev main.py --port 8003`，下面四步每一個都留下一張截圖。
+
+### 第一步：形狀錯，兩種答案
+
+<Terminal title="bash — step 1">{`
+curl -i -X POST http://127.0.0.1:8003/strict \\
+  -H 'Content-Type: application/json' -d '{"name":123}'
+curl -i -X POST http://127.0.0.1:8003/loose \\
+  -H 'Content-Type: application/json' -d '{"name":123}'
+`}</Terminal>
+
+一個 `422` 一個 `500`，而 Body 完全相同。這是第一個對照。
+
+### 第二步：看 loose 的 traceback
+
+<Terminal title="Terminal 1 — step 2" flavor="output">{`
+TypeError: object of type 'int' has no len()
+`}</Terminal>
+
+這行 Client 永遠看不到，只在你的 Terminal。
+
+### 第三步：loc 指向陣列索引
+
+<Terminal title="bash — step 3">{`
+curl -s -X POST http://127.0.0.1:8003/post-strict \\
+  -H 'Content-Type: application/json' \\
+  -d '{"title":"week 8","tags":[{"label":"a","weight":1},{"label":"b","weight":"heavy"}]}'
+`}</Terminal>
+
+traceback 看完了，回到 Client 看得見的東西：比對第 02 節那個形狀，`loc` 應該逐字等於 `["body","tags",1,"weight"]`，差一個字都要找出來。
+
+### 第四步：多出來的欄位
+
+<Terminal title="bash — step 4">{`
+curl -s -X POST http://127.0.0.1:8003/strict \\
+  -H 'Content-Type: application/json' -d '{"name":"iris","admin":true}'
+`}</Terminal>
+
+比對第 06 節那個被丟掉的 `admin`：回應裡沒有它，也沒有 `422` 或 `409`跳出來。
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下操作並記錄成果。
+
+1. 送出 `{"name":123}` 到 `/strict` 與 `/loose`，截圖兩份並排。**必須看到一個 `422` 一個 `500`。** 再截 Terminal 1 的 traceback。
+2. 對 `/strict` 分別送出缺欄位、型別錯、空字串、超長四種 Body，截圖四個 `422` 的完整 Body。整理一張表：`type` 值、錯誤發生在 Body 的哪裡、Client 該做什麼。
+3. 送出那個巢狀的 `post-strict` Body，截圖必須包含 `"loc":["body","tags",1,"weight"]`。用一句話回答：這個 `1` 代表什麼？
+4. 送出 `[1,2,3]`、`{"name":` 與完全沒有 Body 三種，截圖三個 `detail`。回答：第二個的 `loc` 最後一個成員是數字還是字串？這兩種 `loc` 的形狀差異代表什麼？
+5. 送出 `{"name":"iris","admin":true}` 到 `/strict`，截圖回應。回答：這個欄位去哪裡了？兩種驗證都沒有擋下它，這說明什麼？
+6. 回答一句話：判斷一個失敗該回 `422` 還是 `409`，你的判斷標準是什麼？用「改完資料重送一次會不會成功」回答。
+7. 在你自己的 `main.py` 裡加一條 route，用 Pydantic 模型宣告 `name` 與 `role`，然後送一份壞資料，截圖必須包含 `422` 與 `loc`。用一行 diff 說明你把型別宣告放在哪裡、為什麼那裡是對的位置。
+
+把作業截圖與簡答筆記存入 `exercises/10-validation/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
+
+### 本單元使用的正本
+
+- [FastAPI — Request Body](https://fastapi.tiangolo.com/tutorial/body/)
+- [FastAPI — Handling Errors](https://fastapi.tiangolo.com/tutorial/handling-errors/)
+- [FastAPI — Response Model, Filter, Encoding, Type Converter](https://fastapi.tiangolo.com/tutorial/response-model/)
+- [Pydantic — Field constraints](https://docs.pydantic.dev/latest/concepts/fields/)
+- [RFC 9110 §15.5.21 — 422 Unprocessable Content](https://www.rfc-editor.org/rfc/rfc9110.html#name-422-unprocessable-content)
+- [RFC 9110 §15.5.10 — 409 Conflict](https://www.rfc-editor.org/rfc/rfc9110.html#name-409-conflict)

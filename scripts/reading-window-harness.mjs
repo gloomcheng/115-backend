@@ -210,6 +210,18 @@ const CONCEPT_CONTRACTS_BY_WEEK = {
         /(database is locked[^。\n]*(拒絕|訊息|接住|知道|錯誤)|(拒絕|訊息|接住|知道|錯誤)[^。\n]*database is locked)/i,
     },
   ],
+  10: [
+    {
+      name: 'loc',
+      term: /\bloc\b/,
+      explanation: /(loc[^。\n]*(位置|欄位|索引|指向)|(位置|欄位|索引|指向)[^。\n]*loc)/i,
+    },
+    {
+      name: 'shape',
+      term: /形狀/,
+      explanation: /(形狀[^。\n]*(型別|必填|長度|規則)|(型別|必填|長度|規則)[^。\n]*形狀)/,
+    },
+  ],
   8: [
     {
       name: 'CRUD',

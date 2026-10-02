@@ -94,7 +94,12 @@ export const chapters: Chapter[] = [
         href: '/lessons/08-crud',
       },
       { w: 9, dates: '11/02–11/08', title: '期中考試週', exam: true, note: '期中考週' },
-      { w: 10, dates: '11/09–11/15', title: '驗證與錯誤' },
+      {
+        w: 10,
+        dates: '11/09–11/15',
+        title: '驗證與錯誤 — 檢查寫在哪裡，決定 Client 拿到什麼',
+        href: '/lessons/10-validation',
+      },
     ],
   },
   {
