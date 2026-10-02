@@ -1,0 +1,10 @@
+---
+term: REST
+definition: 一種把資源名稱放進 path、把動作放進 method 的架構風格；同一組資源換一個 method，Server 的動作與 Status Code 就跟著換。
+category: 網路
+first: 6
+---
+
+REST 的重點是 `path` 只回答「是哪一筆東西」，動作交給 `method`。Server 用 `method` 與 `path` 對路由表：對上了執行並回 `200` 或 `201`，路徑存在但 method 不符回 `405` 並附上 `allow`，沒有這條路徑回 `404`。
+
+不要把動作寫進網址。`GET /users/delete?id=bob` 會被當成「名叫 delete 的那一筆 user」，而且 `GET` 會被瀏覽器預取、proxy 與爬蟲自動送出。刪除只能是 `DELETE`。

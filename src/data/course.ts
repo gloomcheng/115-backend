@@ -25,8 +25,9 @@ export const chapters: Chapter[] = [
     title: '網路原理與封包傳遞',
     english: 'Protocol & Wire Transmission',
     range: 'Week 01 – 07',
-    summary: '從 HTTP 第一行 curl 開始，看懂 URL、Header、Body、REST 與狀態碼的真實結構。',
-    aiFocus: '模型可以提出回應，但你要用 curl 讀出 Server 真正回了什麼。',
+    summary:
+      '先讀懂封包，再看後端怎麼接住請求：URL 的零件、請求的生命週期、路由表、資源建模與 JSON 驗證。',
+    aiFocus: '模型可以提出 handler，但你要用 curl 讀出 Server 真正回了什麼。',
     weeks: [
       {
         w: 1,
@@ -45,13 +46,20 @@ export const chapters: Chapter[] = [
       {
         w: 3,
         dates: '09/21–09/27',
-        title: 'REST — 為什麼 POST /users 不是 GET',
+        title: '後端怎麼接一個請求 — 從封包到 Response 的五個階段',
+        href: '/lessons/03-request-lifecycle',
         note: '09/25 中秋放假',
       },
-      { w: 4, dates: '09/28–10/04', title: 'JSON — 422 跟 500 不一樣', note: '09/28 教師節放假' },
-      { w: 5, dates: '10/05–10/11', title: '後端怎麼接一個請求', note: '10/09 國慶補假' },
-      { w: 6, dates: '10/12–10/18', title: '路由與 Handler' },
-      { w: 7, dates: '10/19–10/25', title: '寫第一個 GET /health' },
+      {
+        w: 4,
+        dates: '09/28–10/04',
+        title: '路由與 Handler — path 與 method 對到哪一段程式',
+        href: '/lessons/04-routing-handler',
+        note: '09/28 教師節放假',
+      },
+      { w: 5, dates: '10/05–10/11', title: '寫出第一個 GET /health', note: '10/09 國慶補假' },
+      { w: 6, dates: '10/12–10/18', title: '資源建模與 REST — 集合、成員與 201' },
+      { w: 7, dates: '10/19–10/25', title: 'JSON 與執行期驗證 — 422 是怎麼來的' },
     ],
   },
   {
@@ -74,25 +82,41 @@ export const chapters: Chapter[] = [
     code: 'CRUCIBLE',
     title: '資訊安全與身份認證',
     english: 'OWASP Top 10 & Auth Pipeline',
-    range: 'Week 12 – 15',
-    summary: '對齊 OWASP Top 10：JWT 認證、Argon2id 雜湊、AES-GCM 密鑰保護與 401/403 權限邊界。',
+    range: 'Week 12 – 13',
+    summary: '對齊 OWASP Top 10：JWT 認證、中介軟體的權限邊界，以及密鑰不外洩的規則。',
     aiFocus: '模型看不到密鑰，也不能替你決定誰有權限；認證與授權仍由 Server 負責。',
     weeks: [
       { w: 12, dates: '11/23–11/29', title: '登入 — 身份認證與 JWT（401 跟 403 差在哪）' },
-      { w: 13, dates: '11/30–12/06', title: '中間件' },
-      { w: 14, dates: '12/07–12/13', title: '密鑰為什麼會外洩' },
-      { w: 15, dates: '12/14–12/20', title: '怎麼看 log' },
+      { w: 13, dates: '11/30–12/06', title: '中介軟體、權限與密鑰邊界' },
     ],
   },
   {
     num: '04',
+    code: 'CONTRACT',
+    title: '介面契約與 API 家族',
+    english: 'Interface Contracts & API Families',
+    range: 'Week 14',
+    summary:
+      '看懂 SOAP、REST、GraphQL、gRPC、tRPC 五種契約怎麼表示型別與錯誤，以及為什麼 400 與 409 與 422 沒有標準答案。',
+    aiFocus: '模型可以照抄一種錯誤格式；你要能指出對方的契約少了什麼。',
+    weeks: [
+      {
+        w: 14,
+        dates: '12/07–12/13',
+        title: 'API 家族 — SOAP、REST、GraphQL、gRPC、tRPC 怎麼讀',
+      },
+    ],
+  },
+  {
+    num: '05',
     code: 'RUNTIME',
     title: '容器化與維運監控',
     english: 'Containers, Probes & Deployment',
-    range: 'Week 16 – 18',
+    range: 'Week 15 – 18',
     summary: 'Docker 容器化標準：GET /health 探針、結構化 Log 分析與期末真實服務交付。',
     aiFocus: '模型可以寫部署檔，但你要用健康檢查、Log 與外部 curl 驗收。',
     weeks: [
+      { w: 15, dates: '12/14–12/20', title: '怎麼看 log' },
       { w: 16, dates: '12/21–12/27', title: '用 Docker 包起來', note: '12/25 行憲紀念日放假' },
       {
         w: 17,

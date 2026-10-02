@@ -1,0 +1,294 @@
+---
+title: "後端怎麼接一個請求 — 從封包到 Response 的五個階段"
+week: 3
+description: "Server 不是黑盒。它是一個等待的迴圈，把純文字拆開、比對、執行，再把結果寫回純文字。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+第一單元從 Client 那一端看 `curl -v`，第二單元把 URL 拆成六個零件。這一課換到 Server 那一端：那些純文字送進你的程式之後，到底發生了什麼事。
+
+先把課堂 API 啟動起來：
+
+<Terminal title="Terminal 1 — bash — start the practice API">{`
+cd 115-backend
+python3 -m venv venv
+source venv/bin/activate
+pip install "fastapi[standard]>=0.111.0"
+fastapi dev examples/http-api/main.py
+`}</Terminal>
+
+看到 `Application startup complete` 之後，這個 Terminal 就先留著不要關。開第二個 Terminal：
+
+<Terminal title="Terminal 2 — bash — watch the whole exchange">{`
+curl -v http://127.0.0.1:8000/health
+`}</Terminal>
+
+<svg viewBox="0 0 940 350" role="img" aria-labelledby="lifecycle-claim-title lifecycle-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="lifecycle-claim-title">一次 Request 走過五個階段才變成 Response</title>
+  <desc id="lifecycle-claim-description">Client 送出的 GET /health 純文字，經過連線、讀取、解析、比對、執行五個階段，Server 才寫回 HTTP/1.1 200 OK 與十一個位元組的 JSON。Status Line 與 content-length 都是框架寫的。</desc>
+  <defs>
+    <marker id="lifecycle-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="18" width="900" height="46" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="38" y="47" fill="#075486" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&gt; GET /health HTTP/1.1</text>
+  <text x="902" y="47" text-anchor="end" fill="#274f67" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&gt; Host: 127.0.0.1:8000</text>
+  <path d="M470 64 V92" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#lifecycle-arrow)" />
+  <rect x="20" y="96" width="166" height="92" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="103" y="120" text-anchor="middle" fill="#ef795e" font-size="11" font-weight="700">01</text>
+  <text x="103" y="146" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">連線</text>
+  <text x="103" y="169" text-anchor="middle" fill="#274f67" font-size="12">TCP 連線建立</text>
+  <rect x="203" y="96" width="166" height="92" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="286" y="120" text-anchor="middle" fill="#ef795e" font-size="11" font-weight="700">02</text>
+  <text x="286" y="146" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">讀取</text>
+  <text x="286" y="169" text-anchor="middle" fill="#274f67" font-size="12">讀到空行為止</text>
+  <rect x="386" y="96" width="166" height="92" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="469" y="120" text-anchor="middle" fill="#ef795e" font-size="11" font-weight="700">03</text>
+  <text x="469" y="146" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">解析</text>
+  <text x="469" y="169" text-anchor="middle" fill="#274f67" font-size="12">拆 method 與 path</text>
+  <rect x="569" y="96" width="166" height="92" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="652" y="120" text-anchor="middle" fill="#ef795e" font-size="11" font-weight="700">04</text>
+  <text x="652" y="146" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">比對</text>
+  <text x="652" y="169" text-anchor="middle" fill="#274f67" font-size="12">對照路由表</text>
+  <rect x="752" y="96" width="166" height="92" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="835" y="120" text-anchor="middle" fill="#ef795e" font-size="11" font-weight="700">05</text>
+  <text x="835" y="146" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">執行</text>
+  <text x="835" y="169" text-anchor="middle" fill="#274f67" font-size="12">跑你的函式</text>
+  <path d="M470 188 V216" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#lifecycle-arrow)" />
+  <rect x="20" y="220" width="900" height="62" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="38" y="244" fill="#075486" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&lt; HTTP/1.1 <tspan font-weight="700" fill="#0b3d63">200</tspan> OK</text>
+  <text x="38" y="268" fill="#274f67" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&lt; content-length: 11</text>
+  <text x="902" y="268" text-anchor="end" fill="#0b3d63" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{`{"ok":true}`}</text>
+  <text x="470" y="320" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">{'你的函式只回傳了 '}<tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{'{"ok": true}'}</tspan>{'。Status Line 與 content-length 是框架算出來的。'}</text>
+  <text x="470" y="342" text-anchor="middle" fill="#274f67" font-size="14">階段 04 與 05 怎麼決定，就是下一課與單元 06 的主題。</text>
+</svg>
+
+---
+
+## 01. Server 是一個等待的迴圈
+
+`fastapi dev examples/http-api/main.py` 啟動的東西，是一個會一直等在那裡的程式。`main.py` 只是被它呼叫其中一段。
+
+那個迴圈每次收到連線，就跑一輪：讀取、拆解、找對應的程式、執行、把結果寫回去，然後等下一個連線。`curl` 的每一次 `-v` 都對應其中一輪。
+
+現在回頭看 Terminal 1。你在 Terminal 2 每送一次 Request，Terminal 1 就會多印一行：
+
+<Terminal title="Terminal 1 — access log" flavor="output">{`
+INFO:     127.0.0.1 - "GET /health HTTP/1.1" 200 OK
+`}</Terminal>
+
+這一行裡的三樣東西——`GET` 這個動作動詞（method）、目標路徑，以及 Status Code—— 正是接下來兩課要追的三條線。它們能出現在這裡，是因為那個迴圈每一輪都把它們算好了才往下走。
+
+<Callout type="note" title="Terminal 1 與 Terminal 2 都要開">
+  接下來每一個指令都分成兩個視窗：`curl` 打在 Terminal 2，觀察結果打在 Terminal 1。這個習慣到單元 15 看 log 時會直接用到。
+</Callout>
+
+---
+
+## 02. 讀到空行為止
+
+第一單元確認過：連續兩組 CRLF 代表 Header 結束。這個規則在 Server 端有一個具體後果——**在讀到那個空行之前，Server 還不知道你的 Request 到哪裡結束。**
+
+回到 Terminal 2 的 `curl -v` 輸出，注意 `> Accept: */*` 後面還有一個單獨的 `>`：
+
+<Terminal title="Terminal 2 — the blank line" flavor="output">{`
+> GET /health HTTP/1.1
+> Host: 127.0.0.1:8000
+> User-Agent: curl/8.7.1
+> Accept: */*
+>
+* Request completely sent off
+`}</Terminal>
+
+那個孤立的 `>` 就是空行。curl 送出它之後才印出 `* Request completely sent off`，然後 Server 才知道「收完了」，可以往下走。
+
+這個等待是真的會發生的事。如果你送出一個沒有空行的 Request，Server 會繼續等，不會回應。在你還沒送出結尾的時候，它沒辦法決定 Status Code。
+
+---
+
+## 03. 解析：把純文字變成程式能用的東西
+
+讀完之後，Server 把純文字拆成三部分：
+
+| 原文 | 拆成 | 變成 |
+| --- | --- | --- |
+| `GET /health HTTP/1.1` | method `GET`、target `/health`、version `HTTP/1.1` | 三個字串 |
+| `Host: 127.0.0.1:8000` | 欄位名與值 | 一組可以查的資料 |
+
+第二單元講過，`scheme` 與 `host` 會影響連線，`host` 會進 Header。現在換到 Server 那一端：**這些值不只是被收下來，它們可以被你的程式讀出來。**
+
+<Terminal title="Terminal 2 — ask the server what it saw" flavor="output">{`
+> curl -i http://127.0.0.1:8000/request-info
+< HTTP/1.1 200 OK
+
+{"client":"127.0.0.1","scheme":"http","host":"127.0.0.1:8000"}
+`}</Terminal>
+
+`host` 的值 `127.0.0.1:8000` 正是你網址裡那個 port。Server 從 Request 的 Header 讀到了它，並且用 `application/json` 的形式還給你。
+
+第二單元教你在 `curl -v` 的 Request 裡標出這一段；這一課看到的是它變成程式裡的一個值。標示與取值，是同一件事的兩面。
+
+---
+
+## 04. 比對：拿 method 與 path 對路由表
+
+解析之後，Server 拿 `method` 與 `target` 去對照它的路由表，找出該執行哪一段程式。
+
+**對不上的時候，Response 在這裡就已經決定了**，你寫的那個函式一行都還沒跑。`405 Method Not Allowed` 與 `404 Not Found` 都是在這一步產生的。
+
+這一課先看見它的位置。路由表到底是什麼、對不上的時候有哪幾種結果、該怎麼在送出之前就預測——是下一課整節的主題。
+
+---
+
+## 05. 執行與序列化：你的函式一個位元組都沒寫
+
+對上了路由表，函式就會跑。回頭看課堂 API 的程式：
+
+<Terminal title="examples/http-api/main.py — the whole handler" flavor="output">{`
+@app.get("/health")
+def health():
+    return {"ok": True}
+`}</Terminal>
+
+這三行裡沒有 Status Line，沒有 Header，也沒有把字串接起來。它只回傳了一個 Python 的 `dict`。
+
+再看 Response：
+
+<Terminal title="Terminal 2 — what the framework added" flavor="output">{`
+< HTTP/1.1 200 OK
+< content-length: 11
+< content-type: application/json
+
+{"ok":true}
+`}</Terminal>
+
+`{"ok":true}` 剛好 11 個字元，`content-length` 就是 11。curl 自己也數了一次：
+
+<Terminal title="Terminal 2 — curl counts the bytes" flavor="output">{`
+{ [11 bytes data]
+{"ok":true}
+`}</Terminal>
+
+`200` 從哪裡來？`content-type` 從哪裡來？`content-length` 從哪裡來？答案是：**框架算的，不是你寫的。**
+
+<Callout type="important" title="content-length 是數出來的，而且它決定對方在哪裡停">
+  第二單元說過 `Content-Length` 指明 Body 的確切位元組長度。現在你知道它是誰算的：框架序列化你的回傳值之後數出來的。Client 讀到這個數字為止的位元組就停止讀取 Body—— 數字錯一個位元組，Client 就會讀錯或卡住。這個數字不能靠感覺。
+</Callout>
+
+你可以自己驗一次，不用相信我數的：
+
+<Terminal title="Terminal 2 — verify the byte count yourself">{`
+curl -s http://127.0.0.1:8000/health | wc -c
+`}</Terminal>
+
+輸出 `11`。這是這一課最值得記住的一件事：**你在後端寫的是資料，框架寫的是封包。** 兩者的邊界，就是你對 Response 的控制權結束的地方。
+
+後果會在後面幾個單元展開：檢查寫在哪一層，決定 Client 拿到 `422` 還是 `500`（單元 07）；log 裡出現的欄位也由這一層決定（單元 15）。這一課只需要記住那條邊界在哪。
+
+---
+
+## 06. 五個階段，五個可能決定 Status Code 的位置
+
+把這張表放進去，後面幾課的位置就清楚了：
+
+| 階段 | 發生什麼 | 可能決定 Status Code 的位置 |
+| --- | --- | --- |
+| 01 連線 | 建立 TCP 連線 | 連不上時沒有 HTTP 狀態碼，只有 TCP 層的失敗 |
+| 02 讀取 | 讀到空行為止 | Request 不完整時，框架可能回 `400` |
+| 03 解析 | 拆 method 與 path，Header 收成資料 | Body 格式不合法時，框架在這裡就決定（例如 `422`） |
+| 04 比對 | 對照路由表 | `405`、`404`（下一課） |
+| 05 執行 | 跑你的函式 | 你自己決定 `200`、`201`、`404`；函式拋例外則是 `500`（單元 07） |
+
+第一單元講過：狀態碼的第一碼決定責任歸屬。這張表補上另一個問題——**責任是在哪一步被決定的**。
+
+同一個「Request 失敗」，在第 03 步被擋下來，跟在第 05 步崩潰，對 Server 來說是完全不同的兩件事。差別不在數字，在它發生在哪裡。
+
+接下來把這五個階段各跑一次，讓你看到每一步各自留下什麼證據。
+
+---
+
+## 07. 終端實戰驗證：五個階段各留一次證據
+
+五個階段都要親眼看到一次。接著兩個 Terminal 都開著，逐條跑。
+
+### 第一步：連線
+
+<Terminal title="Terminal 2 — step 1" flavor="output">{`
+*   Trying 127.0.0.1:8000...
+* Connected to 127.0.0.1 (127.0.0.1) port 8000
+`}</Terminal>
+
+觀察 `*` 開頭這兩行，是第一課講過的三向交握完成後的樣子。沒有它，後面都不會發生。
+
+### 第二步：讀取
+
+<Terminal title="Terminal 2 — step 2" flavor="output">{`
+> Accept: */*
+>
+* Request completely sent off
+`}</Terminal>
+
+觀察那個孤立的 `>`：它是空行。curl 送出它之後才會說「送完了」。
+
+### 第三步：解析
+
+<Terminal title="Terminal 2 — step 3" flavor="output">{`
+> curl -i http://127.0.0.1:8000/request-info
+< HTTP/1.1 200 OK
+
+{"client":"127.0.0.1","scheme":"http","host":"127.0.0.1:8000"}
+`}</Terminal>
+
+觀察 `host` 從 Request 的 Header 被讀出來，並出現在 Response 裡。
+
+### 第四步：比對
+
+<Terminal title="Terminal 2 — step 4" flavor="output">{`
+> curl -i -X DELETE http://127.0.0.1:8000/health
+< HTTP/1.1 405 Method Not Allowed
+< allow: GET
+
+{"detail":"Method Not Allowed"}
+`}</Terminal>
+
+觀察這個 `405` 在比對階段就產生了，`def health()` 沒有執行。Terminal 1 不會出現這條路徑的 traceback。
+
+### 第五步：執行
+
+<Terminal title="Terminal 2 — step 5" flavor="output">{`
+> curl -s http://127.0.0.1:8000/health | wc -c
+11
+
+> curl -i http://127.0.0.1:8000/health
+< HTTP/1.1 200 OK
+< content-length: 11
+
+{"ok":true}
+`}</Terminal>
+
+觀察數出來的 11 個位元組，就是框架寫進 `content-length` 的那個 11。
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下操作並記錄成果：
+
+1. 用 `curl -v http://127.0.0.1:8000/health` 送出一次 Request，截圖必須同時包含 `*` 開頭的連線行、Request 的空行、`<` 開頭的 Status Line 與 `{ [11 bytes data]`，並在截圖上標出五個階段各自對應哪一行。
+2. 執行 `curl -s http://127.0.0.1:8000/health | wc -c`，截圖必須顯示 `11`，並在筆記中說明這個數字是誰算出來的。
+3. 執行 `curl -i http://127.0.0.1:8000/request-info`，截圖必須包含 `host` 欄位，並寫出它在 Request 裡對應哪一個 Header。
+4. 執行 `curl -i -X DELETE http://127.0.0.1:8000/health`，截圖必須包含 `405` 與 `allow: GET`，並在筆記中回答：這個 `405` 是在五個階段的哪一步決定的？`def health()` 有沒有執行？
+5. 在 Terminal 1 的 access log 找到對應這四個 Request 的四行，截圖並按時間順序標出各自的 Status Code。
+6. 回答一句話：你在後端寫的函式決定了 Response 的哪些部分？框架決定了哪些部分？
+
+把作業截圖與簡答筆記存入 `exercises/03-request-lifecycle/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
+
+### 本單元使用的正本
+
+- [RFC 9112 §4 — Status Line](https://www.rfc-editor.org/rfc/rfc9112.html#name-status-line)
+- [RFC 9112 §6 — Message Body](https://www.rfc-editor.org/rfc/rfc9112.html#name-message-body)
+- [RFC 9110 §6.3.1 — Content-Length](https://www.rfc-editor.org/rfc/rfc9110.html#name-content-length)
+- [FastAPI — Bigger Applications and path routing](https://fastapi.tiangolo.com/tutorial/bigger-applications/)

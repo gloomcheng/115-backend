@@ -21,6 +21,10 @@ pnpm-debug.log*
 # downloaded verification tools
 .cache/
 
+# python artifacts from the practice API
+venv/
+__pycache__/
+
 # macOS-specific files
 .DS_Store
 

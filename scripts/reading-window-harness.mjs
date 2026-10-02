@@ -138,6 +138,88 @@ const CONCEPT_CONTRACTS_BY_WEEK = {
       explanation: /(Body[^。\n]*(內容|本身)|(內容|本身)[^。\n]*Body)/i,
     },
   ],
+  3: [
+    {
+      name: 'method',
+      term: /\bmethod\b/i,
+      explanation: /(method[^。\n]*(動詞|動作|第一個字)|(動詞|動作|第一個字)[^。\n]*method)/i,
+    },
+    {
+      name: 'route',
+      term: /路由表/,
+      explanation:
+        /(路由表[^。\n]*(method|path|對照|比對|一筆|資料)|(method|path|對照|比對|一筆|資料)[^。\n]*路由表)/,
+    },
+    {
+      name: 'content-length',
+      term: /content-length/i,
+      explanation:
+        /(content-length[^。\n]*(位元組|長度|數|算)|(位元組|長度|數|算)[^。\n]*content-length)/i,
+    },
+  ],
+  4: [
+    {
+      name: 'allow',
+      term: /\ballow\b/i,
+      explanation:
+        /(allow[^。\n]*(method|Header|登錄|哪一種|線索)|(method|Header|登錄|哪一種|線索)[^。\n]*allow)/i,
+    },
+    {
+      name: '405',
+      term: /\b405\b/,
+      explanation: /(405[^。\n]*(method|路由|沒登記|對)|(method|路由|沒登記|對)[^。\n]*405)/i,
+    },
+    {
+      name: '404',
+      term: /\b404\b/,
+      explanation: /(404[^。\n]*(路由|命中|框架|不存在)|(路由|命中|框架|不存在)[^。\n]*404)/i,
+    },
+  ],
+  6: [
+    {
+      name: 'REST',
+      term: /\bREST\b/,
+      explanation: /(REST[^。\n]*(架構|path|method|資源)|(架構|path|method|資源)[^。\n]*REST)/i,
+    },
+    {
+      name: '405',
+      term: /\b405\b/,
+      explanation: /(405[^。\n]*(method|allow|沒有|路由)|(method|allow|沒有|路由)[^。\n]*405)/i,
+    },
+    {
+      name: 'Location',
+      term: /\bLocation\b/,
+      explanation: /(Location[^。\n]*(Header|新資源|URL)|(Header|新資源|URL)[^。\n]*Location)/i,
+    },
+    {
+      name: 'idempotent',
+      term: /idempotent/i,
+      explanation: /(idempotent[^。\n]*(冪等|結果|一次)|(冪等|結果|一次)[^。\n]*idempotent)/i,
+    },
+  ],
+  7: [
+    {
+      name: 'Content-Type',
+      term: /\bContent-Type\b/i,
+      explanation:
+        /(Content-Type[^。\n]*(解析|格式|宣告|決定|工作)|(解析|格式|宣告|決定|工作)[^。\n]*Content-Type)/i,
+    },
+    {
+      name: '422',
+      term: /\b422\b/,
+      explanation: /(422[^。\n]*(拒絕|內容|資料|Client)|(拒絕|內容|資料|Client)[^。\n]*422)/,
+    },
+    {
+      name: '500',
+      term: /\b500\b/,
+      explanation: /(500[^。\n]*(Server|程式|出錯|自己)|(Server|程式|出錯|自己)[^。\n]*500)/,
+    },
+    {
+      name: 'loc',
+      term: /\bloc\b/i,
+      explanation: /(loc[^。\n]*(位置|指出|字元|body)|(位置|指出|字元|body)[^。\n]*loc)/i,
+    },
+  ],
 }
 
 function parseWeek(content) {

@@ -1,0 +1,377 @@
+---
+title: "REST — 為什麼 POST /users 不是 GET"
+week: 6
+description: "同一組 users 資源，換一個 method，Server 做的事與回來的 Status Code 就換一個。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+import FieldNote from '../../components/FieldNote.astro';
+
+第二單元把 URL 拆成零件，結論是：`path` 指出你要操作的資源路徑，`method` 寫在 Request Line 的第一個位置。這一單元要回答一個具體問題：為什麼 `POST /users` 不能寫成 `GET`？
+
+先把課堂 API 啟動起來：
+
+<Terminal title="bash — start the practice API">{`
+cd 115-backend
+python3 -m venv venv
+source venv/bin/activate
+pip install "fastapi[standard]>=0.111.0"
+fastapi dev examples/http-api/main.py
+`}</Terminal>
+
+看到 `Application startup complete` 之後，這個 Terminal 就先留在那裡不要關。開另一個 Terminal，送兩次請求：
+
+<Terminal title="bash — read one, then create one">{`
+curl -i http://127.0.0.1:8000/users/alice
+curl -i -X POST http://127.0.0.1:8000/users \\
+  -H 'Content-Type: application/json' \\
+  -d '{"name":"bob","role":"student"}'
+`}</Terminal>
+
+第一次回 `200`，第二次回 `201`。兩次的 Body 长得完全不同，但你先不要看 Body—— 先看 Request Line 的第一個字。
+
+<svg viewBox="0 0 940 400" role="img" aria-labelledby="rest-claim-title rest-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="rest-claim-title">同一組 users 資源，method 決定 Server 回哪一個 Status Line</title>
+  <desc id="rest-claim-description">三組 Request 打向 users 資源。POST /users 回 201 Created；GET /users 回 405 Method Not Allowed 並帶 allow: POST；DELETE /users/bob 回 405 Method Not Allowed 並帶 allow: GET。</desc>
+  <defs>
+    <marker id="rest-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="30" width="390" height="70" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="38" y="62" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&gt; <tspan font-weight="700" fill="#0b3d63">POST</tspan> /users HTTP/1.1</text>
+  <text x="38" y="86" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&gt; Content-Type: application/json</text>
+  <path d="M418 65 H512" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#rest-arrow)" />
+  <rect x="528" y="30" width="392" height="70" rx="8" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="546" y="62" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&lt; HTTP/1.1 <tspan font-weight="700" fill="#0b3d63">201</tspan> Created</text>
+  <text x="546" y="86" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{`{"name":"bob","role":"student"}`}</text>
+  <rect x="20" y="150" width="390" height="70" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="38" y="182" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&gt; <tspan font-weight="700" fill="#0b3d63">GET</tspan> /users HTTP/1.1</text>
+  <text x="38" y="206" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&gt; Accept: application/json</text>
+  <path d="M418 185 H512" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#rest-arrow)" />
+  <rect x="528" y="150" width="392" height="70" rx="8" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
+  <text x="546" y="182" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&lt; HTTP/1.1 <tspan font-weight="700" fill="#ef795e">405</tspan> Method Not Allowed</text>
+  <text x="546" y="206" fill="#ef795e" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">allow: POST</text>
+  <rect x="20" y="270" width="390" height="70" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="38" y="302" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&gt; <tspan font-weight="700" fill="#ef795e">DELETE</tspan> /users/bob HTTP/1.1</text>
+  <text x="38" y="326" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&gt; 沒有 Body</text>
+  <path d="M418 305 H512" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#rest-arrow)" />
+  <rect x="528" y="270" width="392" height="70" rx="8" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
+  <text x="546" y="302" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&lt; HTTP/1.1 <tspan font-weight="700" fill="#ef795e">405</tspan> Method Not Allowed</text>
+  <text x="546" y="326" fill="#ef795e" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">allow: GET</text>
+  <text x="470" y="378" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">目標是同一組 users；換掉第一個字，Server 的動作和 Status Line 就一起換掉。</text>
+</svg>
+
+<Callout type="important" title="這一課的問題只有一句">
+  為什麼建立資料一定要用 `POST`，不能用 `GET`？答案不在風格，在 `GET` 這兩個字在 HTTP 規格裡被綁死了一項承諾：它不能改動 Server 上的資源。拿掉這個承諾，`GET` 就會變成一個可以刪除資料的連結。
+</Callout>
+
+---
+
+## 01. 資源有名稱，動作交給 method
+
+第二單元確認過：`path` 指出要操作的資源路徑，最後怎麼解讀由 Server 的路由決定。REST 的第一個設計選擇，就是讓 `path` 只負責「是哪一筆東西」，不負責「要做什麼」。
+
+這一組 users 資源在路徑上有兩種位置：
+
+| 路徑形態 | 這條路徑代表什麼 | 課堂 API 的實測結果 |
+| --- | --- | --- |
+| `/users` | 一整組 users（集合） | `POST` 回 `201`，`GET` 回 `405 allow: POST` |
+| `/users/bob` | 集合裡的其中一筆（成員） | `GET` 回 `200`，`DELETE` 回 `405 allow: GET` |
+
+`GET /users/bob` 回 `200`，代表 Server 手上真的有 `bob` 這一筆。換一個名字：
+
+<Terminal title="bash — the member does not exist">{`
+curl -i http://127.0.0.1:8000/users/ghost
+`}</Terminal>
+
+<svg viewBox="0 0 920 300" role="img" aria-labelledby="rest-collection-title rest-collection-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="rest-collection-title">ELI5 一個集合路徑與它的成員路徑</title>
+  <desc id="rest-collection-description">集合路徑 /users 底下有多個成員路徑 /users/alice、/users/bob、/users/ghost。成員是否存在由 Server 決定：alice 與 bob 回 200，ghost 回 404。</desc>
+  <rect x="330" y="30" width="260" height="66" rx="8" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="460" y="60" text-anchor="middle" fill="#075486" font-size="19" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">/users</text>
+  <text x="460" y="82" text-anchor="middle" fill="#274f67" font-size="14">集合：一組 users</text>
+  <path d="M460 96 V132 M180 132 H740 M180 132 V168 M460 132 V168 M740 132 V168" fill="none" stroke="#075486" stroke-width="3" />
+  <rect x="60" y="172" width="240" height="66" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="180" y="202" text-anchor="middle" fill="#075486" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">/users/alice</text>
+  <text x="180" y="224" text-anchor="middle" fill="#274f67" font-size="14">回 200：存在</text>
+  <rect x="340" y="172" width="240" height="66" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="460" y="202" text-anchor="middle" fill="#075486" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">/users/bob</text>
+  <text x="460" y="224" text-anchor="middle" fill="#274f67" font-size="14">回 200：剛剛 POST 建立</text>
+  <rect x="620" y="172" width="240" height="66" rx="8" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="740" y="202" text-anchor="middle" fill="#075486" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">/users/ghost</text>
+  <text x="740" y="224" text-anchor="middle" fill="#ef795e" font-size="14" font-weight="700">回 404：這筆不存在</text>
+  <text x="460" y="278" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">path 負責「是哪一筆」；這筆在不在，是 Server 回答的，不是網址保證的。</text>
+</svg>
+
+---
+
+## 02. 動作不要寫進網址
+
+把刪除動作塞進網址，是初學者最常見的寫法之一。它看起來像這樣：
+
+<Terminal title="bash — the shape REST rejects">{`
+curl -i 'http://127.0.0.1:8000/users/delete?id=bob'
+`}</Terminal>
+
+回來的是：
+
+<Terminal title="bash — action written into the path" flavor="output">{`
+< HTTP/1.1 404 Not Found
+< content-type: application/json
+
+{"detail":"User not found"}
+`}</Terminal>
+
+注意這不是語法錯誤，也不是 Server 拒絕服務。`delete` 在這條路徑裡被當成一個 username——`/users/delete` 就是「名叫 delete 的那一筆 user」，Server 找不到，所以回 `404`。動作被寫成資源名稱之後，它就只能被當成資源名稱處理。
+
+把同一個意圖改寫成 method，Server 才有一個明確的位置可以判斷：
+
+<Terminal title="bash — action expressed as a method">{`
+curl -i -X DELETE http://127.0.0.1:8000/users/bob
+`}</Terminal>
+
+<Terminal title="bash — the route answers with 405" flavor="output">{`
+< HTTP/1.1 405 Method Not Allowed
+< allow: GET
+< content-type: application/json
+
+{"detail":"Method Not Allowed"}
+`}</Terminal>
+
+`405` 的意思是：這條路徑我認得，但沒有 `DELETE` 這個 method。`allow: GET` 告訴你這條路徑現在只接受哪一種 method。
+
+真正危險的地方在 `GET`。瀏覽器預先載入、proxy 快取、爬蟲、email 掃描器與捷徑輪播，都會自動送出 `GET`，而且不會問你。只要刪除可以被 `GET` 觸發，這些自動行為就會變成刪除。
+
+<Callout type="warning" title="把刪除寫成 GET 會發生什麼事">
+  搜尋引擎爬蟲抓到 `GET /users/delete?id=bob`，就會照著執行。瀏覽器 prefetch 也一樣。這種 bug 很少在測試時出現，因為測試只會照著你寫的 method 呼叫；出事的是那些不是你呼叫的那一方。
+</Callout>
+
+<FieldNote marker="XML" eyebrow="FIELD NOTE 06" title="SOAP：把動作放進 Body 的另一個答案">
+  另一個走過來的方向是 SOAP。它的 endpoint 幾乎永遠只有一條，動作與參數全部寫在 Body 裡。送一個「建立使用者」的 SOAP 訊息給任何 HTTP 端點：
+
+  <Terminal title="bash — a SOAP envelope over curl">{`
+  curl -i -X POST 'https://httpbin.org/anything/users' \
+    -H 'Content-Type: text/xml; charset=utf-8' \
+    -d '<?xml version="1.0" encoding="utf-8"?>
+  <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="urn:115-backend">
+    <soapenv:Body>
+      <ns:CreateUser>
+        <ns:name>bob</ns:name>
+      </ns:CreateUser>
+    </soapenv:Body>
+  </soapenv:Envelope>'
+  `}</Terminal>
+
+  同一個「建立一個使用者」，REST 的 Body 是 `{"name":"bob"}` 共 16 個位元組，這個 SOAP envelope 是 267 個位元組。回應的 `json` 欄位會是 `null`，因為它確實不是 JSON。
+
+  SOAP 的設計比 REST 早了十年就有 contract-first：介面由 WSDL 定義，再產生各語言的 stub，所以型別錯誤在建置期就被抓到。代價是 XML 肥大、瀏覽器不會用、很多防火牆擋掉。它現在活在金融、醫療與政府的系統整合裡。你會在文件、log 與工程師對話中遇到它；`[SOAP 1.1 規格](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/)` 定義了 `Envelope` 與 `Fault` 的結構。
+
+  這一課不會要求你寫 SOAP。你需要認得它的 envelope 長什麼樣，以及它代表的是另一種分工選擇。
+</FieldNote>
+
+---
+
+## 03. method 決定 Server 做什麼，也決定 Status Code
+
+那個會被自動觸發的 `GET`，正是 method 不能當成可有可無的字的原因。Server 收到一個 Request 之後，只用兩個東西決定要執行哪一段程式——`method` 與 `path`。它把這兩個字對到自己的路由表，對上了就執行並回一個 Status Code。
+
+<Terminal title="bash — three targets, three answers" flavor="output">{`
+> POST /users HTTP/1.1          < 201 Created
+> GET  /users HTTP/1.1          < 405 Method Not Allowed   allow: POST
+> DELETE /users/bob HTTP/1.1    < 405 Method Not Allowed   allow: GET
+`}</Terminal>
+
+<svg viewBox="0 0 940 430" role="img" aria-labelledby="rest-route-title rest-route-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="rest-route-title">ELI5 Server 用 method 與 path 對路由表，對上才執行</title>
+  <desc id="rest-route-description">Request Line 的 method 與 path 送進路由比對。三種結果：有這條路由時執行並回 200 或 201；路徑存在但 method 不符時回 405 並附上 allow；路徑不存在時回 404。</desc>
+  <defs>
+    <marker id="rest-route-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="290" y="24" width="360" height="72" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="470" y="52" text-anchor="middle" fill="#075486" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">method + path</text>
+  <text x="470" y="78" text-anchor="middle" fill="#274f67" font-size="14">Request Line 的前兩個部分</text>
+  <path d="M470 96 V150" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#rest-route-arrow)" />
+  <rect x="300" y="156" width="340" height="66" rx="8" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="470" y="184" text-anchor="middle" fill="#075486" font-size="18" font-weight="700">Server 的路由表</text>
+  <text x="470" y="208" text-anchor="middle" fill="#274f67" font-size="14">比對 method 與 path 的組合</text>
+  <path d="M470 222 V266 M150 266 H790 M150 266 V300 M470 266 V300 M790 266 V300" fill="none" stroke="#075486" stroke-width="3" />
+  <rect x="40" y="304" width="220" height="96" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="150" y="332" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">組合存在</text>
+  <text x="150" y="358" text-anchor="middle" fill="#075486" font-size="19" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200 / 201</text>
+  <text x="150" y="382" text-anchor="middle" fill="#274f67" font-size="13">執行並回結果</text>
+  <rect x="360" y="304" width="220" height="96" rx="8" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="470" y="332" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">路徑有、method 沒有</text>
+  <text x="470" y="358" text-anchor="middle" fill="#ef795e" font-size="19" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">405</text>
+  <text x="470" y="382" text-anchor="middle" fill="#ef795e" font-size="13">附上 allow: GET 或 POST</text>
+  <rect x="680" y="304" width="220" height="96" rx="8" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="790" y="332" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">這條路徑不存在</text>
+  <text x="790" y="358" text-anchor="middle" fill="#075486" font-size="19" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">404</text>
+  <text x="790" y="382" text-anchor="middle" fill="#274f67" font-size="13">沒有這個目標</text>
+</svg>
+
+`GET /users` 回 `405` 而不是 `200`，也值得停下來想一秒：這條集合路徑目前只接受 `POST`，因為這支練習 API 還沒有「列出全部 users」的路由。缺的那條路由會在單元 04 路由與單元 10 CRUD 補上。你現在看到的 `405 allow: POST`，就是 Server 在誠實地說明它認得這條路徑、但還沒有這個 method。
+
+---
+
+## 04. 201 Created 回來之後，它沒有替你做什麼
+
+`201 Created` 的意思是 Server 已經建立了一筆新資源。把剛才那次 `POST` 的完整回應再看一次：
+
+<Terminal title="bash — the full 201 response" flavor="output">{`
+< HTTP/1.1 201 Created
+< content-type: application/json
+< content-length: 31
+
+{"name":"bob","role":"student"}
+`}</Terminal>
+
+RFC 9110 對 `201` 的規定是：Server 應該在 `Location` Header 回報新資源的 URL，好讓 Client 知道剛建立的東西住在哪裡。這份回應沒有 `Location`。
+
+<Callout type="note" title="為什麼沒有 Location">
+  框架不會替你猜新資源的 URL。這個練習 API 用送進來的 `name` 當識別，但它沒有把 `/users/bob` 寫進 `Location`。要回這個 Header，必須由 route 自己決定；寫法在單元 04。
+</Callout>
+
+沒有 `Location` 的實際後果很具體：Client 只能從 Body 的欄位猜剛才那筆資源的識別。如果 Body 沒有回識別欄位（例如回 `{"ok":true}`），Client 就永遠拿不到 `bob` 這個位置，下一步連 `GET /users/bob` 都組不出來。
+
+<Callout type="important" title="Status Code 是 Server 的答案，不是裝飾">
+  第一單元說過：責任分界看打錯網址、遺漏參式，還是後端自己出錯。這一單元多一條規則：Client 送出 `method` 與 `path` 之後，Server 決定執行、拒絕，還是回 `405` 並告訴你它接受什麼。Client 不該從 `200` 推測一切正常，也不該把 `404` 當成空的資料。
+</Callout>
+
+---
+
+## 05. 同一個 method 送兩次，結果不一定相同
+
+第一單元提過 `GET` 是 safe method（讀取不該改動資源狀態），`POST` 通常不是 idempotent，也就是重送一次不會得到同樣的最終結果。現在用這支 API 把它看見。
+
+讀三次，三次一模一樣：
+
+<Terminal title="bash — read three times">{`
+for i in 1 2 3; do curl -s http://127.0.0.1:8000/users/alice; echo; done
+`}</Terminal>
+
+<Terminal title="bash — three identical reads" flavor="output">{`
+{"name":"Alice","note":"First HTTP example"}
+{"name":"Alice","note":"First HTTP example"}
+{"name":"Alice","note":"First HTTP example"}
+`}</Terminal>
+
+同一份 Body 建立兩次，兩次都回 `201`，但資料不是兩筆：
+
+<Terminal title="bash — create the same name twice">{`
+curl -s -X POST http://127.0.0.1:8000/users \\
+  -H 'Content-Type: application/json' \\
+  -d '{"name":"carol","role":"student"}'
+echo
+curl -s -X POST http://127.0.0.1:8000/users \\
+  -H 'Content-Type: application/json' \\
+  -d '{"name":"carol","role":"ta"}'
+echo
+curl -s http://127.0.0.1:8000/users/carol
+echo
+`}</Terminal>
+
+<Terminal title="bash — the second call overwrote the first" flavor="output">{`
+{"name":"carol","role":"student"}
+{"name":"carol","role":"ta"}
+{"name":"carol","role":"ta"}
+`}</Terminal>
+
+第三行是最後的狀態：只剩一份 `carol`，而且是第二次送的那份。這支練習 API 用 `name` 當 key，第二次的 `POST` 是「再執行一次建立」，所以覆蓋了第一次。
+
+<Callout type="note" title="這不是 bug，是 POST 的定義">
+  `POST` 沒有冪等性的保證。網路逾時、使用者重按按鈕、proxy 自動重試，都可能讓同一份 Request 被送兩次。真實系統的兩種做法：用 auto-increment id 或 UUID 當識別，讓每次建立都落在新的位置；針對付款、下單這類重複送出風險高的動作，另外帶一把 idempotency key，讓 Server 認得「這是同一次請求」。資料庫那一段在單元 08 與單元 10。
+</Callout>
+
+用不同名字建立三次，就是三筆：
+
+<Terminal title="bash — three creates, three members">{`
+for name in dan erin frank; do
+  curl -s -o /dev/null -w "$name=%{http_code}\n" \\
+    -X POST http://127.0.0.1:8000/users \\
+    -H 'Content-Type: application/json' \\
+    -d "{\\"name\\":\\"$name\\"}"
+done
+`}</Terminal>
+
+---
+
+## 06. 終端實戰驗證：四組對照
+
+三次讀取與兩次建立的差別看過了。接著把這一課的四個結論各跑一次，全部結果都在 `curl` 的輸出裡。
+
+### 第一步：讀取不會改動狀態
+
+<Terminal title="bash — step 1" flavor="output">{`
+for i in 1 2 3; do curl -s http://127.0.0.1:8000/users/alice; echo; done
+`}</Terminal>
+
+三行輸出必須完全相同。不同，就表示你的 API 有問題。
+
+### 第二步：建立會改動狀態
+
+讀取不改狀態，上一步那三行輸出就是證據。反過來問：`POST` 會不會改？
+
+<Terminal title="bash — step 2">{`
+curl -i -X POST http://127.0.0.1:8000/users \\
+  -H 'Content-Type: application/json' \\
+  -d '{"name":"iris","role":"student"}'
+curl -i http://127.0.0.1:8000/users/iris
+`}</Terminal>
+
+第一個 `201`、第二個 `200`。這是 `POST` 改動了 Server 狀態最直接的證據。
+
+### 第三步：撞到 method 的牆
+
+<Terminal title="bash — step 3" flavor="output">{`
+> curl -i -X DELETE http://127.0.0.1:8000/users/iris
+< HTTP/1.1 405 Method Not Allowed
+< allow: GET
+
+> curl -i http://127.0.0.1:8000/users
+< HTTP/1.1 405 Method Not Allowed
+< allow: POST
+`}</Terminal>
+
+`allow` 這個 Header 要記下來。之後寫 Client 遇到 `405`，第一個反應就是讀它。
+
+### 第四步：動作寫進網址的下場
+
+<Terminal title="bash — step 4" flavor="output">{`
+> curl -i 'http://127.0.0.1:8000/users/delete?id=iris'
+< HTTP/1.1 404 Not Found
+
+{"detail":"User not found"}
+`}</Terminal>
+
+`delete` 被當成一個 username。這就是為什麼 method 與 path 要分開負責。
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下操作並記錄成果。請用英文小寫加數字當作 `name`（例如 `s112306001`）；中文要經過百分比編碼才放得進 path，細節在單元 02。
+
+1. 送出 `POST /users` 建立一筆你自己的資料，截圖必須包含 Request Line、`201` Status Line 與回來的 Body。
+2. 用 `GET /users/s112306001` 讀回同一筆，截圖必須包含 `200` Status Line。
+3. 送出 `DELETE /users/s112306001` 與 `GET /users` 兩次，截圖必須包含 `405` Status Line 與 `allow` Header。
+4. 送出 `GET /users/delete?id=s112306001`，截圖必須包含 `404` 與 Body，證明 `delete` 被當成 username。
+5. 用一句話回答：為什麼 `GET /users` 現在回 `405`，而不是回一個空的 users 清單？
+6. 在繳交筆記中指出，上面五個結果分別是 `4xx` 還是 `5xx`，以及它們的責任落在 Client 還是 Server。
+
+把作業截圖與簡答筆記存入 `exercises/06-resource-modeling/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
+
+### 本單元使用的正本
+
+- [Roy Fielding — Architectural Styles and the Design of Network-based Software Architectures（Chapter 5: REST）](https://ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm)
+- [RFC 9110 §9.1 — Overview of Methods](https://www.rfc-editor.org/rfc/rfc9110.html#name-overview)
+- [RFC 9110 §9.2.1 — GET](https://www.rfc-editor.org/rfc/rfc9110.html#name-get)
+- [RFC 9110 §9.2.2 — Safe Methods](https://www.rfc-editor.org/rfc/rfc9110.html#name-safe-methods)
+- [RFC 9110 §9.3.3 — POST](https://www.rfc-editor.org/rfc/rfc9110.html#name-post)
+- [RFC 9110 §15.3.2 — 201 Created](https://www.rfc-editor.org/rfc/rfc9110.html#name-201-created)
+- [RFC 9110 §15.5.5 — 404 Not Found](https://www.rfc-editor.org/rfc/rfc9110.html#name-404-not-found)
+- [RFC 9110 §15.5.6 — 405 Method Not Allowed](https://www.rfc-editor.org/rfc/rfc9110.html#name-405-method-not-allowed)
+- [FastAPI — Bigger Applications and path routing](https://fastapi.tiangolo.com/tutorial/bigger-applications/)

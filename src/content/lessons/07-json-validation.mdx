@@ -1,0 +1,486 @@
+---
+title: "JSON — 422 跟 500 不一樣"
+week: 7
+description: "同樣是「資料有問題」，422 要你改送出去的資料，500 要你改 Server 的程式。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+第二單元把 Body 定義成「訊息內容本身」，也說明 `Content-Type` 告訴接收端怎麼解析。這一單元只處理一件事：當這份內容有問題時，`422` 和 `500` 各自代表誰該動手。
+
+單元 06 的練習 API 還開著。先送一份缺欄位的 Body：
+
+<Terminal title="bash — a body the server can read but not accept">{`
+curl -i -X POST http://127.0.0.1:8000/users \\
+  -H 'Content-Type: application/json' \\
+  -d '{"role":"student"}'
+`}</Terminal>
+
+<Terminal title="bash — 422" flavor="output">{`
+< HTTP/1.1 422 Unprocessable Entity
+< content-type: application/json
+< content-length: 29
+
+{"detail":"name is required"}
+`}</Terminal>
+
+Server 收到了、讀懂了、拒絕了。動手的人是你，不是它。這個狀態碼叫 `422 Unprocessable Entity`——它不是「伺服器掛掉」，是「你送來的內容我不接受」。接著我們讓 Server 自己壞掉，看另一個狀態碼長什麼樣。
+
+<svg viewBox="0 0 940 400" role="img" aria-labelledby="json-claim-title json-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="json-claim-title">ELI5 同一個錯誤訊息，422 的責任在 Client，500 的責任在 Server</title>
+  <desc id="json-claim-description">一個 Client 送出錯誤資料。上半部：Server 讀懂內容後回 422，Body 帶著錯誤細節，要改的是送出的資料。下半部：Server 程式自己出錯回 500，Body 只有 Internal Server Error 純文字，要改的是 Server 程式。</desc>
+  <defs>
+    <marker id="json-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="40" y="26" width="250" height="66" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="165" y="55" text-anchor="middle" fill="#075486" font-size="19" font-weight="700">Client</text>
+  <text x="165" y="78" text-anchor="middle" fill="#274f67" font-size="14">送出一份 Request</text>
+  <path d="M298 59 H388" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#json-arrow)" />
+  <rect x="404" y="26" width="496" height="140" rx="8" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="424" y="56" fill="#075486" font-size="17" font-weight="700">Server 讀完 Body，內容不能接受</text>
+  <text x="424" y="88" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&lt; HTTP/1.1 <tspan font-weight="700" fill="#0b3d63">422</tspan> Unprocessable Entity</text>
+  <text x="424" y="116" fill="#274f67" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{`{"detail":"name is required"}`}</text>
+  <text x="424" y="146" fill="#075486" font-size="15" font-weight="700">要改：Client 送出的資料</text>
+  <path d="M298 130 H388" fill="none" stroke="#ef795e" stroke-width="4" marker-end="url(#json-arrow)" />
+  <path d="M388 130 H388" fill="none" stroke="#ef795e" stroke-width="4" />
+  <rect x="404" y="196" width="496" height="150" rx="8" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
+  <text x="424" y="226" fill="#ef795e" font-size="17" font-weight="700">Server 程式在處理時出錯</text>
+  <text x="424" y="258" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&lt; HTTP/1.1 <tspan font-weight="700" fill="#ef795e">500</tspan> Internal Server Error</text>
+  <text x="424" y="286" fill="#ef795e" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">Internal Server Error</text>
+  <text x="424" y="318" fill="#ef795e" font-size="15" font-weight="700">要改：Server 的程式碼；線索在 Server 終端機</text>
+  <text x="470" y="380" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">狀態碼不是嚴重程度分級，是責任歸屬的宣告。</text>
+</svg>
+
+<Callout type="important" title="本單元的重點：422 是最難被依賴的狀態碼">
+  `422` 好懂：Server 讀懂了、拒絕了、資料要改。它難的地方是，你不能靠狀態碼本身判斷它到底是什麼。名稱重複回 `422`、權限不足回 `422`、JSON 寫壞還是回 `422`；換一個框架，同一個錯誤變成 `400`；把檢查寫晚一點，同一個錯誤變成 `500`。
+
+  第 05 節用四組可以親手驗證的證據說明這件事：跨框架的 `400` 與 `422` 分歧、GitHub 用 `422` 頂替 `409`、錯誤 Body 的形狀來自框架而不是你的 API、以及同一個錯參數回 `422` 還是 `500` 取決於宣告寫在哪裡。串接別人的 API 之前，那一節比前面四節都重要。
+</Callout>
+
+---
+
+## 01. Body 裡放的是 JSON，Content-Type 決定怎麼解析
+
+`Body` 是訊息內容本身，位在空白行之後。同一段字元串，Server 要先知道它是什麼格式，才能決定怎麼解析——這就是 `Content-Type` 的工作。JSON（JavaScript Object Notation）是最常用的格式，RFC 8259 定義了它的形狀：
+
+<Terminal title="JSON — the shape sent in a body" flavor="output">{`
+{ "name": "bob", "role": "student", "active": true, "tags": ["backend"], "nickname": null }
+`}</Terminal>
+
+物件用 `{}`，陣列用 `[]`，字串用雙引號，布林值寫 `true` 或 `false`，沒有值寫 `null`，數字不加引號。
+
+這支練習 API 的 route 簽名是 `def create_user(body: dict)`。Server 會先照 `Content-Type` 把 Body 解析成一個 Python `dict`，解析不過去就直接回 `422`，route 裡的程式碼一行都還沒跑。
+
+把同一段正確的 JSON 標成另一種格式，結果立刻不一樣：
+
+<Terminal title="bash — same bytes, wrong content type">{`
+curl -i -X POST http://127.0.0.1:8000/users \\
+  -H 'Content-Type: text/plain' \\
+  -d '{"name":"bob"}'
+`}</Terminal>
+
+<Terminal title="bash — 422 with the parser's own words" flavor="output">{`
+< HTTP/1.1 422 Unprocessable Entity
+
+{"detail":[{"type":"dict_type","loc":["body"],
+  "msg":"Input should be a valid dictionary",
+  "input":"{\"name\":\"bob\"}"}]}
+`}</Terminal>
+
+Body 的內容一個字都沒變，只有宣告的格式變了。Server 照著 `Content-Type` 解析，得到一個字串而不是物件，於是拒絕，並把收到的字串原樣貼回來讓你比對。
+
+<Callout type="note" title="loc 是位置，不是錯誤分類">
+  `loc`（location）告訴你錯在整個 Request 的哪一段：這裡是 `body`，所以問題在 Body 裡，不在 Header 裡。第二單元講過的 `Content-Type`，就是讓 Server 能定位到這一段的欄位。
+</Callout>
+
+---
+
+## 02. 三種資料錯誤，三個 422 的樣子
+
+Client 送來的資料壞掉，通常有三種樣子。它們都回 `422`，但 Body 裡的細節長得不一樣。
+
+### 格式錯：這不是合法的 JSON
+
+<Terminal title="bash — missing closing quote">{`
+curl -i -X POST http://127.0.0.1:8000/users \\
+  -H 'Content-Type: application/json' \\
+  -d '{"name": "bob"'
+`}</Terminal>
+
+<Terminal title="bash — the parser points at a character position" flavor="output">{`
+< HTTP/1.1 422 Unprocessable Entity
+
+{"detail":[{"type":"json_invalid","loc":["body",14],
+  "msg":"JSON decode error","input":{},
+  "ctx":{"error":"Expecting ',' delimiter"}}]}
+`}</Terminal>
+
+`loc` 現在有兩個成員：`body` 與 `14`。把 Body 拿出來數，`{` 是第 1 個字元，最後那個沒被閉合的 `"` 正好是第 14 個。Server 直接告訴你壞在第幾個字元。
+
+### 內容缺：格式對，欄位少
+
+開場那一次 `{"role":"student"}` 第二種資料錯誤沒有這種精確位置。開場那一次再送一次，這次是為了比較三種 `detail` 的形狀：
+
+<Terminal title="bash — a hand-written check, not a schema" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8000/users \\
+>   -H 'Content-Type: application/json' \\
+>   -d '{"role":"student"}'
+< HTTP/1.1 422 Unprocessable Entity
+
+{"detail":"name is required"}
+`}</Terminal>
+
+這種 `422` 不會告訴你第幾個字元。它的 `detail` 是一句純文字，不是結構化陣列，原因是這支 route 用手寫檢查擋下空 `name`，而不是用資料模型驗證。用資料模型驗證會長什麼樣，單元 11 會處理。
+
+### 內容空：格式對，值不能用
+
+<Terminal title="bash — empty value" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8000/users \\
+>   -H 'Content-Type: application/json' \\
+>   -d '{"name":""}'
+< HTTP/1.1 422 Unprocessable Entity
+
+{"detail":"name is required"}
+`}</Terminal>
+
+<Callout type="important" title="422 家族共同點">
+  三種 `422` 都表示同一件事：Server 讀完了整個 Request，判斷內容不能接受，並且把「哪裡不對」寫進 Response Body。Server 本身還在正常運作。
+</Callout>
+
+---
+
+## 03. 422：該改的是你送出去的資料
+
+把這三種 `422` 放在一起看，它們講的是同一件事。RFC 9110 把這個狀態碼定為 **422 Unprocessable Content**（舊名稱是 Unprocessable Entity；Starlette 與 FastAPI 目前仍在 Status Line 印舊名）。它的語意是：語法是對的，語意無法接受。
+
+所以 `422` 的責任歸屬，只要問一句：改什麼東西，這個 Request 才會成功？
+
+<Terminal title="bash — the server is still healthy" flavor="output">{`
+> curl -i http://127.0.0.1:8000/health
+< HTTP/1.1 200 OK
+
+{"ok":true}
+`}</Terminal>
+
+剛剛連續送出三種壞掉的 Body，Server 立刻回 `200`。這就是 `422` 的現場意義：服務沒有壞，你只要把資料改對再送一次。要做的是打開你的請求，把 `name` 補上。
+
+<Callout type="note" title="422 對應的 Client 動作">
+  拿到 `422` 時不要重試同一份 Request。重試不會改變結果。讀 Body 裡的 `detail`，修正那個位置，再送一次。
+</Callout>
+
+---
+
+## 04. 500：該改的是 Server 的程式
+
+`500 Internal Server Error` 的意思是：Server 自己出了問題，而且沒有預期到。這一課要用的例子放在 `exercises/07-json-validation/boom.py`，它只有一條路由，而且這條路由會在處理時拋出例外。
+
+<Terminal title="bash — start a deliberately broken server" flavor="output">{`
+$ cd exercises/07-json-validation
+$ fastapi dev boom.py --port 8001
+
+INFO:     Uvicorn running on http://127.0.0.1:8001
+`}</Terminal>
+
+<Terminal title="bash — ask the broken route for data" flavor="output">{`
+> curl -i http://127.0.0.1:8001/boom
+< HTTP/1.1 500 Internal Server Error
+< content-type: text/plain; charset=utf-8
+< content-length: 21
+
+Internal Server Error
+`}</Terminal>
+
+<Terminal title="bash — what it did not tell you" flavor="output">{`
+$ curl -s http://127.0.0.1:8001/boom
+Internal Server Error
+`}</Terminal>
+
+整個 Response 只有 21 個位元組的純文字。沒有 `detail`，沒有欄位位置，也沒有你的 Body 被貼回來。你把資料改一百次，這個 Response 都不會變。
+
+真正的線索在 Server 的終端機。回到跑 `boom.py` 那個 Terminal：
+
+<Terminal title="boom server — traceback" flavor="output">{`
+Traceback (most recent call last):
+  ...
+  File ".../boom.py", line 23, in boom
+    return {"value": 1 / 0}
+                     ~~^~~
+ZeroDivisionError: division by zero
+INFO:     127.0.0.1 - "GET /boom HTTP/1.1" 500 Internal Server Error
+`}</Terminal>
+
+這就是上一單元 `curl` 那一端的差別：`422` 把答案寫給 Client，`500` 把答案寫在 Server 自己的終端機。單元 15 怎麼看 log，會從這裡接手。
+
+Server 沒有死掉。同一個 process 還在回答：
+
+<Terminal title="bash — the process is still alive" flavor="output">{`
+> curl -i http://127.0.0.1:8001/health
+< HTTP/1.1 404 Not Found
+
+{"detail":"Not Found"}
+`}</Terminal>
+
+`404` 不是錯誤訊息，是「這支程式沒有 `/health` 這條路由」。重點是它有回應：`500` 壞掉的是這一條路，不是整個 Server。這個觀察在單元 16 health check 與單元 17 部署時會直接用到。
+
+<Callout type="warning" title="不要在測試用 API 裡假造 500">
+  你可以在本機這樣做，因為它是給你看清楚的練習品。正式環境不應該保留一條會擲例外的路由：它會讓健康檢查與告警系統持續收到 `500`，而沒有人知道是刻意造的。
+</Callout>
+
+---
+
+## 05. 為什麼 422 最難靠
+
+先把這句話講準確。整份狀態碼表裡最難處理的是 `401` 與 `403`——它們牽涉身分、Token 生命週期與權限，那是單元 12 的主題，而且沒有捷徑。`422` 的難處是另一種：**它是最沒有標準、最依賴實作的一個。** 你不能從狀態碼本身推導出它的語意，只能去讀對方的契約。四個原因，每一個都看得到證據。
+
+### 一、同一個 Client 錯誤，別的框架會回 400
+
+RFC 9110 對 `400` 的定義是「Server 因為被視為 client error 的事情而無法或拒絕處理這個 Request」，範圍裡明列 malformed request syntax；對 `422` 的定義是「Server 理解 content type、而且 content 的語法是正確的，但它無法處理裡面的指令」。
+
+同一份壞掉的 JSON，同一個「你的資料錯」的判斷，這兩條都說得通。規格沒有指定要選哪一個，實作者各自選。本課這支 FastAPI 選 `422`：
+
+<Terminal title="bash — FastAPI answers 422" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8000/users \\
+>   -H 'Content-Type: application/json' -d '{"name": "bob"'
+< HTTP/1.1 422 Unprocessable Entity
+`}</Terminal>
+
+Django REST framework 選 `400`。它的原始碼 `rest_framework/exceptions.py` 裡兩行寫得很直接：
+
+<Terminal title="Django REST framework — exceptions.py" flavor="output">{`
+class ValidationError(APIException):
+    status_code = status.HTTP_400_BAD_REQUEST
+
+class ParseError(APIException):
+    status_code = status.HTTP_400_BAD_REQUEST
+`}</Terminal>
+
+同一件事，一個 `422` 一個 `400`。所以 Client 端不能只認 `422`。
+
+### 二、409 該做的事，常常被 422 頂替
+
+規格其實還留了另一個位置給「衝突」：
+
+<Terminal title="RFC 9110 §15.5.10" flavor="output">{`
+409 (Conflict) status code indicates that the request could not be
+completed due to a conflict with the current state of the target resource.
+This code is used in situations where the user might be able to resolve
+the conflict and resubmit the request.
+`}</Terminal>
+
+「email 已經有人用」「這個 repo 名稱已被占用」「這筆訂單已經不能刪」——這些都是 Request 本身沒問題、但和資源的**目前狀態**衝突，正確位置是 `409`。
+
+這個正確位置實務上經常被 `422` 頂替。GitHub 自己的 REST API 文件就是例子：
+
+<Terminal title="GitHub REST API — POST /orgs/{org}/repos" flavor="output">{`
+HTTP response status codes
+
+201 - Created
+403 - Forbidden
+422 - Validation failed, or the endpoint has been spammed.
+`}</Terminal>
+
+同一份文件裡的「Update a repository」更直接：`private` 這個參數的說明寫著，非 owner 嘗試修改 visibility 會得到 `422`。權限不足的結果，在這個 API 上是用 `422` 送的。
+
+<Callout type="warning" title="所以你不能靠狀態碼判斷衝突">
+  名稱重複回 `422`、權限不足也回 `422`、JSON 寫壞還是回 `422`。三者對 Client 的處理動作完全不同：改資料、改資料、改身分。要分辨，只能讀 Response Body 裡的欄位名稱或錯誤代碼，不能只看 Status Line。
+</Callout>
+
+這也說明為什麼同一套 API 的不同端點會回 `400`、`409`、`422` 三種。Client 真正能依賴的不是狀態碼本身，是**一致性**。
+
+### 三、422 的 Body 形狀是框架的契約
+
+Client 如果要處理驗證錯誤，它需要知道錯誤長什麼樣。這份 FastAPI 的答案是把它寫進 OpenAPI：
+
+<Terminal title="bash — the framework publishes its own error schema">{`
+curl -s http://127.0.0.1:8000/openapi.json
+`}</Terminal>
+
+<Terminal title="bash — HTTPValidationError in components/schemas" flavor="output">{`
+"ValidationError": {
+  "properties": {
+    "loc": { "items": { "anyOf": [ {"type":"string"}, {"type":"integer"} ] } },
+    "msg":  { "type": "string" },
+    "type": { "type": "string" },
+    "input": {},
+    "ctx":  { "type": "object" }
+  },
+  "required": ["loc", "msg", "type"]
+}
+`}</Terminal>
+
+Client 直接讀 `detail[0].loc`，就綁死了這套框架。換一個框架，這個形狀可能整個換掉。
+
+順帶一提，Status Line 上那個 reason phrase `Unprocessable Entity` 連 OpenAPI 都沒有記錄。reason phrase 不是契約的一部分，別拿它做程式判斷。
+
+同一支 API 裡的 `422` 也不一定長一樣。框架擋下來的是上面那個結構；`{"detail":"name is required"}` 則是這支 route 自己寫的字串。
+
+### 四、同一個「參數不對」，422 還是 500 取決於你程式寫在哪一層
+
+`boom.py` 除了 `/boom`，還有兩條專門用來示範這件事的路由。送同一個錯的參數，一次到有型別宣告的那條，一次到沒有型別宣告的那條：
+
+<Terminal title="bash — same bad parameter, two routes">{`
+curl -i 'http://127.0.0.1:8001/page?size=10'
+curl -i 'http://127.0.0.1:8001/page?size=abc'
+curl -i 'http://127.0.0.1:8001/manual-page?size=10'
+curl -i 'http://127.0.0.1:8001/manual-page?size=abc'
+`}</Terminal>
+
+<Terminal title="bash — /page answers 422 on its own" flavor="output">{`
+> curl -i 'http://127.0.0.1:8001/page?size=abc'
+< HTTP/1.1 422 Unprocessable Entity
+
+{"detail":[{"type":"int_parsing","loc":["query","size"],
+  "msg":"Input should be a valid integer, unable to parse string as an integer",
+  "input":"abc"}]}
+`}</Terminal>
+
+`/page` 的簽名是 `size: int`。Server 在進入 handler 之前就要把字串轉成整數，轉不過去就自己回 `422`，handler 裡那一行程式碼根本沒執行。
+
+<Terminal title="bash — /manual-page answers 500" flavor="output">{`
+> curl -i 'http://127.0.0.1:8001/manual-page?size=abc'
+< HTTP/1.1 500 Internal Server Error
+< content-type: text/plain; charset=utf-8
+
+Internal Server Error
+`}</Terminal>
+
+`/manual-page` 的簽名是 `size: str`，沒有型別宣告，所以沒有任何東西在它進 handler 之前檢查。`int(size)` 在 handler 裡拋出 `ValueError`，Server 只能回 `500`。Terminal 2 會印出：
+
+<Terminal title="boom server — traceback" flavor="output">{`
+File ".../boom.py", line 33, in manual_page
+  return {"size": int(size)}
+              ^^^^^^^^^
+ValueError: invalid literal for int() with base 10: 'abc'
+`}</Terminal>
+
+兩次的 Request 完全一樣。差別只在宣告寫在哪裡。
+
+<Callout type="important" title="422 不是自動產生的">
+  `422` 不會自己出現。它出現在「框架或你的程式，在錯誤還沒變成例外的時候把它擋下來」的位置。檢查寫在對的位置，Client 拿到 `422` 與精確位置；寫晚了，Client 拿到 `500` 與一句沒有用的純文字。同一個 bug，兩種狀態碼。
+</Callout>
+
+### 串接別人的 API 時的一句話
+
+綜合前面四節，串接別人的 API 時只剩一句話可用：`400`、`409`、`422` 全部當「你送出的 Request 要改」處理，然後**先讀對方的 API 文件確認它用哪一個**。狀態碼表給的是語意分類，不是跨服務的一致保證。
+
+---
+
+## 06. 同一個錯誤訊息，誰該動手
+
+把兩個狀態碼並排，判斷責任只有下面這幾列：
+
+| 比較項目 | `422` | `500` |
+| --- | --- | --- |
+| 誰該改 | 你送出去的資料 | Server 的程式 |
+| Response Body | 有 `detail`，指出哪裡不對 | 只有 `Internal Server Error` 純文字 |
+| 重送同一份 Request 會怎樣 | 不會變好，要先改資料 | 不會變好，改程式後才會好 |
+| 線索在哪 | Response Body | Server 終端機的 traceback 與 log |
+| Server 還活著嗎 | 活著，其他路由正常 | 活著，但這條路由壞了 |
+
+更上層的規則只有一句：**`4xx` 是這一次請求的問題，`5xx` 是服務端的問題。** 上一節講過為什麼這句話在 `400`、`409`、`422` 之間還需要再讀一次對方文件。
+
+<Callout type="important" title="5xx 不一定是程式寫錯">
+  程式碼完全正確，服務照樣會回 `5xx`。資料庫連線逾時、磁碟滿、依賴的第三方 API 掛掉，都會變成 `5xx`。所以 `5xx` 真正的意思是「責任在服務端，要去看 log」，不是「有人寫錯一行」。
+</Callout>
+
+---
+
+## 07. 終端實戰驗證：兩台 Server 一起跑
+
+接著同時開兩個 Terminal，讓兩台 Server 同時存在，才能把責任歸屬看完整。
+
+<Terminal title="Terminal 1 — practice API" flavor="output">{`
+$ fastapi dev examples/http-api/main.py
+INFO:     Uvicorn running on http://127.0.0.1:8000
+`}</Terminal>
+
+<Terminal title="Terminal 2 — deliberately broken API" flavor="output">{`
+$ cd exercises/07-json-validation
+$ fastapi dev boom.py --port 8001
+INFO:     Uvicorn running on http://127.0.0.1:8001
+`}</Terminal>
+
+### 第一步：讓 8000 收到三種壞資料
+
+<Terminal title="bash — three 422 results">{`
+curl -s -o /dev/null -w "missing name -> %{http_code}\n" \\
+  -X POST http://127.0.0.1:8000/users \\
+  -H 'Content-Type: application/json' -d '{"role":"student"}'
+curl -s -o /dev/null -w "empty name   -> %{http_code}\n" \\
+  -X POST http://127.0.0.1:8000/users \\
+  -H 'Content-Type: application/json' -d '{"name":""}'
+curl -s -o /dev/null -w "broken json  -> %{http_code}\n" \\
+  -X POST http://127.0.0.1:8000/users \\
+  -H 'Content-Type: application/json' -d '{"name": "bob"'
+`}</Terminal>
+
+三行都是 `422`。看 8000 的 Terminal：它只印 access log，沒有 traceback。Server 沒有出錯，是 Request 的內容被拒絕。
+
+### 第二步：確認 8000 還活著
+
+<Terminal title="bash — step 2">{`
+curl -i http://127.0.0.1:8000/health
+`}</Terminal>
+
+`200` 加 `{"ok":true}`。這是 `422` 與 `500` 最容易搞混的地方，而它也是最快能分辨兩者的方法。
+
+### 第三步：讓 8001 壞掉
+
+<Terminal title="bash — step 3">{`
+curl -i http://127.0.0.1:8001/boom
+`}</Terminal>
+
+`500`，Body 只有 `Internal Server Error`。接著立刻看 Terminal 2 的畫面—— traceback 就在那裡，`boom.py` 第 23 行。
+
+### 第四步：同一個錯參數，打兩條路由
+
+<Terminal title="bash — step 4">{`
+curl -i 'http://127.0.0.1:8001/page?size=abc'
+curl -i 'http://127.0.0.1:8001/manual-page?size=abc'
+`}</Terminal>
+
+第一個 `422`，`loc` 是 `["query","size"]`。第二個 `500`，Body 只有純文字。這是第 05 節第四個證據的現場重現。
+
+### 第五步：確認 8001 的 process 還活著
+
+<Terminal title="bash — step 5" flavor="output">{`
+> curl -i http://127.0.0.1:8001/health
+< HTTP/1.1 404 Not Found
+
+{"detail":"Not Found"}
+`}</Terminal>
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下操作並記錄成果：
+
+1. 在 `8000` 送出缺欄位、值為空、JSON 格式錯三種 Body，截圖必須同時包含三個 `422` Status Line 與各自的 Body。
+2. 送出 `Content-Type: text/plain` 但 Body 是合法 JSON 的一次請求，截圖必須包含 `422` 與 `dict_type` 那段 `detail`。
+3. 立刻送出 `curl -i http://127.0.0.1:8000/health`，截圖必須包含 `200`，證明 Server 沒有壞。
+4. 啟動 `exercises/07-json-validation/boom.py`，送出 `curl -i http://127.0.0.1:8001/boom`，截圖必須包含 `500` Status Line 與只有一行文字的 Body。
+5. 送出 `curl -i 'http://127.0.0.1:8001/page?size=abc'` 與 `curl -i 'http://127.0.0.1:8001/manual-page?size=abc'`，截圖必須顯示一個 `422`、一個 `500`。兩次 Request 字面相同，這就是第 05 節第四個證據。
+6. 執行 `curl -s http://127.0.0.1:8000/openapi.json`，截圖必須包含 `HTTPValidationError` 這段 schema，並在筆記中回答：Client 如果直接讀 `detail[0].loc`，它綁死了什麼？
+7. 截圖 Terminal 2 的 traceback，並在筆記中指出出錯的檔名與行號。
+8. 送出 `curl -i http://127.0.0.1:8001/health`，截圖必須包含 `404`，證明 process 仍然活著。
+9. 回答一句話：`422` 與 `500` 各自要動的是誰的什麼？把答案寫成「動哪一邊的什麼」。
+10. 回答一句話：為什麼 Client 不能只靠 Status Code 判斷「名稱重複」這種衝突？把你的答案寫成一個可以執行的檢查方式。
+
+把作業截圖與簡答筆記存入 `exercises/07-json-validation/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
+
+### 本單元使用的正本
+
+- [RFC 8259 — The JSON Data Interchange Format](https://www.rfc-editor.org/rfc/rfc8259.html)
+- [RFC 9110 §8.3 — Content-Type](https://www.rfc-editor.org/rfc/rfc9110.html#name-content-type)
+- [RFC 9110 §15.5.1 — 400 Bad Request](https://www.rfc-editor.org/rfc/rfc9110.html#name-400-bad-request)
+- [RFC 9110 §15.5.10 — 409 Conflict](https://www.rfc-editor.org/rfc/rfc9110.html#name-409-conflict)
+- [RFC 9110 §15.5.21 — 422 Unprocessable Content](https://www.rfc-editor.org/rfc/rfc9110.html#name-422-unprocessable-content)
+- [RFC 9110 §15.6.1 — 500 Internal Server Error](https://www.rfc-editor.org/rfc/rfc9110.html#name-500-internal-server-error)
+- [Django REST framework — rest_framework/exceptions.py](https://github.com/encode/django-rest-framework/blob/master/rest_framework/exceptions.py)
+- [GitHub REST API — Repositories（`POST /orgs/{org}/repos` 回 422）](https://docs.github.com/en/rest/repos/repos)
+- [FastAPI — Request Body](https://fastapi.tiangolo.com/tutorial/body/)
+- [FastAPI — Handling Errors](https://fastapi.tiangolo.com/tutorial/handling-errors/)

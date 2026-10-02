@@ -1,0 +1,287 @@
+---
+title: "路由與 Handler — path 與 method 對到哪一段程式"
+week: 4
+description: "Server 只有一張路由表。method 與 path 的每一種組合，都會落到四個結果之一。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+第三單元說了五個階段，比對路由表是第四個。那一段值得整節講：它是「你送出 Request 之前，就已經知道會回什麼」的地方。
+
+兩個 Terminal 都開著。先送出兩個**結果不同的 404**：
+
+<Terminal title="bash — two 404, two different bodies">{`
+curl -i http://127.0.0.1:8000/nowhere
+curl -i http://127.0.0.1:8000/users/ghost
+`}</Terminal>
+
+<svg viewBox="0 0 940 430" role="img" aria-labelledby="routing-claim-title routing-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="routing-claim-title">method 與 path 對路由表，只有四個出口</title>
+  <desc id="routing-claim-description">Request 的 method 與 path 送進路由表比對，有四種結果：兩者都對上就執行 handler 回 200；path 對而 method 不對回 405 並附上 allow；找不到這條 path 回 404；Body 在比對前就解析失敗回 422。</desc>
+  <defs>
+    <marker id="routing-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="20" width="420" height="52" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="38" y="52" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">method <tspan font-weight="700" fill="#0b3d63">GET</tspan></text>
+  <rect x="460" y="20" width="460" height="52" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="478" y="52" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">path <tspan font-weight="700" fill="#0b3d63">/users/ghost</tspan></text>
+  <path d="M470 72 V104" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#routing-arrow)" />
+  <rect x="300" y="108" width="340" height="54" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="470" y="133" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">對照路由表</text>
+  <text x="470" y="153" text-anchor="middle" fill="#274f67" font-size="13">Server 啟動時就已經把表建好</text>
+  <path d="M470 162 V194 M150 194 H790 M150 194 V222 M363 194 V222 M576 194 V222 M790 194 V222" fill="none" stroke="#075486" stroke-width="3" />
+  <rect x="40" y="226" width="220" height="140" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="150" y="252" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">method 與 path 都對上</text>
+  <text x="150" y="290" text-anchor="middle" fill="#075486" font-size="26" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200</text>
+  <text x="150" y="316" text-anchor="middle" fill="#274f67" font-size="13">執行 handler</text>
+  <text x="150" y="342" text-anchor="middle" fill="#274f67" font-size="13">由你的程式決定</text>
+  <rect x="253" y="226" width="220" height="140" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="363" y="252" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">path 對、method 不對</text>
+  <text x="363" y="290" text-anchor="middle" fill="#ef795e" font-size="26" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">405</text>
+  <text x="363" y="316" text-anchor="middle" fill="#ef795e" font-size="13">附上 allow</text>
+  <text x="363" y="342" text-anchor="middle" fill="#274f67" font-size="13">handler 沒執行</text>
+  <rect x="466" y="226" width="220" height="140" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="576" y="252" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">這條 path 不存在</text>
+  <text x="576" y="290" text-anchor="middle" fill="#075486" font-size="26" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">404</text>
+  <text x="576" y="316" text-anchor="middle" fill="#274f67" font-size="13">Body 寫 Not Found</text>
+  <text x="576" y="342" text-anchor="middle" fill="#274f67" font-size="13">框架寫的</text>
+  <rect x="679" y="226" width="220" height="140" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="789" y="252" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">Body 先被解析失敗</text>
+  <text x="789" y="290" text-anchor="middle" fill="#075486" font-size="26" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">422</text>
+  <text x="789" y="316" text-anchor="middle" fill="#274f67" font-size="13">連路由表都沒走到</text>
+  <text x="789" y="342" text-anchor="middle" fill="#274f67" font-size="13">單元 07</text>
+  <text x="470" y="402" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">你送出 Request 之前，就可以先寫下答案。四個出口都不需要猜。</text>
+</svg>
+
+---
+
+## 01. 路由表是一筆資料
+
+上一單元說「比對路由表」，那張表到底是什麼？打開課堂 API 的程式，最下面兩條路由是這樣寫的：
+
+<Terminal title="examples/http-api/main.py — the routing table" flavor="output">{`
+@app.get("/users/{name}")
+def get_user(name: str):
+    ...
+
+@app.post("/users", status_code=201)
+def create_user(body: dict):
+    ...
+`}</Terminal>
+
+`@app.get("/users/{name}")` 不是註解。它在 Server 啟動時，把三樣東西登記進一張表：
+
+| 登記的東西 | 這條路由的值 |
+| --- | --- |
+| method | `GET` |
+| path 樣板 | `/users/{name}` |
+| 對應的函式 | `get_user` |
+
+`@app.post("/users", status_code=201)` 又登記一筆。這張表就是「哪些 method 配哪些 path 會執行什麼」的全部依據。
+
+<Callout type="note" title="為什麼要講成資料">
+  如果路由只是寫在函式上面的裝飾器，你就無法回答「這個 path 到底接受哪些 method」。把它想成資料之後，`405` 附帶的那個 `allow` 就有了來源：Server 是照著自己那張表列出可用的 method。
+</Callout>
+
+---
+
+## 02. `{name}` 是樣板，不是比對字串
+
+第二條路由更能看出重點：那條 path 樣板匹配的是**一個任意段落**。`/users/alice`、`/users/ghost`、`/users/delete` 都會命中它，`name` 各自帶進不同的值。
+
+第二單元教過 `@app.get("/items/{item_id}")` 這個寫法。那裡講的是語法；這裡要看的是它的行為——它是樣板匹配，不是字串相等。
+
+<Terminal title="bash — the pattern matched" flavor="output">{`
+> curl -i http://127.0.0.1:8000/users/ghost
+< HTTP/1.1 404 Not Found
+< content-length: 27
+
+{"detail":"User not found"}
+`}</Terminal>
+
+這是關鍵證據：`ghost` 命中了樣板、函式有執行、回 `404` 是**你的程式**決定的。
+
+再看一條完全沒有對應路由的：
+
+<Terminal title="bash — nothing matched at all" flavor="output">{`
+> curl -i http://127.0.0.1:8000/nowhere
+< HTTP/1.1 404 Not Found
+< content-length: 22
+
+{"detail":"Not Found"}
+`}</Terminal>
+
+兩個 `404`，但 Body 不同：
+
+| 你送的路徑 | Status Code | Body | 是誰寫的 |
+| --- | --- | --- | --- |
+| `/users/ghost` | `404` | `{"detail":"User not found"}` | **你的 handler** 判斷資料不存在 |
+| `/nowhere` | `404` | `{"detail":"Not Found"}` | **框架**，因為沒有任何路由命中 |
+
+<Callout type="important" title="Status Code 會騙你，Body 不會">
+  只看數字，你會以為這兩個 `404` 是同一件事。看 Body 就知道：`Not Found` 是框架在路由表裡找不到，`User not found` 是你的函式跑完之後自己拒絕。接下來寫自己的 API 時，讓 `detail` 寫清楚是誰的判斷，Client 才分得出來。
+</Callout>
+
+---
+
+## 03. 四個出口
+
+路由比對不會有第五種結果。把四個出口列全：
+
+| 出口 | 條件 | Status Code | 誰寫的 Body |
+| --- | --- | --- | --- |
+| 1 執行 | method 與 path 都對上路由表 | `200`、`201`，或 handler 自己決定的 `404` | 你的 handler |
+| 2 method 不對 | path 命中，但這個 method 沒登記 | `405` + `allow` | 框架 |
+| 3 path 不對 | 沒有任何路由命中這個 path | `404` `Not Found` | 框架 |
+| 4 Body 先壞 | 還沒比到路由，Body 就解析失敗 | `422` | 框架 |
+
+出口 4 值得注意它的位置：**它發生在比對路由之前。** 你送 `POST /users` 附上一段壞掉的 JSON，路由表根本沒被查到。單元 07 會把這一條拆開講。
+
+現在把出口 1 與出口 2 都跑一次。出口 1 讀得到資料：
+
+<Terminal title="bash — outlet 1, the member exists" flavor="output">{`
+> curl -i http://127.0.0.1:8000/users/alice
+< HTTP/1.1 200 OK
+
+{"name":"Alice","note":"First HTTP example"}
+`}</Terminal>
+
+出口 2 換一個 method：
+
+<Terminal title="bash — outlet 2, method not registered" flavor="output">{`
+> curl -i -X DELETE http://127.0.0.1:8000/users/alice
+< HTTP/1.1 405 Method Not Allowed
+< allow: GET
+< content-length: 31
+
+{"detail":"Method Not Allowed"}
+`}</Terminal>
+
+`allow: GET` 是 Server 照著路由表告訴你的：這條 path 登錄過的 method 只有 `GET`。`def get_user()` 沒有執行。
+
+---
+
+## 04. 同一個 405，兩種原因
+
+`allow` 這個 Header 值得再往下看一層。把兩個 `405` 並排：
+
+<Terminal title="bash — two 405, two different allow values" flavor="output">{`
+> curl -i -X DELETE http://127.0.0.1:8000/users/alice
+< HTTP/1.1 405 Method Not Allowed
+< allow: GET
+
+> curl -i http://127.0.0.1:8000/users
+< HTTP/1.1 405 Method Not Allowed
+< allow: POST
+`}</Terminal>
+
+第一個是**成員**路徑 `/users/alice`：它登錄過，只接受 `GET` 讀取。
+第二個是**集合**路徑 `/users`：它登錄過，但只接受 `POST` 建立。
+
+為什麼 `/users` 不接受 `GET`？因為這支練習 API 還沒有「列出全部 users」的路由。你想讀整組使用者時框架本來該給你一個清單，但那一條還沒被寫出來。
+
+<Callout type="important" title="Client 遇到 405 的第一個動作是讀 allow">
+  `405` 本身就是答案的一半。它附帶的 `allow` 才是另一半——直接告訴你這個目標能用哪些 method。與其猜 Client 端要換哪個 method，不如讀 Server 給的線索。
+</Callout>
+
+---
+
+## 05. 送出之前先寫下答案
+
+路由表是資料，意味著任何 `(method, path)` 組合的結果都是可預測的。先寫下你的預測，再送出來對答案：
+
+| 你的預測 | 你送出的 Request | 預測 Status Code | 預測 Body 裡有什麼 |
+| --- | --- | --- | --- |
+| 1 | `GET /users/alice` | `200` | 使用者資料 |
+| 2 | `GET /users/ghost` | `404` | `User not found`（handler 寫的） |
+| 3 | `GET /nowhere` | `404` | `Not Found`（框架寫的） |
+| 4 | `DELETE /users/alice` | `405` | `allow: GET` |
+| 5 | `PUT /users/alice` | `405` | `allow: GET` |
+| 6 | `GET /users` | `405` | `allow: POST` |
+| 7 | `POST /users` 帶合法 JSON | `201` | 你送進去的內容 |
+
+第 5 與第 6 特別值得先想：它們的 `405` 看起來一樣，但 `allow` 不同，代表 Server 認為該換 method 的方向不同。
+
+這不是考試技巧。以後你寫 Client 端、要處理別人的 API 時，同樣的表格就是你的除錯工具——**先算，再送**，比送出之後猜回應快得多。
+
+---
+
+## 06. 終端實戰驗證：四個出口各跑一次
+
+四個出口各跑一次。兩個 Terminal 都開著，每一條指令送出之後，都去 Terminal 1 看對應的 access log 有沒有出現。
+
+### 第一步：出口 1，命中並執行
+
+<Terminal title="bash — outlet 1">{`
+curl -i http://127.0.0.1:8000/users/alice
+`}</Terminal>
+
+觀察 `200`，Body 是使用者資料。
+
+### 第二步：出口 3，路由表裡沒有這條
+
+<Terminal title="bash — outlet 3">{`
+curl -i http://127.0.0.1:8000/nowhere
+`}</Terminal>
+
+觀察 `404`，Body 是框架寫的 `Not Found`。
+
+### 第三步：出口 2，method 沒登記
+
+<Terminal title="bash — outlet 2">{`
+curl -i -X DELETE http://127.0.0.1:8000/users/alice
+curl -i http://127.0.0.1:8000/users
+`}</Terminal>
+
+觀察兩個 `405`，`allow` 分別是 `GET` 與 `POST`。Terminal 1 只會印 access log，不會有 traceback—— 因為函式沒有執行。
+
+### 第四步：出口 4，Body 在比對路由之前就壞掉
+
+<Terminal title="bash — outlet 4" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8000/users \\
+>   -H 'Content-Type: application/json' \\
+>   -d '{"name": "bob"'
+< HTTP/1.1 422 Unprocessable Entity
+
+{"detail":[{"type":"json_invalid","loc":["body",14],
+  "msg":"JSON decode error","input":{},
+  "ctx":{"error":"Expecting ',' delimiter"}}]}
+`}</Terminal>
+
+這裡沒有 `allow`，也沒有路由比對的痕跡：`/users` 這條路由是存在而且接受 `POST` 的，但壞掉的 Body 在比對之前就被擋下來了。單元 07 會說明這一步是誰在做。
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下操作並記錄成果：
+
+1. 先寫下預測再送出：從下表任選五組 `(method, path)`，寫下你預期的 Status Code 與 Body，再執行 `curl -i` 驗證。
+
+   | 候選組合 | 你的預測 Status Code | 你的預測 Body |
+   | --- | --- | --- |
+   | `GET /users/alice` | | |
+   | `GET /users/ghost` | | |
+   | `GET /nowhere` | | |
+   | `DELETE /users/alice` | | |
+   | `PUT /users/alice` | | |
+   | `GET /users` | | |
+   | `POST /users`（合法 JSON） | | |
+
+2. 對每一組截圖，必須包含 Request Line、Status Line 與完整 Body。預測與實際不符的組別，額外截 Terminal 1 的 access log。
+3. 截圖 `GET /users/ghost` 與 `GET /nowhere` 兩個回應並排，回答一句話：為什麼兩個都是 `404`，但 Body 的 `detail` 不一樣？這一句話要寫出「是誰寫的」。
+4. 送出 `curl -i -X DELETE http://127.0.0.1:8000/users/alice` 與 `curl -i http://127.0.0.1:8000/users`，截圖必須包含兩個 `allow` Header 的值，並回答：這兩個 `405` 有什麼不同？為什麼會不同？
+5. 送出 `curl -i -X POST http://127.0.0.1:8000/users -H 'Content-Type: application/json' -d '{"name": "bob"'`，截圖必須包含 `422`，並在筆記中指出：這次的路由有沒有被查到？
+
+把作業截圖與簡答筆記存入 `exercises/04-routing-handler/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
+
+### 本單元使用的正本
+
+- [RFC 9110 §9.1 — Overview of Methods](https://www.rfc-editor.org/rfc/rfc9110.html#name-overview)
+- [RFC 9110 §15.5.5 — 404 Not Found](https://www.rfc-editor.org/rfc/rfc9110.html#name-404-not-found)
+- [RFC 9110 §15.5.6 — 405 Method Not Allowed](https://www.rfc-editor.org/rfc/rfc9110.html#name-405-method-not-allowed)
+- [RFC 9110 §10.2.2 — Allow](https://www.rfc-editor.org/rfc/rfc9110.html#name-allow)
+- [FastAPI — Bigger Applications and path routing](https://fastapi.tiangolo.com/tutorial/bigger-applications/)
