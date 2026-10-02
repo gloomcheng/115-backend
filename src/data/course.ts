@@ -24,9 +24,9 @@ export const chapters: Chapter[] = [
     code: 'PROTOCOL',
     title: '網路原理與封包傳遞',
     english: 'Protocol & Wire Transmission',
-    range: 'Week 01 – 07',
+    range: 'Week 01 – 04',
     summary:
-      '先讀懂封包，再看後端怎麼接住請求：URL 的零件、請求的生命週期、路由表、資源建模與 JSON 驗證。',
+      '先讀懂封包，再看後端怎麼接住請求：URL 的零件、請求的生命週期、路由表，以及你交付的第一段程式。',
     aiFocus: '模型可以提出 handler，但你要用 curl 讀出 Server 真正回了什麼。',
     weeks: [
       {
@@ -53,15 +53,25 @@ export const chapters: Chapter[] = [
       {
         w: 4,
         dates: '09/28–10/04',
-        title: '路由與 Handler — path 與 method 對到哪一段程式',
-        href: '/lessons/04-routing-handler',
+        title: '路由與你的第一條程式 — path、method 與 /health',
+        href: '/lessons/04-routing-and-first-endpoint',
         note: '09/28 教師節放假',
       },
+    ],
+  },
+  {
+    num: '02',
+    code: 'DATA',
+    title: '資料、介面與錯誤契約',
+    english: 'Persistence, Interface & Error Contracts',
+    range: 'Week 05 – 10',
+    summary: '先讓資料活過行程結束，再把資源建模成路由，最後把驗證失敗變成可被程式讀懂的錯誤契約。',
+    aiFocus: '模型可以提資料操作，但你要用測試確認資料沒有多一筆或少一筆。',
+    weeks: [
       {
         w: 5,
         dates: '10/05–10/11',
-        title: '寫出第一個 GET /health — 你交付的第一段程式',
-        href: '/lessons/05-first-health-endpoint',
+        title: '存資料 — File 跟 SQLite 差在哪',
         note: '10/09 國慶補假',
       },
       {
@@ -76,21 +86,9 @@ export const chapters: Chapter[] = [
         title: 'JSON 與執行期驗證 — 422 是怎麼來的',
         href: '/lessons/07-json-validation',
       },
-    ],
-  },
-  {
-    num: '02',
-    code: 'PERSISTENCE',
-    title: '關聯式資料庫與 ACID',
-    english: 'Relational Model & SQLite Engine',
-    range: 'Week 08 – 11',
-    summary: '用 SQLite 練習交易與 CRUD，觀察一次寫入成功或回滾時，資料實際留下什麼。',
-    aiFocus: '模型可以提資料操作，但你要用測試確認資料沒有多一筆或少一筆。',
-    weeks: [
-      { w: 8, dates: '10/26–11/01', title: '存資料 — File 跟 SQLite 差在哪' },
+      { w: 8, dates: '10/26–11/01', title: 'CRUD：新增、查詢、修改、刪除' },
       { w: 9, dates: '11/02–11/08', title: '期中考試週', exam: true, note: '期中考週' },
-      { w: 10, dates: '11/09–11/15', title: 'CRUD：新增、查詢、修改、刪除' },
-      { w: 11, dates: '11/16–11/22', title: '驗證與錯誤' },
+      { w: 10, dates: '11/09–11/15', title: '驗證與錯誤' },
     ],
   },
   {
@@ -98,24 +96,25 @@ export const chapters: Chapter[] = [
     code: 'CRUCIBLE',
     title: '資訊安全與身份認證',
     english: 'OWASP Top 10 & Auth Pipeline',
-    range: 'Week 12 – 13',
+    range: 'Week 11 – 12',
     summary: '對齊 OWASP Top 10：JWT 認證、中介軟體的權限邊界，以及密鑰不外洩的規則。',
     aiFocus: '模型看不到密鑰，也不能替你決定誰有權限；認證與授權仍由 Server 負責。',
     weeks: [
-      { w: 12, dates: '11/23–11/29', title: '登入 — 身份認證與 JWT（401 跟 403 差在哪）' },
-      { w: 13, dates: '11/30–12/06', title: '中介軟體、權限與密鑰邊界' },
+      { w: 11, dates: '11/16–11/22', title: '登入 — 身份認證與 JWT（401 跟 403 差在哪）' },
+      { w: 12, dates: '11/23–11/29', title: '中介軟體、權限與密鑰邊界' },
     ],
   },
   {
     num: '04',
     code: 'CONTRACT',
-    title: '介面契約與 API 家族',
-    english: 'Interface Contracts & API Families',
-    range: 'Week 14',
+    title: '契約與對外介面',
+    english: 'Contracts & External Interfaces',
+    range: 'Week 13 – 14',
     summary:
-      '看懂 SOAP、REST、GraphQL、gRPC、tRPC 五種契約怎麼表示型別與錯誤，以及為什麼 400 與 409 與 422 沒有標準答案。',
+      '先用測試把你自己的契約變成門禁，再讀別人的契約：SOAP、REST、GraphQL、gRPC、tRPC 怎麼表示型別與錯誤，以及為什麼 400 與 409 與 422 沒有標準答案。',
     aiFocus: '模型可以照抄一種錯誤格式；你要能指出對方的契約少了什麼。',
     weeks: [
+      { w: 13, dates: '11/30–12/06', title: '測試 — 讓你交付的契約每次都會被檢查' },
       {
         w: 14,
         dates: '12/07–12/13',

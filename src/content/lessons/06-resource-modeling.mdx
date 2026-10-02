@@ -213,7 +213,7 @@ curl -i -X DELETE http://127.0.0.1:8000/users/bob
   <text x="790" y="382" text-anchor="middle" fill="#274f67" font-size="13">沒有這個目標</text>
 </svg>
 
-`GET /users` 回 `405` 而不是 `200`，也值得停下來想一秒：這條集合路徑目前只接受 `POST`，因為這支練習 API 還沒有「列出全部 users」的路由。缺的那條路由會在單元 04 路由與單元 10 CRUD 補上。你現在看到的 `405 allow: POST`，就是 Server 在誠實地說明它認得這條路徑、但還沒有這個 method。
+`GET /users` 回 `405` 而不是 `200`，也值得停下來想一秒：這條集合路徑目前只接受 `POST`，因為這支練習 API 還沒有「列出全部 users」的路由。缺的那條路由會在單元 08 CRUD 補上。你現在看到的 `405 allow: POST`，就是 Server 在誠實地說明它認得這條路徑、但還沒有這個 method。
 
 ---
 
@@ -232,7 +232,7 @@ curl -i -X DELETE http://127.0.0.1:8000/users/bob
 RFC 9110 對 `201` 的規定是：Server 應該在 `Location` Header 回報新資源的 URL，好讓 Client 知道剛建立的東西住在哪裡。這份回應沒有 `Location`。
 
 <Callout type="note" title="為什麼沒有 Location">
-  框架不會替你猜新資源的 URL。這個練習 API 用送進來的 `name` 當識別，但它沒有把 `/users/bob` 寫進 `Location`。要回這個 Header，必須由 route 自己決定；寫法在單元 04。
+  框架不會替你猜新資源的 URL。這個練習 API 用送進來的 `name` 當識別，但它沒有把 `/users/bob` 寫進 `Location`。要回這個 Header，必須由 route 自己決定；寫法在單元 08。
 </Callout>
 
 沒有 `Location` 的實際後果很具體：Client 只能從 Body 的欄位猜剛才那筆資源的識別。如果 Body 沒有回識別欄位（例如回 `{"ok":true}`），Client 就永遠拿不到 `bob` 這個位置，下一步連 `GET /users/bob` 都組不出來。
@@ -283,7 +283,7 @@ echo
 第三行是最後的狀態：只剩一份 `carol`，而且是第二次送的那份。這支練習 API 用 `name` 當 key，第二次的 `POST` 是「再執行一次建立」，所以覆蓋了第一次。
 
 <Callout type="note" title="這不是 bug，是 POST 的定義">
-  `POST` 沒有冪等性的保證。網路逾時、使用者重按按鈕、proxy 自動重試，都可能讓同一份 Request 被送兩次。真實系統的兩種做法：用 auto-increment id 或 UUID 當識別，讓每次建立都落在新的位置；針對付款、下單這類重複送出風險高的動作，另外帶一把 idempotency key，讓 Server 認得「這是同一次請求」。資料庫那一段在單元 08 與單元 10。
+  `POST` 沒有冪等性的保證。網路逾時、使用者重按按鈕、proxy 自動重試，都可能讓同一份 Request 被送兩次。真實系統的兩種做法：用 auto-increment id 或 UUID 當識別，讓每次建立都落在新的位置；針對付款、下單這類重複送出風險高的動作，另外帶一把 idempotency key，讓 Server 認得「這是同一次請求」。資料庫那一段在單元 05 與單元 08。
 </Callout>
 
 用不同名字建立三次，就是三筆：

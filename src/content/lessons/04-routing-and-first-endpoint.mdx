@@ -1,7 +1,11 @@
 ---
-title: "路由與 Handler — path 與 method 對到哪一段程式"
+title: "路由與你的第一條程式 — path、method 與 /health"
 week: 4
-description: "Server 只有一張路由表。method 與 path 的每一種組合，都會落到四個結果之一。"
+description: "Server 只有一張路由表。你先加兩筆資料進去，再預測每一種 method 與 path 的組合會落到哪個結果。"
+goals:
+  - "自己寫出第一條路由，並理解它是程式碼還是資料"
+  - "在送出 Request 之前就預測 Status Code 與 Body"
+  - "寫出一條給機器讀的 /health，並說明它的四列契約"
 ---
 
 import Terminal from '../../components/Terminal.astro';
@@ -9,7 +13,9 @@ import Callout from '../../components/Callout.astro';
 
 第三單元說了五個階段，比對路由表是第四個。那一段值得整節講：它是「你送出 Request 之前，就已經知道會回什麼」的地方。
 
-兩個 Terminal 都開著。先送出兩個**結果不同的 404**：
+前兩課你都在讀別人寫好的 API。這一課你會自己動手——**先加兩筆路由，再用你寫的那張表去預測結果。**
+
+兩個 Terminal 都開著。先送出兩個**結果不同的 404**，它們是這一課的證據：
 
 <Terminal title="bash — two 404, two different bodies">{`
 curl -i http://127.0.0.1:8000/nowhere
@@ -88,7 +94,57 @@ def create_user(body: dict):
 
 ---
 
-## 02. `{name}` 是樣板，不是比對字串
+## 02. 先寫一條你自己的路由
+
+到目前為止你都在讀別人的路由表。現在把 `main.py` 打開，在 `health()` **上面**加兩條自己的路由——加在上方是為了讓它們比現有的 `/users/{name}` 先被比對到，這一課的觀察才乾淨：
+
+<Terminal title="Terminal 1 — edit main.py, above health()" flavor="output">{`
+@app.get("/notes")
+def list_notes():
+    return {"notes": ["buy milk"]}
+
+
+@app.get("/notes/{note_id}")
+def read_note(note_id: int):
+    return {"id": note_id, "text": "buy milk"}
+
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+`}</Terminal>
+
+`fastapi dev` 會自動重載。存檔後立刻在 Terminal 2 送一次：
+
+<Terminal title="Terminal 2 — your first route" flavor="output">{`
+> curl -i http://127.0.0.1:8000/notes
+< HTTP/1.1 200 OK
+< content-length: 30
+
+{"notes":["buy milk"]}
+`}</Terminal>
+
+**你剛剛寫了第一條路由。** 三行函式，加上一個裝飾器。這就是整個「後端」最小的形狀。
+
+現在做一個小實驗，把第一條改名，再送一次：
+
+<Terminal title="Terminal 2 — the path is part of the identity" flavor="output">{`
+> curl -i http://127.0.0.1:8000/todos
+< HTTP/1.1 404 Not Found
+< content-length: 22
+
+{"detail":"Not Found"}
+`}</Terminal>
+
+只改了 `@app.get("/notes")` 裡的字串，路由就不存在了。**path 不是給人看的裝飾，是路由表的鍵。**
+
+<Callout type="important" title="為什麼要先寫再讀">
+  如果你只是讀別人的表，「路由是一筆資料」會是一個你記住的句子。你自己加了一筆、又把它改錯一次之後，它才變成你能在送出 Request 之前拿來預測的工具。下一節的預測表之所以成立，是因為那張表裡現在有你自己的兩筆。
+</Callout>
+
+---
+
+## 03. `{name}` 是樣板，不是比對字串
 
 第二條路由更能看出重點：那條 path 樣板匹配的是**一個任意段落**。`/users/alice`、`/users/ghost`、`/users/delete` 都會命中它，`name` 各自帶進不同的值。
 
@@ -127,7 +183,7 @@ def create_user(body: dict):
 
 ---
 
-## 03. 四個出口
+## 04. 四個出口
 
 路由比對不會有第五種結果。把四個出口列全：
 
@@ -164,7 +220,7 @@ def create_user(body: dict):
 
 ---
 
-## 04. 同一個 405，兩種原因
+## 05. 同一個 405，兩種原因
 
 `allow` 這個 Header 值得再往下看一層。把兩個 `405` 並排：
 
@@ -189,7 +245,7 @@ def create_user(body: dict):
 
 ---
 
-## 05. 送出之前先寫下答案
+## 06. 送出之前先寫下答案
 
 路由表是資料，意味著任何 `(method, path)` 組合的結果都是可預測的。先寫下你的預測，再送出來對答案：
 
@@ -209,7 +265,132 @@ def create_user(body: dict):
 
 ---
 
-## 06. 終端實戰驗證：四個出口各跑一次
+## 07. `/health`：你交付的第一份契約
+
+預測表算得準，是因為路由表對你不再是黑盒子。但還有一件事沒解決：**你寫的東西到底被誰讀？**
+
+這張路由表答得出 Status Code，答不出別的事：你寫的東西到底被誰讀？被瀏覽器讀的頁面，錯了有人立刻發現；被程式讀的端點，錯了不會有提示。`/health` 就是第二種。
+
+這就是為什麼要有 `/health`。先看你剛才那兩條 `/notes` 路由：它們有誰在讀？答應過誰？答不出來。
+
+<Terminal title="examples/http-api/compose.yaml — the healthcheck test" flavor="output">{`
+healthcheck:
+  test:
+    - python
+    - -c
+    - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+  interval: 30s
+  timeout: 3s
+  retries: 3
+  start_period: 10s
+`}</Terminal>
+
+這段程式不會畫任何東西。它只做一件事：送出 Request，拿到 `200` 就當作服務還活著，任何例外就當作不健康。你可以把它複製出來自己跑：
+
+<Terminal title="bash — run the probe yourself">{`
+python -c "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/health'); print(r.status, r.read())"
+`}</Terminal>
+
+輸出是 `200 b'{"ok":true}'`。這就是探測程式看到的全部資訊。
+
+現在做這一課最後一個實驗。把 `main.py` 的 `health()` 改成 `return {"ok": "yes"}`：
+
+<Terminal title="Terminal 2 — a change that looks fine" flavor="output">{`
+> curl -i http://127.0.0.1:8000/health
+< HTTP/1.1 200 OK
+
+{"ok":"yes"}
+`}</Terminal>
+
+狀態碼還是 `200`。人看到會覺得「服務好像還活著」。
+
+但探測程式正在做這件事：
+
+<Terminal title="bash — what the probe judges" flavor="output">{`
+$ python -c "
+import urllib.request, json
+r = urllib.request.urlopen('http://127.0.0.1:8000/health')
+body = json.load(r)
+print('status ok:', r.status == 200)
+print('body ok  :', body.get('ok') is True)
+"
+status ok: True
+body ok  : False
+`}</Terminal>
+
+**`status ok: True`、`body ok: False`。** 你交付的東西在人類看來正常，在真正使用它的程式看來是壞的。**請立刻改回 `{"ok": True}`。**
+
+<Callout type="warning" title="這個錯誤特別難抓的原因">
+  它不會在你的畫面上跳出來。部署流程照跑、頁面照樣開、log 也不會紅。只有當探測程式在某一個夜裡判定「這個 container 不健康」並把它重啟時，你才會知道。
+</Callout>
+
+探測程式判定完成之後，第二個問題才出現：健康檢查該檢查多少，答案盡量少，原因在下一段。
+
+<Terminal title="what a too-broad health check causes" flavor="output">{`
+探測程式 ──> GET /health
+              │
+              ├─ 檢查程式本身存活        ── 必須做
+              ├─ 檢查資料庫連線          ── 不要放進來
+              └─ 檢查外部 API            ── 更不要放進來
+
+資料庫故障 → 回 500 → 探測程式判定整個服務不健康
+            → 平台重啟 container → 連線全斷，資料庫恢復也沒用
+`}</Terminal>
+
+原因很單純：**Container 被重啟時，裡面正在處理的 Request 全部中斷。** 資料庫短暫故障不該讓你的服務被重啟，因為重啟不會讓資料庫恢復，只會讓你連資料庫的能力暫時歸零。
+
+| 該放進 `/health` | 不該放進 `/health` |
+| --- | --- |
+| 程式本身還能接受 Request 並回應 | 資料庫、外部 API、第三方服務 |
+| 回應夠快（這支 API 的十次量測都在 `0.08s` 內） | 任何需要等待的檢查 |
+| 不改動任何狀態（單元 06 的 safe method） | 會寫入或觸發工作的檢查 |
+
+第三個問題：method 也在契約裡。第四課說過 `405` 會附上 `allow`。`/health` 只登錄了 `GET`，所以：
+
+<Terminal title="bash — the method is part of the contract" flavor="output">{`
+> curl -I http://127.0.0.1:8000/health
+< HTTP/1.1 405 Method Not Allowed
+< allow: GET
+
+{"detail":"Method Not Allowed"}
+`}</Terminal>
+
+`curl -I` 送的是 `HEAD`，回 `405`。很多工具習慣用 `HEAD` 輕量探測一個 URL，但這條路由沒有答應過 `HEAD`。要讓它也能用，得明確登錄：
+
+<Terminal title="main.py — adding HEAD explicitly" flavor="output">{`
+@app.get("/health")
+@app.head("/health")
+def health():
+    return {"ok": True}
+`}</Terminal>
+
+這一行差別，就是「契約裡有這件事」與「契約裡沒這件事」的差別。
+
+把這節合起來，`GET /health` 答應了四件事：
+
+| 契約 | 規格 | 違約的後果 |
+| --- | --- | --- |
+| 路徑 | 固定是 `/health` | 探測程式拿到 `404`，判定不健康 |
+| 方法 | 只接受 `GET` | 送 `HEAD` 拿到 `405`，判定不健康 |
+| 狀態碼 | 正常時固定 `200` | 任何其他數字，判定不健康 |
+| Body | 固定是 `{"ok":true}` | `ok` 不是布林 `true`，判定不健康 |
+
+<Callout type="important" title="你開始被別人依賴了">
+  你寫的那兩條 `/notes` 路由和這條 `/health`，差別只在有沒有人依賴。前三課你是 API 的使用者；從這一節起，寫在這張表裡的每一列，都是別人會依賴的地方。**改動任何一列，都是 breaking change。**
+</Callout>
+
+這也是為什麼這個 repo 對 `main.py` 有測試。跑一次看看它在檢查什麼：
+
+<Terminal title="bash — the existing test for this route">{`
+cd examples/http-api
+python -m pytest tests/test_main.py -q -k health
+`}</Terminal>
+
+那條測試斷言兩件事：`status_code == 200`，以及 `response.json() == {"ok": True}`。第二個斷言就是上面那個實驗的機器版——它擋下來的正是 `{"ok":"yes"}` 那種看起來沒問題的改動。怎麼自己寫出這種測試，單元 13 會處理。
+
+---
+
+## 08. 終端實戰驗證：四個出口各跑一次
 
 四個出口各跑一次。兩個 Terminal 都開著，每一條指令送出之後，都去 Terminal 1 看對應的 access log 有沒有出現。
 
@@ -257,9 +438,17 @@ curl -i http://127.0.0.1:8000/users
 
 ## 單元實作作業
 
-在本地環境完成以下操作並記錄成果：
+在本地環境完成以下操作並記錄成果。每一部分都對應上面的一節，先做第一部分。
 
-1. 先寫下預測再送出：從下表任選五組 `(method, path)`，寫下你預期的 Status Code 與 Body，再執行 `curl -i` 驗證。
+**第一部分：寫下你自己的兩條路由**
+
+1. 在 `examples/http-api/main.py` 的 `health()` 上方加入 `GET /notes` 與 `GET /notes/{note_id}` 兩條路由（程式碼見第 02 節）。截圖必須包含你新增的那段程式碼，以及 `curl -i http://127.0.0.1:8000/notes` 的 `200` 與完整 Body。
+2. 把 `@app.get("/notes")` 改名成 `"/todos"`，送出 `curl -i http://127.0.0.1:8000/notes` 與 `curl -i http://127.0.0.1:8000/todos`，截圖兩者並排。**改完要改回來。**
+3. 送出 `curl -i 'http://127.0.0.1:8000/notes/abc'`，截圖必須包含 `422` 與 `loc` 指向 `note_id`。回答：這次的路由有沒有被查到？
+
+**第二部分：預測別人的路由**
+
+4. 先寫下預測再送出：從下表任選五組 `(method, path)`，寫下你預期的 Status Code 與 Body，再執行 `curl -i` 驗證。
 
    | 候選組合 | 你的預測 Status Code | 你的預測 Body |
    | --- | --- | --- |
@@ -271,12 +460,21 @@ curl -i http://127.0.0.1:8000/users
    | `GET /users` | | |
    | `POST /users`（合法 JSON） | | |
 
-2. 對每一組截圖，必須包含 Request Line、Status Line 與完整 Body。預測與實際不符的組別，額外截 Terminal 1 的 access log。
-3. 截圖 `GET /users/ghost` 與 `GET /nowhere` 兩個回應並排，回答一句話：為什麼兩個都是 `404`，但 Body 的 `detail` 不一樣？這一句話要寫出「是誰寫的」。
-4. 送出 `curl -i -X DELETE http://127.0.0.1:8000/users/alice` 與 `curl -i http://127.0.0.1:8000/users`，截圖必須包含兩個 `allow` Header 的值，並回答：這兩個 `405` 有什麼不同？為什麼會不同？
-5. 送出 `curl -i -X POST http://127.0.0.1:8000/users -H 'Content-Type: application/json' -d '{"name": "bob"'`，截圖必須包含 `422`，並在筆記中指出：這次的路由有沒有被查到？
+5. 對每一組截圖，必須包含 Request Line、Status Line 與完整 Body。預測與實際不符的組別，額外截 Terminal 1 的 access log。
+6. 截圖 `GET /users/ghost` 與 `GET /nowhere` 兩個回應並排，回答一句話：為什麼兩個都是 `404`，但 Body 的 `detail` 不一樣？這一句話要寫出「是誰寫的」。
+7. 送出 `curl -i -X DELETE http://127.0.0.1:8000/users/alice` 與 `curl -i http://127.0.0.1:8000/users`，截圖必須包含兩個 `allow` Header 的值，並回答：這兩個 `405` 有什麼不同？為什麼會不同？
+8. 送出 `curl -i -X POST http://127.0.0.1:8000/users -H 'Content-Type: application/json' -d '{"name": "bob"'`，截圖必須包含 `422`，並在筆記中指出：這次的路由有沒有被查到？
 
-把作業截圖與簡答筆記存入 `exercises/04-routing-handler/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
+第三部分回到第 07 節那個實驗，把你交付的契約改壞一次。
+
+**第三部分：把 `/health` 改壞一次**
+
+9. 把 `main.py` 的 `health()` 暫時改成 `return {"ok": "yes"}`，執行 `curl -i http://127.0.0.1:8000/health` 截圖，再執行一支會讀 Body 的探測程式截圖。兩張都要有，且探測程式那張必須顯示 `status ok: True` 與 `body ok: False`。**截完立刻改回 `{"ok": True}` 並再次截圖。**
+10. 執行 `cd examples/http-api && python -m pytest tests/test_main.py -q`，截圖必須顯示全部通過。在筆記中寫出：第 9 步那個改動為什麼會讓這條測試失敗？
+11. 執行 `curl -f http://127.0.0.1:8000/health; echo $?` 與 `curl -f http://127.0.0.1:8000/healthz; echo $?`，截圖兩次的 exit status。
+12. 用一句話回答：`/health` 為什麼不應該檢查資料庫連線？把答案寫成「重啟之後會發生什麼」。
+
+把作業截圖與簡答筆記存入 `exercises/04-routing-and-first-endpoint/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案，且 `main.py` 已經改回 `{"ok": True}`、路由已改回 `/notes`。
 
 ### 本單元使用的正本
 
@@ -285,3 +483,7 @@ curl -i http://127.0.0.1:8000/users
 - [RFC 9110 §15.5.6 — 405 Method Not Allowed](https://www.rfc-editor.org/rfc/rfc9110.html#name-405-method-not-allowed)
 - [RFC 9110 §10.2.2 — Allow](https://www.rfc-editor.org/rfc/rfc9110.html#name-allow)
 - [FastAPI — Bigger Applications and path routing](https://fastapi.tiangolo.com/tutorial/bigger-applications/)
+- [RFC 9110 §15.3.1 — 200 OK](https://www.rfc-editor.org/rfc/rfc9110.html#name-200-ok)
+- [RFC 9110 §9.3.1 — Safe Methods](https://www.rfc-editor.org/rfc/rfc9110.html#name-safe-methods)
+- [curl — exit codes and `--fail`](https://curl.se/docs/manpage.html#-f)
+- [Docker — HEALTHCHECK reference](https://docs.docker.com/reference/dockerfile/#healthcheck)

@@ -4,7 +4,7 @@
 
 - [x] 單一核心命題：同一個「資料有問題」，`422` 是 Server 讀懂了並拒絕內容，該改資料；`500` 是 Server 自己出錯，該改程式。
 - [x] 第 05 節不是新主題，而是同一個命題的集成難度：狀態碼本身不足以判斷責任與語意，所以不能被依賴。
-- [x] 沒有提前展開 `401` / `403`、schema 驗證框架或 API 版本化，只標示單元 12 與單元 11 的位置。
+- [x] 沒有提前展開 `401` / `403`、schema 驗證框架或 API 版本化，只標示單元 11 與單元 10 的位置。
 
 ## 2. 先備知識與認知盲區
 
@@ -26,9 +26,9 @@
 
 ## 4. 兩段閱讀視窗稽核
 
-- [x] `node scripts/reading-window-harness.mjs --week 4`：35 個相鄰視窗全數通過，0 個 window finding，0 個 concept finding。
+- [x] `node scripts/reading-window-harness.mjs`：35 個相鄰視窗全數通過，0 個 window finding，0 個 concept finding。
 - [x] 銜接點包含實質橋接：「第二種資料錯誤沒有這種精確位置」、「把這三種 422 放在一起看」、「這個正確位置實務上經常被 422 頂替」、「綜合前面四節」。
-- [x] harness 已加入 week 4 的 concept contracts（Content-Type / 422 / 500 / loc）。
+- [x] harness 已加入 week 7 的 concept contracts（Content-Type / 422 / 500 / loc）。
 
 ## 5. 多角色審查
 

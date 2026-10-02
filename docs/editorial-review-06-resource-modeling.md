@@ -25,9 +25,9 @@
 
 ## 4. 兩段閱讀視窗稽核
 
-- [x] `node scripts/reading-window-harness.mjs --week 3`：23 個相鄰視窗全數通過，0 個 window finding，0 個 concept finding。
+- [x] `node scripts/reading-window-harness.mjs`：23 個相鄰視窗全數通過，0 個 window finding，0 個 concept finding。
 - [x] 銜接點是實質的因果橋：「那個會被自動觸發的 GET」、「三次讀取與兩次建立的差別看過了」、「讀取不改狀態，上一步那三行輸出就是證據」。
-- [x] harness 已加入 week 3 的 concept contracts（REST / 405 / Location / idempotent）。
+- [x] harness 已加入 week 6 的 concept contracts（REST / 405 / Location / idempotent）。
 
 ## 5. 多角色審查
 
