@@ -29,7 +29,7 @@ curl -i -X POST http://127.0.0.1:8000/users \\
   -d '{"name":"bob","role":"student"}'
 `}</Terminal>
 
-第一次回 `200`，第二次回 `201`。兩次的 Body 长得完全不同，但你先不要看 Body—— 先看 Request Line 的第一個字。
+第一次回 `200`，第二次回 `201`。兩次的 Body 長得完全不同，但你先不要看 Body—— 先看 Request Line 的第一個字。
 
 <svg viewBox="0 0 940 400" role="img" aria-labelledby="rest-claim-title rest-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
   <title id="rest-claim-title">同一組 users 資源，method 決定 Server 回哪一個 Status Line</title>
@@ -152,8 +152,8 @@ curl -i -X DELETE http://127.0.0.1:8000/users/bob
   另一個走過來的方向是 SOAP。它的 endpoint 幾乎永遠只有一條，動作與參數全部寫在 Body 裡。送一個「建立使用者」的 SOAP 訊息給任何 HTTP 端點：
 
   <Terminal title="bash — a SOAP envelope over curl">{`
-  curl -i -X POST 'https://httpbin.org/anything/users' \
-    -H 'Content-Type: text/xml; charset=utf-8' \
+  curl -i -X POST 'https://httpbin.org/anything/users' \\
+    -H 'Content-Type: text/xml; charset=utf-8' \\
     -d '<?xml version="1.0" encoding="utf-8"?>
   <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="urn:115-backend">
     <soapenv:Body>

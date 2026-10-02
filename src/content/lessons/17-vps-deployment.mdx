@@ -274,7 +274,7 @@ printf 'domain=%s\n' "$DOMAIN"
 
 <Terminal title="Ubuntu — VPS">{`
 cd ~/115-backend/examples/http-api
-sed "s/api\\.example\\.com/$DOMAIN/g" deploy/nginx/backend-api.conf \
+sed "s/api\\.example\\.com/$DOMAIN/g" deploy/nginx/backend-api.conf \\
   | sudo tee /etc/nginx/sites-available/backend-api > /dev/null
 
 sudo ln -sfn /etc/nginx/sites-available/backend-api /etc/nginx/sites-enabled/backend-api
@@ -452,8 +452,8 @@ bun run security:scan
 
 <Terminal title="bash — your development computer">{`
 bun run check:deployment
-bun run check:deployment -- \
-  --url="https://$DOMAIN" \
+bun run check:deployment -- \\
+  --url="https://$DOMAIN" \\
   --expected-ip="$SERVER_IP"
 `}</Terminal>
 
@@ -482,8 +482,8 @@ curl -f http://127.0.0.1:8000/health
 
 <Terminal title="bash — your computer">{`
 curl -f "https://$DOMAIN/health"
-bun run check:deployment -- \
-  --url="https://$DOMAIN" \
+bun run check:deployment -- \\
+  --url="https://$DOMAIN" \\
   --expected-ip="$SERVER_IP"
 `}</Terminal>
 

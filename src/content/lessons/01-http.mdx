@@ -166,7 +166,7 @@ curl -i https://httpbin.org/status/418
 </FieldNote>
 
 <FieldNote marker="402" eyebrow="FIELD NOTE 02" title="402 Payment Required：為數位付費預留的位置">
-  HTTP 早在早期就預留了 `402 Payment Required`，原本設想瀏覽器未來能直接原生處理線上支付。雖然數十年來各家金流服務多半以自訂流程或重定向實現付款，使得 402 在一般網頁中極少出現；但在現代的微服務與 API 計費探索中，這個狀態碼依然是規格中極具啟發性的設計。不論業務流程如何變化，在網路傳輸層次上，它依然遵循標準的 Request 與 Response。
+  HTTP 早在早期就預留了 `402 Payment Required`，原本設想瀏覽器未來能直接原生處理線上支付。雖然數十年來各家金流服務多半以自訂流程或轉址實現付款，使得 402 在一般網頁中極少出現；但在現代的微服務與 API 計費探索中，這個狀態碼依然是規格中極具啟發性的設計。不論業務流程如何變化，在網路傳輸層次上，它依然遵循標準的 Request 與 Response。
 
   來源：[RFC 9110 §15.5.3](https://www.rfc-editor.org/rfc/rfc9110.html#name-402-payment-required)
 </FieldNote>
@@ -224,7 +224,7 @@ curl -v -L https://httpbin.org/status/301
 
 ### 第二步：親手啟動極簡 Python 伺服器
 
-在你的電腦上啟動一個最簡單的本機 HTTP 伺服器，親眼看見 Server 如何監聽與印出連線日誌：
+在你的電腦上啟動一個最簡單的本機 HTTP 伺服器，親眼看見 Server 如何監聽與印出連線紀錄：
 
 <Terminal title="bash — local python server">{`
 python3 -m http.server 8000
@@ -238,7 +238,7 @@ python3 -m http.server 8000
 curl -v http://localhost:8000
 `}</Terminal>
 
-回到執行 Python 的終端機視窗，你會看到一行由 Python 伺服器印出的標準日誌：包含了發出請求的本機 IP、時間戳記、`"GET / HTTP/1.1"` 以及狀態碼 `200`。這代表你已經同時扮演了發送請求的 Client 與處理請求的 Server。
+回到執行 Python 的終端機視窗，你會看到一行由 Python 伺服器印出的標準 log：包含了發出請求的本機 IP、時間戳記、`"GET / HTTP/1.1"` 以及狀態碼 `200`。這代表你已經同時扮演了發送請求的 Client 與處理請求的 Server。
 
 <CurlPlayground client:visible />
 
@@ -249,7 +249,7 @@ curl -v http://localhost:8000
 在本地環境完成以下三個驗證步驟，並整理至指定資料夾：
 
 1. 在 Terminal 分別執行 `curl -v https://httpbin.org/status/200` 與 `curl -v https://httpbin.org/status/404`。截圖必須同時清晰包含 `>` 開頭的 Request Line 與 `<` 開頭的 Status Line。
-2. 執行 `python3 -m http.server 8000`，並用另一個視窗以 `curl -v http://localhost:8000` 訪問。截圖必須拍下 Python 終端機輸出的存取紀錄日誌。
+2. 執行 `python3 -m http.server 8000`，並用另一個視窗以 `curl -v http://localhost:8000` 訪問。截圖必須拍下 Python 終端機輸出的 access log。
 3. 在截圖上清楚標註出：哪一行是由 Client 送出的動詞，哪一行是由 Server 決定的狀態碼。
 
 把截圖與筆記存入 `exercises/01-http/`，並以 Git 提交到你的儲存庫。提交前執行 `git status`，確認只包含作業繳交檔案，保持工作目錄乾淨。

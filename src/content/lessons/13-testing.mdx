@@ -54,7 +54,7 @@ pytest -q
   <rect x="60" y="364" width="820" height="88" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
   <text x="470" y="394" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">兩條測試看到的是同一個壞掉的程式碼，結果相反</text>
   <text x="470" y="422" text-anchor="middle" fill="#274f67" font-size="14">所以「測試通過」不是證據，「測試在程式碼被改壞時失敗」才是</text>
-  <text x="470" y="442" text-anchor="middle" fill="#274f67" font-size="14">要證明一條測試有用，唯一的办法是先把它對著一個壞掉的程式碼跑一次</text>
+  <text x="470" y="442" text-anchor="middle" fill="#274f67" font-size="14">要證明一條測試有用，唯一的辦法是先把它對著一個壞掉的程式碼跑一次</text>
 </svg>
 
 ---
@@ -99,7 +99,7 @@ E         Differing items:
 E         {'ok': 'yes'} != {'ok': True}
 
 tests/test_contract.py:39: AssertionError
-7 passed, 1 failed, 1 warning in 0.84s
+1 failed, 6 passed, 1 warning in 0.28s
 `}</Terminal>
 
 `.F.....` — 七個點中間夾著一個 `F`。**是那個斷言 Body 的測試失敗，不是那個斷言狀態碼的測試。**
@@ -133,7 +133,7 @@ tests/test_contract.py::test_create_without_name_is_rejected PASSED      [100%]
 
 現在做相反的事：把 Body 那一條斷言刪掉，只留狀態碼，然後**再跑一次那個壞掉的程式碼**。手動開一個新的 Terminal，在 `exercises/13-testing` 底下先刪掉 `tests/test_contract.py` 裡的 `test_health_body_is_exactly_ok_true` 整條測試，再執行 `pytest -q`。
 
-`7 passed`。**API 是壞的，整個測試套件全綠。**
+`6 passed`。**API 是壞的，整個測試套件全綠。**
 
 這是初學者最常遇到的情況：一個沒有測試的專案看起來比壞掉的專案還可靠，因為壞掉的專案至少會告訴你哪裡不對。
 
@@ -228,12 +228,12 @@ AssertionError
 
 <Terminal title="bash — run one test by name or by keyword" flavor="output">{`
 > pytest -q -k health
-......                                                                  [100%]
-6 passed, 1 deselected, 1 warning in 1.02s
+...                                                                     [100%]
+3 passed, 4 deselected, 1 warning in 0.23s
 
 > pytest -q -k test_health_returns_200
 .                                                                        [100%]
-1 passed, 6 deselected, 1 warning in 0.84s
+1 passed, 6 deselected, 1 warning in 0.19s
 `}</Terminal>
 
 `-k` 是關鍵字篩選。改壞程式碼之後只跑那一條，比跑全部七條快得多。
@@ -253,7 +253,7 @@ $ pytest -q
 7 passed, 1 warning in 1.00s
 `}</Terminal>
 
-`TestClient` 把 Request 直接送進應用程式本身，**不經過網路、不經過 socket、不佔用 port**。上一課的 `SIGNING_KEY` 也不需要設定，因為 `main.py` 裡沒有那個檢查。
+`TestClient` 把 Request 直接送進應用程式本身，**不經過網路、不經過 socket、不占用 port**。上一課的 `SIGNING_KEY` 也不需要設定，因為 `main.py` 裡沒有那個檢查。
 
 | 你想驗證的 | 用什麼 |
 | --- | --- |
@@ -322,7 +322,7 @@ cd exercises/13-testing
 ```
 
 1. 先跑一次全部：`pytest -q`。截圖必須包含 `7 passed`。這是還沒動過的基準。
-2. 接著跑詳細版：`pytest -v`。截圖必須包含七行測試名稱與 `PASSED`。這張截圖是第 05 節那张契約表的證據來源。
+2. 接著跑詳細版：`pytest -v`。截圖必須包含七行測試名稱與 `PASSED`。這張截圖是第 05 節那張契約表的證據來源。
 3. 現在改 `main.py`：把 `health()` 裡的 `True` 改成 `"yes"`，然後 `pytest -q`。截圖必須包含 `.F.....`、`AssertionError`、`{'ok': 'yes'} != {'ok': True}`。
 4. 然後 `pytest -v`，截圖必須**同時**包含 `test_health_returns_200 PASSED` 與 `test_health_body_is_exactly_ok_true FAILED`。這是整個單元最重要的一張截圖。
 5. 接著只跑那條狀態碼測試：`pytest -q -k test_health_returns_200`。截圖必須包含 `1 passed`。**API 是壞的，這條測試卻過了。**
@@ -353,7 +353,7 @@ cd exercises/13-testing
 
 - [pytest — Get Started](https://docs.pytest.org/en/stable/getting-started.html)
 - [pytest — How to use fixtures](https://docs.pytest.org/en/stable/how-to/fixtures.html)
-- [pytest — How to invoke pytest / `-k` keyword selection](https://docs.pytest.org/en/stable/how-to/invocation.html)
+- [pytest — How to invoke pytest / `-k` keyword selection](https://docs.pytest.org/en/stable/how-to/usage.html)
 - [FastAPI — Testing](https://fastapi.tiangolo.com/tutorial/testing/)
 - [Python — `assert` statement](https://docs.python.org/3/reference/simple_stmts.html#the-assert-statement)
 - [unittest — Assert methods (distinguishing `assertEquals` from `assertTrue`)](https://docs.python.org/3/library/unittest.html#assert-methods)

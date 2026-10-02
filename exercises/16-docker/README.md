@@ -23,7 +23,7 @@ docker images lesson16-base
 
 ```bash
 docker rm -f l16
-docker run -d --name l16 -p 127.0.0.1:8016:8000 lesson16-base
+docker run -d --name l16 -p 127.0.0.1:8016:8000 lesson16-runtime
 docker port l16
 ```
 

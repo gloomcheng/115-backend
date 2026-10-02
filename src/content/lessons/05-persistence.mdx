@@ -171,7 +171,7 @@ CREATE TABLE notes (id INTEGER PRIMARY KEY, text TEXT NOT NULL)
 `NOT NULL`、`INTEGER PRIMARY KEY` 這些規則**寫在檔案裡**，不是寫在你的 Python 程式裡。這是關鍵差異：你的程式結束了、換了一個人維護，規則還在。
 
 <Callout type="note" title="為什麼一個檔案要 8192 bytes">
-  SQLite 把磁碟空間切成固定大小的 page（預設 4 KB），一次配置兩頁。空的資料庫也會佔掉這些空間。檔案大小不是資料量，這一點在單元 08 討論磁碟與容量時會再遇到。
+  SQLite 把磁碟空間切成固定大小的 page（預設 4 KB），一次配置兩頁。空的資料庫也會占掉這些空間。檔案大小不是資料量，這一點在單元 08 討論磁碟與容量時會再遇到。
 </Callout>
 
 ---
@@ -200,7 +200,7 @@ $ sqlite3 notes.db "SELECT id, typeof(id) FROM notes;"
 
 ## 05. 同時寫入：一個拒絕，一個不說話
 
-把第 02 節那個安靜的失敗，和 SQLite 放在同一個實驗裡。`hold_the_lock.py` 讓 writer A 獨佔寫入鎖三秒：
+把第 02 節那個安靜的失敗，和 SQLite 放在同一個實驗裡。`hold_the_lock.py` 讓 writer A 獨占寫入鎖三秒：
 
 <Terminal title="Terminal 1 — take the write lock">{`
 $ python hold_the_lock.py hold

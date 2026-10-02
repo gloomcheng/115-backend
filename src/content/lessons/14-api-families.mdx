@@ -91,8 +91,8 @@ REST 讀資料的方式是：拿一條路徑，決定要什麼。`GET /notes` �
 現在走 GraphQL 那一條路，同一個 API、同一份資料：
 
 <Terminal title="bash — the same need, asked for by name" flavor="output">{`
-> curl -s -X POST http://127.0.0.1:8007/graphql \
->   -H 'Content-Type: application/json' \
+> curl -s -X POST http://127.0.0.1:8007/graphql \\
+>   -H 'Content-Type: application/json' \\
 >   -d '{"query":"{ notes { name title } }"}'
 {"data":{"notes":[{"name":"welcome","title":"Welcome"},{"name":"api","title":"API design"}]}}
 `}</Terminal>
@@ -119,8 +119,8 @@ REST 讀資料的方式是：拿一條路徑，決定要什麼。`GET /notes` �
 現在送一個**明確錯誤**的請求給 GraphQL：查一個不存在的欄位。
 
 <Terminal title="bash — asking for a field that does not exist" flavor="output">{`
-> curl -i -X POST http://127.0.0.1:8007/graphql \
->   -H 'Content-Type: application/json' \
+> curl -i -X POST http://127.0.0.1:8007/graphql \\
+>   -H 'Content-Type: application/json' \\
 >   -d '{"query":"{ notes { name nickname } }"}'
 < HTTP/1.1 200 OK
 
@@ -135,17 +135,25 @@ REST 讀資料的方式是：拿一條路徑，決定要什麼。`GET /notes` �
 
 第三點最容易踩到。單元 07 講過 `4xx` 代表「這一次請求的問題」，而這裡確實是請求的問題，卻回 `200`。
 
-<Callout type="warning" title="GraphQL 為什麼常用 200">
-  因為一個查詢可以在**部分成功**的情況下回傳部分資料加部分錯誤。如果用狀態碼表達，`200` 代表全部成功、`4xx` 代表全部失敗，那「三個欄位成功、一個欄位失敗」就沒有代碼可用了。
+<Callout type="warning" title="這個 200 是這支 Server 的選擇，不是規格的建議">
+  查不到欄位是**驗證失敗**，GraphQL over HTTP 草案對這一類錯誤寫得很明確：「If the request does not pass GraphQL validation, status code `422` **SHOULD** be used.」
 
-  這是一個真實的取捨，不是偷懶。**代價是 Client 不能只看狀態碼判斷成不成功**，必須檢查 Body 裡有沒有 `errors`。這一條要記到實務上：串接別人的 GraphQL API 時，`curl` 加 `-f` 是沒用的。
+  同一份草案也說：「If the GraphQL result does not contain the `data` entry then it represents a GraphQL request error result and the server **MUST** reply with an appropriate `4xx` or `5xx` status code.」這裡的 `data` 正好是 `null`。
+
+  所以**照規格，這一個請求應該是 `422`**，而這支練習 API 回 `200` 是它的作者選的。它之所以能這樣，是因為 `graphql_sync()` 回傳的結果已經把查詢擋掉了，route 只是把結果原樣包成 JSON。
+
+  那麼「GraphQL 都回 200」這個說法從哪來？它來自**另一種錯誤**：查詢本身合法、執行到一半才錯，此時 `data` 有值而且不是 `null`，只有部分欄位失敗。那一種情況才真的沒有狀態碼可用——規格因此建議一個專門的 `294`，理由寫在草案的「Partial success」一節。
+
+  **「三個欄位成功、一個欄位失敗沒有狀態碼可用」是對的，但那只適用於第二種錯誤，不適用於你剛剛送出的這個。**單元 10 講過 `422` 沒有跨實作一致性，這裡是同一個問題換了個家族。
+
+  實務結論不變，而且更重要：**串接別人的 GraphQL API 時，不要只看狀態碼**，一律檢查 Body 裡有沒有 `errors`。`curl -f` 在這裡是沒用的。
 </Callout>
 
 現在做同一件事給 REST。送一個**多餘的欄位**：
 
 <Terminal title="bash — the same mistake, REST's way" flavor="output">{`
-> curl -i -X POST http://127.0.0.1:8007/notes \
->   -H 'Content-Type: application/json' \
+> curl -i -X POST http://127.0.0.1:8007/notes \\
+>   -H 'Content-Type: application/json' \\
 >   -d '{"name":"t1","title":"T","is_admin":true,"colour":"red"}'
 < HTTP/1.1 200 OK
 
@@ -189,8 +197,8 @@ REST 讀資料的方式是：拿一條路徑，決定要什麼。`GET /notes` �
 同一個「找不到」的問題，GraphQL 的答案不是狀態碼：
 
 <Terminal title="bash — GraphQL: a missing record is a value" flavor="output">{`
-> curl -i -X POST http://127.0.0.1:8007/graphql \
->   -H 'Content-Type: application/json' \
+> curl -i -X POST http://127.0.0.1:8007/graphql \\
+>   -H 'Content-Type: application/json' \\
 >   -d '{"query":"{ note(name: \"ghost\") { name } }"}'
 < HTTP/1.1 200 OK
 
@@ -213,7 +221,7 @@ REST 讀資料的方式是：拿一條路徑，決定要什麼。`GET /notes` �
 
 同一件事在 SOAP 那邊又不一樣了。SOAP 在單元 06 出現過一次，那時的重點是「把動作放進 Body」的取捨，而它真正特別的地方是**契約的產生地點**。
 
-SOAP 1.1 讓服務端先產出一份 WSDL（Web Services Description Language），裡面有每個 operation 的名稱、參數型別和回傳型別，然後**各家語言的 client stub 是從那份檔案自動產生的**，不是手寫的。
+SOAP 1.1 讓伺服器端先產出一份 WSDL（Web Services Description Language），裡面有每個 operation 的名稱、參數型別和回傳型別，然後**各家語言的 client stub 是從那份檔案自動產生的**，不是手寫的。
 
 | | 契約的載體 | Client 怎麼知道型別 |
 | --- | --- | --- |
@@ -264,7 +272,7 @@ service NoteService {
 `rpc ListNumbers(ListNotesRequest) returns (ListNotesResponse)` 這一行同時說明了：方法名、輸入型別、輸出型別。**Client stub 是從這裡生成的**，所以 Client 呼叫 `getNote()` 少傳一個參數，編譯期就紅。
 
 <Callout type="note" title="和 SOAP 的差別：誰產生 spec">
-  SOAP 是**服務端**先產出 WSDL，你再去生成 stub。gRPC 是把 `.proto` 當成**原始碼**，Client 與 Server 各自從它生成自己的 stub，兩邊都不手寫。
+  SOAP 是**伺服器端**先產出 WSDL，你再去生成 stub。gRPC 是把 `.proto` 當成**原始碼**，Client 與 Server 各自從它生成自己的 stub，兩邊都不手寫。
 
   這是「contract-first」和「code-first」的差別。你在 `trpc-contract.ts` 裡看到的正是 code-first：契約寫在 Server 的 router 裡，Client 的型別由 TypeScript **推導**出來，所以不需要產生器，但要求兩端同語言同專案。
 
@@ -279,13 +287,13 @@ service NoteService {
 > curl -s http://127.0.0.1:8007/notes | wc -c
 161
 
-> curl -s -X POST http://127.0.0.1:8007/graphql \
->   -H 'Content-Type: application/json' \
+> curl -s -X POST http://127.0.0.1:8007/graphql \\
+>   -H 'Content-Type: application/json' \\
 >   -d '{"query":"{ notes { name title } }"}' | wc -c
 119
 
-> curl -s -X POST http://127.0.0.1:8007/graphql \
->   -H 'Content-Type: application/json' \
+> curl -s -X POST http://127.0.0.1:8007/graphql \\
+>   -H 'Content-Type: application/json' \\
 >   -d '{"query":"{ notes { name title tags } }"}' | wc -c
 170
 `}</Terminal>
@@ -358,6 +366,7 @@ service NoteService {
 - [GraphQL — Introduction to GraphQL / Learn Schema](https://graphql.org/learn/schema/)
 - [GraphQL — Execution and Responses（`errors` 與 `data` 的並存規則）](https://graphql.org/learn/response/)
 - [SOAP 1.1 Note（`Envelope` 與 `Fault` 的結構定義）](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/)
+- [W3C — Web Services Description Language (WSDL) 1.1（`portType`、`message` 等介面定義）](https://www.w3.org/TR/wsdl/)
 - [Protocol Buffers — Language Guide（proto3）](https://protobuf.dev/programming-guides/proto3/)
 - [gRPC — Core Concepts（`.proto` 與 stub 產生）](https://grpc.io/docs/what-is-grpc/core-concepts/)
 - [tRPC — Server routers](https://trpc.io/docs/server/routers)

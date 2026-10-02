@@ -107,7 +107,7 @@ export const interactiveCopy = {
         role: '監聽連線埠 (Port)',
         summary: '指定本機伺服器在 8000 通訊門牌待命，省略不寫時預設亦為 8000。',
         detail:
-          '若 8000 已被其他程式佔用，可以自由改為 8080 或 3000 等其他通訊埠（例如 python3 -m http.server 8080）。',
+          '若 8000 已被其他程式占用，可以自由改為 8080 或 3000 等其他通訊埠（例如 python3 -m http.server 8080）。',
       },
     ],
   },

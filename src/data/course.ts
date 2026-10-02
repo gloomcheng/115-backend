@@ -105,7 +105,7 @@ export const chapters: Chapter[] = [
   {
     num: '03',
     code: 'CRUCIBLE',
-    title: '資訊安全與身份認證',
+    title: '資訊安全與身分認證',
     english: 'OWASP Top 10 & Auth Pipeline',
     range: 'Week 11 – 12',
     summary: '對齊 OWASP Top 10：JWT 認證、中介軟體的權限邊界，以及密鑰不外洩的規則。',
@@ -114,7 +114,7 @@ export const chapters: Chapter[] = [
       {
         w: 11,
         dates: '11/16–11/22',
-        title: '登入 — 身份認證與 JWT',
+        title: '登入 — 身分認證與 JWT',
         href: '/lessons/11-auth',
       },
       {
@@ -210,7 +210,7 @@ export const aiCollaboration = {
     {
       number: '03',
       title: '模型提案，Server 決定',
-      detail: '模型可以提出程式或 tool call，但 schema、身份、授權與 allowlist 要在模型外檢查。',
+      detail: '模型可以提出程式或 tool call，但 schema、身分、授權與 allowlist 要在模型外檢查。',
       evidence: '留下：diff、權限判斷與執行結果',
     },
     {

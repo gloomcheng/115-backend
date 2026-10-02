@@ -17,7 +17,7 @@ AI 工程不是把 prompt 寫得漂亮。它是把一個會產生機率性輸出
 </Callout>
 
 <Callout type="warning" title="把這四條規則帶回 backend">
-  這門課允許你使用 AI，但不把責任交給模型。先看需求與上下文，再問模型；不要貼上 `.env`、API key、Token 或個人資料；模型提出的 patch 或 tool call 要在模型外通過 schema、身份與權限檢查；最後用測試、`curl` 與 log 證明結果，並說明 AI 幫了哪裡。這套規則參考[臺大生成式 AI 工具之教學因應措施](https://www.dlc.ntu.edu.tw/ai-tools/) 與 [數位發展部 AI 產業人才認定指引](https://moda.gov.tw/ADI/services/publications/19692)。
+  這門課允許你使用 AI，但不把責任交給模型。先看需求與上下文，再問模型；不要貼上 `.env`、API key、Token 或個人資料；模型提出的 patch 或 tool call 要在模型外通過 schema、身分與權限檢查；最後用測試、`curl` 與 log 證明結果，並說明 AI 幫了哪裡。這套規則參考[臺大生成式 AI 工具之教學因應措施](https://www.dlc.ntu.edu.tw/ai-tools/) 與 [數位發展部 AI 產業人才認定指引](https://moda.gov.tw/ADI/services/publications/19692)。
 </Callout>
 
 ## 01. 為什麼文字要切成 token？
@@ -414,7 +414,7 @@ PY
 
 ## 12. 為什麼需要 tool calling？
 
-模型不能直接修改資料庫、讀取檔案或部署服務。它只能提出一個結構化的 tool call；真正的 Server 必須驗證 schema、身份與權限，再決定是否執行。
+模型不能直接修改資料庫、讀取檔案或部署服務。它只能提出一個結構化的 tool call；真正的 Server 必須驗證 schema、身分與權限，再決定是否執行。
 
 <svg viewBox="0 0 760 190" role="img" aria-labelledby="ai-q12-title ai-q12-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
   <title id="ai-q12-title">ELI5 tool calling 是模型提案，Server 做驗證與執行</title>
@@ -509,7 +509,7 @@ PY
   <text x="632" y="157" text-anchor="middle" fill="#075486" font-size="14">delete → deny by default</text>
 </svg>
 
-系統的身份驗證、授權、檔案權限與資料庫交易不能交給 prompt 保證。Prompt 是提示，不是 security boundary。
+系統的身分驗證、授權、檔案權限與資料庫交易不能交給 prompt 保證。Prompt 是提示，不是 security boundary。
 
 <Terminal title="bash — toy permission gate">{`
 python3 - <<'PY'

@@ -1,5 +1,5 @@
 ---
-title: "登入 — 身份認證與 JWT"
+title: "登入 — 身分認證與 JWT"
 week: 11
 description: "401 問的是「你是誰」，403 問的是「你能不能做」。而 JWT 沒有加密，只簽名。"
 ---
@@ -243,7 +243,9 @@ def read_token(token: str) -> dict:
 | 有效但權限不足 | `403` | **沒有** | 使用者要換權限，或聯絡管理員 |
 
 <Callout type="important" title="Header 的差別不是裝飾，是規格要求">
-  RFC 9110 規定：Server 回 `401` 時 **MUST** 送出 `WWW-Authenticate`，說明要用哪種認證方式。`403` 沒有這項要求——而且不該有，因為它是認證成功之後的判斷，沒有「你該換一種方式認證」的意思。
+  RFC 9110 §15.5.2 規定：Server 回 `401` 時 **MUST** 送出 `WWW-Authenticate`，說明要用哪種認證方式。`403` 沒有這項**要求**——§15.5.4 完全沒有提到這個 Header。
+
+  規格也沒有禁止它在 `403` 上出現。§11.6.1 寫的是「A server **MAY** generate a WWW-Authenticate header field in other response messages」，也就是說別的回應可以帶它。**所以正確的說法是「`401` 必須帶、`403` 不要求帶」，而不是「`403` 不該帶」。**我們的 API 選擇不带，而 Client 不該把這個選擇當成保證。
 
   Client 端可以用這個 Header 決定行為：看到 `401` 就跳登入頁，看到 `403` 就顯示「你沒有這個權限」。**不要用兩個都跳登入頁的寫法**，那會讓權限不足的使用者被無限次踢回登入頁，而且永遠不知道自己為什麼不行。
 </Callout>

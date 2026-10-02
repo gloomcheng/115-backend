@@ -35,7 +35,7 @@ fastapi dev main.py --port 8008
   <text x="270" y="184" text-anchor="middle" fill="#274f67" font-size="13">知道哪條路徑壞了，不知道為什麼</text>
   <rect x="500" y="104" width="360" height="96" rx="7" fill="#ffe29a" stroke="#ef795e" stroke-width="3" />
   <text x="680" y="132" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">traceback 數十行</text>
-  <text x="680" y="160" text-anchor="middle" fill="#274f67" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">main.py line 45 in boom</text>
+  <text x="680" y="160" text-anchor="middle" fill="#274f67" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">main.py line 55 in boom</text>
   <text x="680" y="184" text-anchor="middle" fill="#274f67" font-size="13">知道為什麼，不提這次請求</text>
   <path d="M270 200 V268" fill="none" stroke="#075486" stroke-width="2" stroke-dasharray="5 4" />
   <path d="M680 200 V268" fill="none" stroke="#075486" stroke-width="2" stroke-dasharray="5 4" />
@@ -68,7 +68,7 @@ fastapi dev main.py --port 8008
 Internal Server Error
 `}</Terminal>
 
-**Client 拿到的全部訊息就是 `Internal Server Error` 這五個字。**沒有檔名、沒有行號、沒有「是 `ValueError` 還是 `KeyError`」。
+**Client 拿到的全部訊息就是 `Internal Server Error` 這 21 個字元。**沒有檔名、沒有行號、沒有「是 `ValueError` 還是 `KeyError`」。
 
 這是刻意的。單元 10 說過，把例外細節寫進回應是資安漏洞 —— traceback 會洩漏你的檔案路徑、套件版本和內部結構。所以框架只給一句通用話語，真正的資訊留在 Server 端。
 
@@ -102,12 +102,12 @@ Traceback (most recent call last):
     return await future
   File ".../anyio/_backends/_asyncio.py", line 1100, in run
     result = context.run(func, *args)
-  File "/Users/gloomcheng/Workspace/courses/115-backend/exercises/15-logging/main.py", line 45, in boom
+  File "/Users/gloomcheng/Workspace/courses/115-backend/exercises/15-logging/main.py", line 55, in boom
     raise ValueError("something the handler could not handle")
 ValueError: something the handler could not handle
 `}</Terminal>
 
-**倒數第三行才是答案**：`main.py` 第 45 行，`boom` 裡，丟的是 `ValueError`。
+**倒數第三行才是答案**：`main.py` 第 55 行，`boom` 裡，丟的是 `ValueError`。
 
 <Callout type="note" title="為什麼 traceback 那麼長，而且前面全都不是你的程式">
   `boom` 是同步函式，框架把它丟到執行緒裡跑才有動。要離開同步世界，就必須經過 `anyio` 這一層執行緒包裝器，traceback 因此把每一層都記下來。
@@ -190,7 +190,7 @@ Terminal 1:
 </Callout>
 
 <Callout type="note" title="access log 還是沒有 request id">
-  `x-request-id` 這個 Header 是你的中介軟體自己加的，**框架的 access log 不會自動把它印出來**。想把 id 放進 access log，得自己寫 log 格式，或改用會讀取它的日誌中介軟體。
+  `x-request-id` 這個 Header 是你的中介軟體自己加的，**框架的 access log 不會自動把它印出來**。想把 id 放進 access log，得自己寫 log 格式，或改用會讀取它的記錄中介軟體。
 
   所以實務上會分成三層：`x-request-id` 給使用者回報、`應用程式 log` 帶 id 給你自己查、`access log` 給你統計數量。三者互補，不能互相取代——下面這節就是 access log 獨有的東西。
 </Callout>
@@ -211,38 +211,20 @@ Terminal 1:
 INFO:     127.0.0.1:49563 - "GET /slow HTTP/1.1" 200 OK
 `}</Terminal>
 
-那個 access log 行**沒有時間**——uvicorn 預設的 access log 格式不含 duration。你可以在啟動時加上：
+那個 access log 行**沒有 duration**。注意它有日期嗎？也沒有 —— uvicorn 預設的 access log 格式只有來源位址、Request Line 和狀態碼。
 
-<Terminal title="Terminal 1 — restart with timing in the access log" flavor="output">{`
-uvicorn main:app --log-config <(echo '{
-  "version": 1,
-  "formatters": {"default": {"format": "%(asctime)s %(levelname)s %(message)s"}},
-  "handlers": {"default": {
-    "class": "logging.StreamHandler",
-    "formatter": "default",
-    "stream": "ext://sys.stdout"
-  }},
-  "loggers": {
-    "uvicorn.access": {"handlers": ["default"], "level": "INFO", "propagate": false}
-  }
-}')
-`}</Terminal>
+要自己加時間戳，可以傳 `--log-config`，但那個檔案必須是**真的檔案**：把設定寫進 JSON 再用行程替換（`<(...)`）會失敗，`configparser` 讀不到 `/dev/fd/63`。這是實務上會卡住人的地方，值得知道。
 
-跑起來之後，access log 每行會帶上時間戳：
-
-<Terminal title="Terminal 1 — the same requests with timing visible" flavor="output">{`
-2026-10-03 00:15:51,776 INFO 127.0.0.1:50135 - "GET /health HTTP/1.1" 200
-2026-10-03 00:15:51,790 INFO 127.0.0.1:50136 - "GET /users/ghost HTTP/1.1" 404
-`}</Terminal>
+至於 **duration**，這一課不帶你做。要在 access log 裡顯示每個 Request 花了多久，得覆寫 access log 的 formatter 自己計算，那是單元 17 部署時才會需要的東西。**現在你要的時間，上面那條 `curl -w '%{time_total}s'` 已經給你了**——差別只是那是單次查詢，不是 Server 端的長期統計。
 
 現在送一個帶 query string 的請求，這是這一節真正要提醒的事：
 
 <Terminal title="Terminal 2 — bash — a query string carrying a credential" flavor="output">{`
-> curl -s -o /dev/null 'http://127.0.0.1:8009/users?token=SECRETVALUE&page=2'
+> curl -s -o /dev/null 'http://127.0.0.1:8008/users?token=SECRETVALUE&page=2'
 `}</Terminal>
 
 <Terminal title="Terminal 1 — where that token just went" flavor="output">{`
-2026-10-03 00:16:27,184 INFO 127.0.0.1:50183 - "GET /users?token=SECRETVALUE&page=2 HTTP/1.1" 200
+INFO:     127.0.0.1:50183 - "GET /users?token=SECRETVALUE&page=2 HTTP/1.1" 200 OK
 `}</Terminal>
 
 **`SECRETVALUE` 已經在 log 裡了，而這完全不是刻意做的。**uvicorn 的 access log 預設就印整條路徑，包含 query string。
@@ -291,7 +273,7 @@ uvicorn main:app --log-config <(echo '{
 
 1. 在 Terminal 2 打 `curl -i http://127.0.0.1:8008/boom`。截圖必須包含 `500` 與 `Internal Server Error`。**這是 Client 拿到的全部。**
 2. 接著到 Terminal 1 找到 `"GET /boom HTTP/1.1" 500` 那一行，截圖必須**單獨包含那一行**。
-3. 然後在 Terminal 1 繼續往下找到 `ValueError: something the handler could not handle`，截圖必須包含 `main.py` 與 `line 45`。**回答：這兩張截圖之間，Terminal 1 還有幾行不相干的輸出？**
+3. 然後在 Terminal 1 繼續往下找到 `ValueError: something the handler could not handle`，截圖必須包含 `main.py` 與 `line 55`。**回答：這兩張截圖之間，Terminal 1 還有幾行不相干的輸出？**
 4. 接著 `curl -i http://127.0.0.1:8008/users`，截圖必須包含 `x-request-id: r0001`（或之後的編號），並且 Terminal 1 的 log 必須出現同一個編號。**回答：這個編號現在出現在哪兩個地方？**
 5. 然後 `curl -i http://127.0.0.1:8008/users/iris`，記下它的 `x-request-id`，再到 Terminal 1 `grep` 那個編號。截圖必須包含「0 筆結果」。**回答：這代表這條路由有寫 log 嗎？這和 log 有問題有關嗎？**
 6. 最後 `curl -i http://127.0.0.1:8008/admin`，到 Terminal 1 找到 `admin viewed with token=` 那一行，截圖必須包含它。**回答：這行 log 應該怎麼改寫，才不會洩漏憑證又保留診斷價值？**
@@ -302,14 +284,14 @@ uvicorn main:app --log-config <(echo '{
 
 在本地環境完成以下八項操作，每一項的截圖與簡答都記錄下來。
 
-1. `/boom` 的完整 `curl -i` 截圖（必須含 `500` 與 `Internal Server Error`）+ Terminal 1 的 access log 那一行截圖 + traceback 結尾兩行截圖（必須含 `main.py line 45` 與 `ValueError`）。回答：Client 拿到五個字，Server 拿到幾十行，中間少的是什麼？
+1. `/boom` 的完整 `curl -i` 截圖（必須含 `500` 與 `Internal Server Error`）+ Terminal 1 的 access log 那一行截圖 + traceback 結尾兩行截圖（必須含 `main.py line 55` 與 `ValueError`）。回答：Client 拿到三個英文單字、21 個字元，Server 拿到幾十行，中間少的是什麼？
 2. 用第 3 步數出來的那個行數回答：如果你的 API 每分鐘 800 個請求，這兩段文字之間會夾著幾行？回答之後說明為什麼這讓 debug 變成「不可能」。
 3. `GET /users` 的 `x-request-id` 與 Terminal 1 對應 log 的截圖。回答：`x-request-id` 這個 Header 存在的理由，跟 `access log` 的存在理由有什麼不同？
 4. 第 5 步 `grep` 結果為 0 筆的截圖。回答：`/users/iris` 沒有 log，這件事本身是問題嗎？該不該為了「每條路由都有 log」而加？
 5. `/admin` 那行含 token 的 log 截圖 + 你改寫後的版本（**只貼改寫後那行**）。回答：改寫後還剩多少診斷價值？丟掉的是什麼？
 6. 自己寫一條 log，必須包含：發生了什麼、一個 request id、一個數量。放在 `/users` 這條路由上，並在 Terminal 1 看到它。截圖必須包含那一行與對應的 `x-request-id`。
 7. 回答：以下四個東西各該不該寫進 log？各用一句話說明。`password`、`/users/iris` 這種資源路徑、`count=1` 這種數量、完整 request body。其中哪一個的答案會讓你猶豫？為什麼？
-8. 在 Terminal 2 打 `curl -s -o /dev/null 'http://127.0.0.1:8009/users?token=SECRETVALUE&page=2'`，然後在 Terminal 1 找到那一行。截圖必須包含 `SECRETVALUE`。回答：把 token 從 query string 搬到 `Authorization` Header 之後，這個 log 會變成什麼？用第 05 節的敏感資料論點說明為什麼這不只是美觀問題。
+8. 在 Terminal 2 打 `curl -s -o /dev/null 'http://127.0.0.1:8008/users?token=SECRETVALUE&page=2'`，然後在 Terminal 1 找到那一行。截圖必須包含 `SECRETVALUE`。回答：把 token 從 query string 搬到 `Authorization` Header 之後，這個 log 會變成什麼？用第 05 節的敏感資料論點說明為什麼這不只是美觀問題。
 
 把作業截圖與簡答筆記存入 `exercises/15-logging/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。**不要**把你自己的 token、密碼或任何真實憑證寫進 `main.py` 或任何會被提交的檔案。
 
@@ -317,7 +299,7 @@ uvicorn main:app --log-config <(echo '{
 
 - [Python — `logging` 模組](https://docs.python.org/3/library/logging.html)
 - [Python — `logging.handlers` 與 `LogRecord` 欄位](https://docs.python.org/3/library/logging.handlers.html)
-- [uvicorn — Settings（`access-log`、`log-config`）](https://www.uvicorn.org/settings/)
+- [uvicorn — Settings（`access-log`、`log-config`）](https://uvicorn.dev/settings/)
 - [OWASP — Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
 - [MDN — `X-Forwarded-For`（來源 IP 與代理的可信度）](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Forwarded-For)
 - [RFC 9110 §15.6.1 — `Content-Type`](https://www.rfc-editor.org/rfc/rfc9110.html#name-content-type)

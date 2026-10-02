@@ -285,7 +285,7 @@ HTTP response status codes
 同一份文件裡的「Update a repository」更直接：`private` 這個參數的說明寫著，非 owner 嘗試修改 visibility 會得到 `422`。權限不足的結果，在這個 API 上是用 `422` 送的。
 
 <Callout type="warning" title="所以你不能靠狀態碼判斷衝突">
-  名稱重複回 `422`、權限不足也回 `422`、JSON 寫壞還是回 `422`。三者對 Client 的處理動作完全不同：改資料、改資料、改身分。要分辨，只能讀 Response Body 裡的欄位名稱或錯誤代碼，不能只看 Status Line。
+  名稱重複回 `422`、權限不足也回 `422`、JSON 寫壞還是回 `422`。三者對 Client 的處理動作不一樣：名稱重複是改資料，權限不足是改身分，JSON 寫壞還是改資料。要分辨，只能讀 Response Body 裡的欄位名稱或錯誤代碼，不能只看 Status Line。
 </Callout>
 
 這也說明為什麼同一套 API 的不同端點會回 `400`、`409`、`422` 三種。Client 真正能依賴的不是狀態碼本身，是**一致性**。
@@ -380,10 +380,10 @@ ValueError: invalid literal for int() with base 10: 'abc'
 | 線索在哪 | Response Body | Server 終端機的 traceback 與 log |
 | Server 還活著嗎 | 活著，其他路由正常 | 活著，但這條路由壞了 |
 
-更上層的規則只有一句：**`4xx` 是這一次請求的問題，`5xx` 是服務端的問題。** 上一節講過為什麼這句話在 `400`、`409`、`422` 之間還需要再讀一次對方文件。
+更上層的規則只有一句：**`4xx` 是這一次請求的問題，`5xx` 是伺服器端的問題。** 上一節講過為什麼這句話在 `400`、`409`、`422` 之間還需要再讀一次對方文件。
 
 <Callout type="important" title="5xx 不一定是程式寫錯">
-  程式碼完全正確，服務照樣會回 `5xx`。資料庫連線逾時、磁碟滿、依賴的第三方 API 掛掉，都會變成 `5xx`。所以 `5xx` 真正的意思是「責任在服務端，要去看 log」，不是「有人寫錯一行」。
+  程式碼完全正確，服務照樣會回 `5xx`。資料庫連線逾時、磁碟滿、依賴的第三方 API 掛掉，都會變成 `5xx`。所以 `5xx` 真正的意思是「責任在伺服器端，要去看 log」，不是「有人寫錯一行」。
 </Callout>
 
 ---
@@ -433,7 +433,7 @@ curl -i http://127.0.0.1:8000/health
 curl -i http://127.0.0.1:8001/boom
 `}</Terminal>
 
-`500`，Body 只有 `Internal Server Error`。接著立刻看 Terminal 2 的畫面—— traceback 就在那裡，`boom.py` 第 23 行。
+`500`，Body 只有 `Internal Server Error`。接著立刻看 Terminal 2 的畫面—— traceback 就在那裡，`boom.py` 第 40 行。
 
 ### 第四步：同一個錯參數，打兩條路由
 

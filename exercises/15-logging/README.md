@@ -31,7 +31,7 @@ INFO:     127.0.0.1:49945 - "GET /boom HTTP/1.1" 500 Internal Server Error
 traceback 結尾（**倒數第三行才是答案**）：
 
 ```
-  File "/Users/gloomcheng/Workspace/courses/115-backend/exercises/15-logging/main.py", line 45, in boom
+  File ".../exercises/15-logging/main.py", line 55, in boom
     raise ValueError("something the handler could not handle")
 ValueError: something the handler could not handle
 ```
@@ -112,7 +112,7 @@ Terminal 1：
 
 ## 繳交
 
-1. `/boom` 的 `curl -i` 截圖（`500` + `Internal Server Error`）+ Terminal 的 access log 那一行 + traceback 結尾兩行（`main.py line 45` + `ValueError`）。Client 拿五個字，Server 拿幾十行，中間少的是什麼？
+1. `/boom` 的 `curl -i` 截圖（`500` + `Internal Server Error`）+ Terminal 的 access log 那一行 + traceback 結尾兩行（`main.py line 55` + `ValueError`）。Client 拿三個英文單字、21 個字元，Server 拿幾十行，中間少的是什麼？
 2. 數出那兩行之間隔了幾行。API 每分鐘 800 個請求時會夾著幾行？為什麼這讓 debug 變成不可能？
 3. `GET /users` 的 `x-request-id` 與 Terminal 對應 log 的截圖。這個 Header 和 access log 的存在理由有什麼不同？
 4. `curl -i http://127.0.0.1:8008/users/iris` 記下 `x-request-id`，再 `grep` 那個編號，截圖必須是 0 筆。這條路由沒 log 是問題嗎？

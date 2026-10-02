@@ -101,11 +101,29 @@ lesson16-base   latest    225a001f4ec7   14 seconds ago   306MB
 
 ## 02. 容器不是小電腦，它有自己的 127.0.0.1
 
-現在做這一課最重要的一個實驗。先把容器跑起來：
+現在做這一課最重要的一個實驗。先把**你要送上機器的那一個** image 建成出來：
+
+<Terminal title="Terminal 1 — bash — build the stage that actually runs" flavor="output">{`
+docker build --target runtime -t lesson16-runtime .
+`}</Terminal>
+
+<Terminal title="why runtime and not base" flavor="output">{`
+> docker inspect lesson16-base --format 'base    Cmd={{json .Config.Cmd}}'
+base    Cmd=["python3"]
+
+> docker inspect lesson16-runtime --format 'runtime Cmd={{json .Config.Cmd}}'
+runtime Cmd=["fastapi","run","main.py","--host","0.0.0.0","--port","8000",...]
+`}</Terminal>
+
+`base` 階段沒有 `CMD`，它繼承到的是 `python3.14-slim` 的預設值。**用 `docker run` 跑它，容器會立刻結束**，因為沒有東西告訴它要啟動伺服器。
+
+`runtime` 階段才有 `CMD`，也有 `USER appuser`。這就是第 05 節要講的差別：base 是共用的底，runtime 才是你真的部署的東西。
+
+現在把容器跑起來：
 
 <Terminal title="Terminal 2 — bash — run it and publish one port" flavor="output">{`
 > docker rm -f l16
-> docker run -d --name l16 -p 127.0.0.1:8016:8000 lesson16-base
+> docker run -d --name l16 -p 127.0.0.1:8016:8000 lesson16-runtime
 > docker port l16
 8000/tcp -> 127.0.0.1:8016
 `}</Terminal>
@@ -342,7 +360,7 @@ null
 那個 `start_period` 防止的「一直起不來」，值得自己驗一次。Terminal 1 跑著 `docker build`，Terminal 2 跑下面六組。
 
 1. `docker images lesson16-base` 的截圖，必須包含大小。回答：一個 image 裡包含了什麼，讓它不需要在別的機器上安裝任何東西？
-2. `docker run -d --name l16 -p 127.0.0.1:8016:8000 lesson16-base` 然後 `docker port l16`，截圖必須包含 `8000/tcp -> 127.0.0.1:8016`。
+2. `docker run -d --name l16 -p 127.0.0.1:8016:8000 lesson16-runtime` 然後 `docker port l16`，截圖必須包含 `8000/tcp -> 127.0.0.1:8016`。
 3. `curl -s http://127.0.0.1:8016/health`（必須 `200`）與 `docker exec l16 python -c "...urlopen('http://127.0.0.1:8016/health')"`（必須 `URLError`）**兩張截圖並排**。回答：同一個字串，為什麼在兩邊意思不同？
 4. `docker logs l16 | tail -3` 的截圖，必須包含一個 `192.168.x.x` 的 IP。回答：那是誰的位址？單元 15 的警告在這裡具體長什麼樣？
 5. `docker exec l16 ls /app` 與 `docker exec l16 ls /app/tests`（必須失敗）的截圖。回答：`.dockerignore` 裡的 `.env` 這一行，擋掉的是哪一條路徑？
