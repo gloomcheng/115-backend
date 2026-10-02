@@ -210,6 +210,37 @@ const CONCEPT_CONTRACTS_BY_WEEK = {
         /(database is locked[^。\n]*(拒絕|訊息|接住|知道|錯誤)|(拒絕|訊息|接住|知道|錯誤)[^。\n]*database is locked)/i,
     },
   ],
+  12: [
+    {
+      name: 'middleware',
+      term: /中介軟體/,
+      explanation:
+        /(中介軟體[^。\n]*(路由|Request|Header|巢狀|執行)|(路由|Request|Header|巢狀|執行)[^。\n]*中介軟體)/,
+    },
+    {
+      name: 'call_next',
+      term: /call_next/,
+      explanation: /(call_next[^。\n]*(門|順序|巢狀|傳給)|(門|順序|巢狀|傳給)[^。\n]*call_next)/,
+    },
+    {
+      name: 'outermost',
+      term: /最外層|最外面/,
+      explanation:
+        /(最外層|最外面)[^。\n]*(註冊|順序|進去|回來|跑)|(註冊|順序|進去|回來|跑)[^。\n]*(最外層|最外面)/,
+    },
+    {
+      name: 'extra="forbid"',
+      term: /extra="forbid"|ConfigDict/,
+      explanation:
+        /(extra="forbid"|ConfigDict)[^。\n]*(未宣告|拒絕|忽略|422|欄位)|(未宣告|拒絕|忽略|422|欄位)[^。\n]*(extra="forbid"|ConfigDict)/,
+    },
+    {
+      name: 'signing key',
+      term: /SIGNING_KEY|簽發金鑰/,
+      explanation:
+        /(SIGNING_KEY|簽發金鑰)[^。\n]*(環境變數|拒絕啟動|Git|指紋)|(環境變數|拒絕啟動|Git|指紋)[^。\n]*(SIGNING_KEY|簽發金鑰)/,
+    },
+  ],
   11: [
     {
       name: 'JWT',

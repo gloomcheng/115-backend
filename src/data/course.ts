@@ -117,7 +117,12 @@ export const chapters: Chapter[] = [
         title: '登入 — 身份認證與 JWT',
         href: '/lessons/11-auth',
       },
-      { w: 12, dates: '11/23–11/29', title: '中介軟體、權限與密鑰邊界' },
+      {
+        w: 12,
+        dates: '11/23–11/29',
+        title: '中介軟體、權限與密鑰邊界',
+        href: '/lessons/12-middleware',
+      },
     ],
   },
   {

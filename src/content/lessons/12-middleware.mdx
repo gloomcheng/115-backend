@@ -1,0 +1,357 @@
+---
+title: "中介軟體、權限與密鑰邊界"
+week: 12
+description: "中介軟體在路由比對之前就跑完了。它看得到這是一個 Request，看不到這是要做什麼——權限與密鑰因此各有該待的位置。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+單元 11 回答了「你是誰」。這一課處理剩下的問題，而且從一個位置開始：**這些判斷的程式碼，應該寫在哪一層。**
+
+這支 API 的簽發金鑰從環境變數拿，所以啟動方式和平常不同：
+
+<Terminal title="Terminal 1 — bash — start with a key from the environment">{`
+cd exercises/12-middleware
+SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005
+`}</Terminal>
+
+<svg viewBox="0 0 940 566" role="img" aria-labelledby="mw-claim-title mw-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="mw-claim-title">中介軟體在路由比對之前執行，看得到請求本身，看不到這次請求要做什麼</title>
+  <desc id="mw-claim-description">Request 進入中介軟體的時候，method、path、Header 都已經讀得到，但路由還沒比對，所以中介軟體不知道這次會對上哪一條路由、那條路由要不要認證、該回哪一種 401 挑戰。路由比對之後分成兩條路：比對到路由就執行 handler，沒有任何路由就回 404，而 404 的回應上仍然帶著中介軟體寫進去的 x-trace Header。</desc>
+  <defs>
+    <marker id="mw-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="250" y="14" width="440" height="56" rx="7" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
+  <text x="470" y="40" text-anchor="middle" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">POST /admin HTTP/1.1</text>
+  <text x="470" y="60" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">Authorization: Bearer …</text>
+  <path d="M470 70 V100" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#mw-arrow)" />
+  <rect x="80" y="104" width="780" height="176" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="470" y="132" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">中介軟體</text>
+  <path d="M470 146 V268" fill="none" stroke="#075486" stroke-width="2" />
+  <text x="270" y="170" text-anchor="middle" fill="#0b3d63" font-size="14" font-weight="700">看得見</text>
+  <text x="670" y="170" text-anchor="middle" fill="#ef795e" font-size="14" font-weight="700">還不知道</text>
+  <text x="270" y="198" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">method 與 path</text>
+  <text x="270" y="222" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">Header 全部</text>
+  <text x="270" y="246" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">Body 的位元組</text>
+  <text x="670" y="198" text-anchor="middle" fill="#ef795e" font-size="13">比對到哪一條路由</text>
+  <text x="670" y="222" text-anchor="middle" fill="#ef795e" font-size="13">那條路由要不要認證</text>
+  <text x="670" y="246" text-anchor="middle" fill="#ef795e" font-size="13">該用哪一種認證</text>
+  <path d="M470 280 V308" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#mw-arrow)" />
+  <rect x="250" y="312" width="440" height="48" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="470" y="342" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">路由比對</text>
+  <path d="M380 360 V392 H240 V410" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#mw-arrow)" />
+  <path d="M560 360 V392 H700 V410" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#mw-arrow)" />
+  <rect x="80" y="414" width="320" height="64" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="240" y="440" text-anchor="middle" fill="#075486" font-size="13" font-weight="700">比對到路由，執行 handler</text>
+  <text x="240" y="464" text-anchor="middle" fill="#0b3d63" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200 / 401 / 403</text>
+  <rect x="540" y="414" width="320" height="64" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="700" y="440" text-anchor="middle" fill="#075486" font-size="13" font-weight="700">沒有任何路由</text>
+  <text x="700" y="466" text-anchor="middle" fill="#ef795e" font-size="20" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">404</text>
+  <rect x="80" y="496" width="780" height="54" rx="7" fill="none" stroke="#ef795e" stroke-width="2" stroke-dasharray="6 5" />
+  <text x="470" y="518" text-anchor="middle" fill="#274f67" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">curl -i http://127.0.0.1:8005/nope</text>
+  <text x="470" y="538" text-anchor="middle" fill="#ef795e" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">x-trace: outer:in &gt; inner:in &gt; inner:out &gt; outer:out</text>
+</svg>
+
+---
+
+## 01. 連路由都沒比到的請求，也會經過它
+
+先打一個這支 API 完全沒有定義的路徑：
+
+<Terminal title="bash — a path with no route at all" flavor="output">{`
+> curl -i http://127.0.0.1:8005/nope
+< HTTP/1.1 404 Not Found
+< x-trace: outer:in > inner:in > inner:out > outer:out
+< x-request-id: r0001
+
+{"detail":"Not Found"}
+`}</Terminal>
+
+`404`，但 `x-trace` 與 `x-request-id` 兩個 Header 都在。**這條路徑沒有任何路由可比，中介軟體還是跑完了，並且在 Response 上寫了兩個 Header。**
+
+FastAPI 官方文件對中介軟體的定義是：它處理「every request **before it is processed by any specific path operation**」。位置就在路由比對之前。
+
+<Callout type="important" title="這決定了 log 該寫在哪裡">
+  打到不存在的路徑、使用者打錯字、機器人來爬 `/wp-login.php`——這些請求永遠不會進入任何 handler。如果 log 寫在 handler 裡，這些全部不會被記錄。寫在中介軟體裡，全部都會。
+</Callout>
+
+---
+
+## 02. 巢狀：進去照順序，回來照相反
+
+這條位置還決定了第二件事：**多個中介軟體怎麼串。**`x-trace` 這個 Header 是為了讓巢狀看得見而存在的，看它的順序：
+
+<Terminal title="bash — the nesting order in one header" flavor="output">{`
+> curl -i http://127.0.0.1:8005/open | rg -i '^x-trace'
+< x-trace: outer:in > inner:in > inner:out > outer:out
+`}</Terminal>
+
+進去是 `outer` 然後 `inner`，回來是 `inner:out` 然後 `outer:out`。**`call_next` 是一道門**：門前面的是進去，門後面的是裡面，回來時順序反過來。
+
+這裡的「外面」指的是離入口最近的那一層，也就是每個 Request 最先碰到的那個。這一串 `x-trace` 裡 `outer` 最先出現，就是這個意思。
+
+順序不是自己排的，是註冊順序決定的，而且方向和直覺相反：
+
+<Terminal title="FastAPI — Multiple middleware execution order">{`
+The last middleware added is the outermost, and the first is the innermost.
+On the request path, the outermost middleware runs first.
+On the response path, it runs last.
+`}</Terminal>
+
+**最後註冊的那個在最外面，也就是每個 Request 最先跑的那一層。** 所以 `main.py` 裡 `trace_inner` 寫在 `trace_outer` 前面，`trace_outer` 才會先進去。
+
+把這兩個 block 對調，會發生什麼？`trace_inner` 變成最外層，於是它在 `trace_outer` 之前執行，而 `request.state.trace` 還沒被建立：
+
+<Terminal title="Terminal 1 — after swapping the two blocks" flavor="output">{`
+AttributeError: 'State' object has no attribute 'trace'
+
+> curl -i http://127.0.0.1:8005/open
+< HTTP/1.1 500 Internal Server Error
+`}</Terminal>
+
+`/open` 這條路由本身完全正常。**壞掉的是中介軟體，而外面只看到一個 `500`。**
+
+<Callout type="note" title="單元 03 與 07 的規則第三次出現">
+  單元 03 說過：責任是在五個階段的哪一步被決定的。這裡的答案是「在路由比對之前」。所以中介軟體裡的例外和 handler 裡的例外，從 Client 看到的一樣都是 `500`，沒有任何線索指向真正出錯的地方。例外要留 traceback 在 Server 終端機，這也是單元 15 會接回來的主題。
+</Callout>
+
+---
+
+## 03. 看得到「是誰來的」，看不到「要做什麼」
+
+中介軟體執行的時候，`method`、`path`、所有 `Header` 都已經讀得到了（Request 物件在第一個位元組到達時就組好）。但還沒有人去比對路由表，所以它不知道：
+
+- 這次請求會對上哪一條路由
+- 那條路由要不要認證
+- 如果要認證，該用哪一種認證方式
+
+第三點最要緊。單元 11 講過，`401` **必須**帶 `WWW-Authenticate`，而裡面的 `realm` 是每一個保護範圍各不同的。一個「保護所有路由」的中介軟體如果想回正確的挑戰，它必須先知道每條路由的設定——而那正是它還不知道的事。
+
+所以這支 API 的寫法是：認證與權限掛在路由上，不是掛在中介軟體上。
+
+<Terminal title="exercises/12-middleware/main.py — the check lives on the route" flavor="output">{`
+def current_subject(authorization: str | None = Header(default=None)) -> str:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing credentials", headers=CHALLENGE)
+    return read_token(authorization.removeprefix("Bearer ").strip())["sub"]
+
+
+def require_admin(subject: str = Depends(current_subject)) -> str:
+    if USERS[subject]["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admins only")
+    return subject
+`}</Terminal>
+
+`/open` 什麼都沒有掛，`/profile` 掛 `current_subject`，`/admin` 掛 `require_admin`。差別是宣告出來的，不是中介軟體猜出來的。
+
+---
+
+## 04. 權限不等於驗證：role 一律從 Server 自己的表拿
+
+現在做這支 API 最故意的設計。先登入管理員，然後把 token 的 payload 解出來看：
+
+<Terminal title="Terminal 2 — bash — log in both accounts">{`
+export STUDENT=$(curl -s -X POST http://127.0.0.1:8005/login \\
+  -H 'Content-Type: application/json' \\
+  -d '{"name":"iris","password":"lesson"}' \\
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])")
+
+export ADMIN=$(curl -s -X POST http://127.0.0.1:8005/login \\
+  -H 'Content-Type: application/json' \\
+  -d '{"name":"root","password":"lesson"}' \\
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])")
+
+python3 -c "
+import base64, json, sys
+p = sys.argv[1].split('.')[1]
+print(json.loads(base64.urlsafe_b64decode(p + '=' * (-len(p) % 4))))
+" "$ADMIN"
+`}</Terminal>
+
+管理員的 token 裡，role 這一欄寫的是 `intern`：
+
+<Terminal title="the admin token's own role claim" flavor="output">{`
+{'sub': 'root', 'role': 'intern', 'exp': 1790956815}
+`}</Terminal>
+
+**這個欄位是故意寫錯的。**現在拿它去打只有管理員能用的路徑：
+
+<Terminal title="bash — the wrong claim does not matter" flavor="output">{`
+> curl -i http://127.0.0.1:8005/admin -H "Authorization: Bearer $ADMIN"
+< HTTP/1.1 200 OK
+
+{"sub":"root","admin_panel":true,"role_source":"server table"}
+`}</Terminal>
+
+`200`。因為 `require_admin` 沒有讀 token 裡的 `role`，它拿 `sub` 去 `USERS` 這張表查。token 裡那個寫錯的欄位完全沒有被使用。
+
+換成學生的 token，同一條路徑：
+
+<Terminal title="bash — the same route, a student token" flavor="output">{`
+> curl -i http://127.0.0.1:8005/admin -H "Authorization: Bearer $STUDENT"
+< HTTP/1.1 403 Forbidden
+
+{"detail":"Admins only"}
+`}</Terminal>
+
+<Callout type="warning" title="這裡修掉了單元 11 的一個弱點">
+  單元 11 的 `/admin` 是直接讀 token 裡的 `role`。那份教學程式能運作，因為 payload 有簽名、沒被改過。但它把「這個人是誰」和「這個人能做什麼」綁在同一個簽發動作上：**任何有簽發權限的人，權限就跟著 token 一起發出去。**
+
+  改成查表之後，token 只回答「是誰」。角色是 Server 用自己的資料決定的，要改就改那張表，並且留下紀錄。`role_source` 這個欄位就是為了讓你在回應上看見它。
+</Callout>
+
+---
+
+## 05. 未宣告欄位要拒絕，不要忽略
+
+同一個問題在單元 10 出現過，而且那一次更安靜：那邊 `POST /strict` 送 `{"name":"iris","admin":true}` 進去，`admin` 被安靜地丟掉了，沒有任何錯誤。那一節的最後一句是：怎麼宣告禁止未宣告欄位，在單元 12 處理。
+
+宣告的方式是一行：
+
+<Terminal title="exercises/12-middleware/main.py — refusing what was not declared" flavor="output">{`
+class ProfileIn(BaseModel):
+    # extra="forbid" turns a silent drop into a 422 that names the field.
+    model_config = ConfigDict(extra="forbid")
+
+    nickname: str
+`}</Terminal>
+
+送一個沒有宣告的欄位進去：
+
+<Terminal title="bash — the undeclared field is now named" flavor="output">{`
+> curl -i -X POST http://127.0.0.1:8005/profile \\
+>   -H 'Content-Type: application/json' \\
+>   -H "Authorization: Bearer $STUDENT" \\
+>   -d '{"nickname":"iris","is_admin":true}'
+< HTTP/1.1 422 Unprocessable Entity
+
+{"detail":[{"type":"extra_forbidden","loc":["body","is_admin"],"msg":"Extra inputs are not permitted","input":true}]}
+`}</Terminal>
+
+`type` 是 `extra_forbidden`，`loc` 精確指到 `["body","is_admin"]`。單元 07 教過的 `loc` 就是給 Client 定位用的——這一次它指的不是型別不對，而是「這個欄位不該存在」。
+
+<Callout type="important" title="忽略與拒絕的差別，是 Client 會不會知道">
+  忽略：Client 送出 `is_admin`，收到 `201`，以為設定成功。實際上什麼都沒發生。
+  拒絕：Client 送出 `is_admin`，收到 `422`，而且 `loc` 告訴它是 body 裡的 `is_admin`。
+
+  在顯示名稱這種欄位上，兩個差別只是使用者困惑。在權限欄位上，這就是資安差別——**一個被忽略的權限欄位，等於一個你以為有設但其實沒設的權限。**
+</Callout>
+
+---
+
+## 06. 密鑰在哪：環境變數，不是程式碼
+
+回到啟動時那個 `SIGNING_KEY=...`。把環境變數拿掉，看這個程式怎麼反應：
+
+<Terminal title="bash — the app refuses to start without a key" flavor="output">{`
+$ python -c "import main"
+RuntimeError: SIGNING_KEY is not set. A signing key belongs in the
+environment; hardcoding one here would put it in version control.
+`}</Terminal>
+
+它不是印一句警告然後用預設值繼續跑，而是**拒絕啟動**。這是刻意的：如果程式裡有 `SIGNING_KEY = "..."` 這一行，那一行就會進 Git，進每一個人的 clone，而且刪掉之後歷史裡還在。
+
+接著要看目前生效的是哪一把金鑰，用這支 API 提供的端點：
+
+<Terminal title="bash — a fingerprint, never the key itself" flavor="output">{`
+> curl -s http://127.0.0.1:8005/key-info
+{"key_fingerprint":"4ce62386","source":"environment variable"}
+`}</Terminal>
+
+回應裡是指紋，不是金鑰。金鑰永遠不該被印出來。
+
+<Callout type="note" title="為什麼是指紋">
+  金鑰需要能被比較（「現在這把跟上次那把是不是同一把？」），但不需要能被讀回來。雜湊函式把這兩件事分開：你可以放心地比較 `4ce62386` 和 `05e21816` 而不必讓任何人看到金鑰本身。`sha256` 在這裡不是拿來保護金鑰，是拿來讓金鑰可以被指名而不被洩漏。
+</Callout>
+
+---
+
+## 07. 換一把金鑰：無狀態的帳單終於結清
+
+單元 11 留下一筆債：Server 無法把你的登入清掉。這裡是答案，而且是可以真的觀察到的。
+
+再開一個 Terminal 3，用**不同的金鑰**啟動同一支程式：
+
+<Terminal title="Terminal 3 — bash — the same code, a different key">{`
+cd exercises/12-middleware
+SIGNING_KEY=lesson-12-key-b fastapi dev main.py --port 8006
+`}</Terminal>
+
+兩把金鑰的指紋不同：
+
+<Terminal title="bash — two instances, two keys" flavor="output">{`
+> curl -s http://127.0.0.1:8005/key-info
+{"key_fingerprint":"4ce62386","source":"environment variable"}
+
+> curl -s http://127.0.0.1:8006/key-info
+{"key_fingerprint":"05e21816","source":"environment variable"}
+`}</Terminal>
+
+現在把 Terminal 2 拿到的那枚 token 送到 8006：
+
+<Terminal title="bash — a token signed by the other key" flavor="output">{`
+> curl -i http://127.0.0.1:8006/profile -H "Authorization: Bearer $STUDENT"
+< HTTP/1.1 401 Unauthorized
+< www-authenticate: Bearer realm="lesson-12"
+
+{"detail":"Bad signature"}
+`}</Terminal>
+
+`401`。**同一枚 token，在 8005 還能用，在 8006 就不能用了。**
+
+<Callout type="important" title="這就是撤銷，但要注意它的範圍">
+  換金鑰會讓**所有已發出的 token 同時失效**——不是某一枚，是全部。剛才那枚是 student 的，admin 那枚一樣會死。
+
+  所以這是一個粗體的工具：它處理「金鑰外洩」「有人拿到舊 token」「你發現權限設錯了要全部收回」這三種狀況，而且因為 Server 完全不需要保存狀態，做這件事的成本是零。代價是每個登入中的人都被迫重新登入一次。
+
+  真正麻煩的是「只踢掉一個人」。那需要 Server 記住「這一枚已經作廢」，記住這件事本身就是狀態，而狀態正是單元 01 說 HTTP 沒有提供的東西。實務上的做法是折衷：把 `exp` 設短（單元 11 的做法），讓撤銷的視窗小到可以接受，再用換金鑰處理真正嚴重的事件。
+</Callout>
+
+---
+
+## 08. 終端實戰驗證
+
+Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`，Terminal 2 已經把 `$STUDENT` 和 `$ADMIN` 放出來了。下面八步照順序做，每一步都先看指令再看截圖要求。
+
+1. 先打一個這支 API 沒有定義的路徑：`curl -i http://127.0.0.1:8005/nope`。截圖必須同時包含 `404`、`x-request-id` 與 `x-trace`，因為中介軟體有沒有執行，證據就在那兩個 Header 上。
+2. 接著看巢狀順序：`curl -i http://127.0.0.1:8005/open | rg -i '^x-trace'`。把 `outer:in > inner:in > inner:out > outer:out` 整串抄下來，這是第 02 節的證據。
+3. 現在把 `main.py` 裡 `trace_inner` 與 `trace_outer` 兩個 block 上下互換，等重新載入後再打一次 `curl -i http://127.0.0.1:8005/open`。Terminal 1 會出現 `AttributeError: 'State' object has no attribute 'trace'`，curl 會拿到 `500`。**截圖必須兩邊都有**，因為它要證明的是「路由正常但中介軟體壞掉」。做完記得還原。
+4. 解出 `$ADMIN` 的 payload，用第 04 節那個 `python3` 指令，截圖必須包含 `'role': 'intern'`。接著用這枚 token 打 `curl -i http://127.0.0.1:8005/admin -H "Authorization: Bearer $ADMIN"`，截圖必須包含 `200`。
+5. 對照第 4 步，同一條路徑換成 `curl -i http://127.0.0.1:8005/admin -H "Authorization: Bearer $STUDENT"`，截圖必須包含 `403`。兩張截圖並排，唯一的差別就是 `$ADMIN` 與 `$STUDENT`。
+6. 然後送出未宣告的欄位：`curl -i -X POST http://127.0.0.1:8005/profile -H 'Content-Type: application/json' -H "Authorization: Bearer $STUDENT" -d '{"nickname":"iris","is_admin":true}'`。截圖必須包含 `422`、`extra_forbidden` 與 `["body","is_admin"]`。
+7. 接著把 `SIGNING_KEY` 拿掉，執行 `python -c "import main"`。截圖必須包含 `RuntimeError` 與那句完整訊息，因為重點是它拒絕啟動而不是用預設值。
+8. 最後開 Terminal 3 用 `SIGNING_KEY=lesson-12-key-b` 起 8006，然後跑 `curl -s http://127.0.0.1:8005/key-info` 和 `curl -s http://127.0.0.1:8006/key-info` 比較指紋，再用 `curl -i http://127.0.0.1:8006/profile -H "Authorization: Bearer $STUDENT"` 確認回 `401 Bad signature`。
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下八項操作，每一項的截圖與簡答都記錄下來。
+
+1. 先打一個不存在的路徑，截圖必須同時包含 `404`、`x-request-id` 與 `x-trace`。用一句話回答：中介軟體有沒有真的執行？
+2. 把兩個中介軟體的 block 對調，截圖必須同時包含 Terminal 1 的 `AttributeError` 與 curl 的 `500`。用一句話回答：為什麼對調之後是外面那個壞掉？
+3. 登入管理員，解出 payload，截圖必須包含 `'role': 'intern'`。然後用這枚 token 打 `/admin`，截圖必須包含 `200`。回答：這枚 token 的 role 欄位被誰忽略了？
+4. 接著用學生的 token 打 `/admin`，截圖必須包含 `403`。**和第 3 步並排，寫出這兩次的差異只有哪一個欄位。**
+5. 然後 `POST /profile` 送 `{"nickname":"...","is_admin":true}`，截圖必須包含 `422`、`extra_forbidden` 與 `["body","is_admin"]`。回答：`extra="forbid"` 和單元 10 的預設行為差在哪？
+6. 接著把 `SIGNING_KEY` 拿掉再執行 `python -c "import main"`，截圖必須包含 `RuntimeError` 與那句完整訊息。回答：為什麼這支程式選擇拒絕啟動，而不是印警告然後用預設值？
+7. 然後開第二個 Terminal 用不同金鑰起 8006，截圖必須包含兩個 `/key-info` 的**不同指紋**，以及 `8006` 回 `401 Bad signature`。回答：換金鑰讓誰失效？
+8. 最後用一句話回答：`exp` 兩小時的情況下，使用者被開除一個小時，他的 token 還能用多久？用這一堂課的兩個機制回答，不要只用其中一個。
+
+把作業截圖與簡答筆記存入 `exercises/12-middleware/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。這一課的作業重點不在截圖數量，而在第 3、4、8 三題的答案是否真的對照到指令輸出。
+
+**不要**把你自己的 `SIGNING_KEY` 寫進 `main.py`、`.env` 或任何會被提交的檔案。真實的簽發金鑰由部署環境提供。
+
+### 本單元使用的正本
+
+這一課的每一條主張都對應到下面其中一份文件或規格：
+
+- [FastAPI — Middleware](https://fastapi.tiangolo.com/tutorial/middleware/) — 「before it is processed by any specific path operation」與「The last middleware added is the outermost」
+- [Starlette — Middleware](https://starlette.dev/middleware/)
+- [FastAPI — Dependencies in path operation decorators](https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-in-path-operation-decorators/)
+- [FastAPI — Settings and Environment Variables](https://fastapi.tiangolo.com/advanced/settings/)
+- [OWASP — Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)
+- [OWASP — Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)
+- [RFC 9110 §15.5.2 — 401 Unauthorized](https://www.rfc-editor.org/rfc/rfc9110.html#name-401-unauthorized)
