@@ -7,7 +7,18 @@ description: "同一份錯誤的 Body，送進兩條路由：一條回 422 並�
 import Terminal from '../../components/Terminal.astro';
 import Callout from '../../components/Callout.astro';
 
-第七課留下一句話：「用資料模型驗證會長什麼樣，單元 10 會處理。」第八課的 `UserIn` 已經是一個資料模型，但只看不出它改變了什麼。
+第七課留下一句話：「用資料模型驗證會長什麼樣，單元 10 會處理。」第八課的 `create_user(payload: UserIn)` 已經把 Body 交給一個資料模型，但那一課只讓你看見它改變了回應的形狀，還沒讓你看見它改變了**什麼時候**拒絕。
+
+先看 `UserIn` 長什麼樣：
+
+<Terminal title="exercises/10-validation/main.py — the model, in full" flavor="output">{`
+class UserStrict(BaseModel):
+    # Field constraints are declared here, so they run before the handler.
+    name: str = Field(min_length=1, max_length=40)
+    role: str | None = Field(default=None, max_length=20)
+`}</Terminal>
+
+這就是單元 07 手寫檢查時「宣告」的那三件事，只是搬到了一個類別裡面。
 
 這一課要回答的是：**同一份壞掉的資料，送進兩條不同的路由，Client 會拿到兩個完全不同的答案。**
 

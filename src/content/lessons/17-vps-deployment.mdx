@@ -410,7 +410,7 @@ def test_health_returns_200_and_expected_body():
 在**開發電腦的 repository root** 執行：
 
 <Terminal title="bash — your development computer">{`
-bun run test:api
+npm run test:api
 `}</Terminal>
 
 預期是 `4 passed`。Production image 不會收進 `pytest` 與 `tests/`。
@@ -436,10 +436,10 @@ database_url = os.environ["DATABASE_URL"]
 每次 clone repository 後，啟用 commit 前檢查：
 
 <Terminal title="bash — your development computer">{`
-bun run setup:hooks
+npm run setup:hooks
 git config --get core.hooksPath
-bun run test:security
-bun run security:scan
+npm run test:security
+npm run security:scan
 `}</Terminal>
 
 `core.hooksPath` 必須回 `.githooks`。`secret-harness.mjs` 會擋 `.env`、private-key file 與明文 credential pattern；Gitleaks 會再掃已知憑證格式與 Git history。GitHub Actions 會在 push 後重跑這些檢查。
@@ -451,8 +451,8 @@ bun run security:scan
 ### 部署設定與真實網站各查一次
 
 <Terminal title="bash — your development computer">{`
-bun run check:deployment
-bun run check:deployment -- \\
+npm run check:deployment
+npm run check:deployment -- \\
   --url="https://$DOMAIN" \\
   --expected-ip="$SERVER_IP"
 `}</Terminal>
@@ -482,7 +482,7 @@ curl -f http://127.0.0.1:8000/health
 
 <Terminal title="bash — your computer">{`
 curl -f "https://$DOMAIN/health"
-bun run check:deployment -- \\
+npm run check:deployment -- \\
   --url="https://$DOMAIN" \\
   --expected-ip="$SERVER_IP"
 `}</Terminal>
@@ -493,7 +493,7 @@ bun run check:deployment -- \\
 
 部署一個 FastAPI 服務，交付這六組證據：
 
-1. `bun run test:api` 顯示 `4 passed`，`bun run security:scan` 通過。
+1. `npm run test:api` 顯示 `4 passed`，`npm run security:scan` 通過。
 2. DNS `A` record 回傳 VPS public IP。
 3. `sudo ufw status numbered` 沒有 `8000`，`sudo ss -ltnp` 顯示 `127.0.0.1:8000`。
 4. `sudo nginx -t` 與 `sudo certbot renew --dry-run` 通過。

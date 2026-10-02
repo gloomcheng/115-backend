@@ -70,7 +70,7 @@ Internal Server Error
 
 **Client 拿到的全部訊息就是 `Internal Server Error` 這 21 個字元。**沒有檔名、沒有行號、沒有「是 `ValueError` 還是 `KeyError`」。
 
-這是刻意的。單元 10 說過，把例外細節寫進回應是資安漏洞 —— traceback 會洩漏你的檔案路徑、套件版本和內部結構。所以框架只給一句通用話語，真正的資訊留在 Server 端。
+這是刻意的。把例外細節寫進回應是資安漏洞 —— traceback 會洩漏你的檔案路徑、套件版本和內部結構。所以框架只給一句通用話語，真正的資訊留在 Server 端。
 
 <Callout type="important" title="所以 debug 的第一步永遠是看 Server，不是一直重送">
   你可以重送這個 Request 一百次，`Internal Server Error` 都不會變多一個字。
@@ -102,7 +102,7 @@ Traceback (most recent call last):
     return await future
   File ".../anyio/_backends/_asyncio.py", line 1100, in run
     result = context.run(func, *args)
-  File "/Users/gloomcheng/Workspace/courses/115-backend/exercises/15-logging/main.py", line 55, in boom
+  File ".../exercises/15-logging/main.py", line 55, in boom
     raise ValueError("something the handler could not handle")
 ValueError: something the handler could not handle
 `}</Terminal>
@@ -237,7 +237,7 @@ INFO:     127.0.0.1:50183 - "GET /users?token=SECRETVALUE&page=2 HTTP/1.1" 200 O
   這是本節唯一需要記住的設定事實：**access log 印不印 query string，不是可以隨意開關的顯示選項，而是你資料管線的一部分。**
 </Callout>
 
-第二件是**來源**。access log 開頭那個 `127.0.0.1:49563` 是連線的來源位址。單元 04 講過，透過反向代理時你看到的會是 proxy 的位址而不是使用者的，要拿到真實 IP 得讀 `X-Forwarded-For`——**而那個 Header 是可以被偽造的**，只有在後面確實有一台可信的 proxy 時才該採用它。單元 17 部署時會再遇到一次。
+第二件是**來源**。access log 開頭那個 `127.0.0.1:49563` 是連線的來源位址。單元 01 提過 `502 Bad Gateway` 是「反向代理找不到後端」，那個反向代理就站在你和 Server 之間：**透過它時，你看到的會是代理的位址而不是使用者的**，要拿到真實 IP 得讀 `X-Forwarded-For`——**而那個 Header 是可以被偽造的**，只有在後面確實有一台可信的 proxy 時才該採用它。單元 17 部署時會再遇到一次。
 
 ---
 

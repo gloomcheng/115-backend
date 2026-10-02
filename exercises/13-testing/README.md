@@ -86,7 +86,7 @@ python -c "assert {'ok': 'yes'} == {'ok': True}"
 3. 壞掉的程式碼上的 `pytest -v` 截圖，**同時**含 `test_health_returns_200 PASSED` 與 `test_health_body_is_exactly_ok_true FAILED`。為什麼同一個壞掉的 API，一條說好一條說壞？
 4. 只跑狀態碼測試（`1 passed`）+ 刪掉 Body 斷言後全套件（`6 passed`）。第 04 節說「綠色代表行為沒變」，這兩張分別證明了什麼？
 5. 自己寫一條新測試，斷言 `GET /notes` 的 `count` 是整數且不小於 `len(items)`。通過後把 `count` 改成字串 `"1"`，截圖必須含 `1 failed`。
-6. 寫一條測試斷言 `POST /notes` 缺 `name` 時 `content-type` 是 `application/json`。通過後把 `raise HTTPException(...)` 改成 `return {"detail": ...}`，截圖必須含失敗。狀態碼從 `422` 變 `200` 時，哪一條斷言先發現？
+6. 寫一條測試斷言 `POST /notes` 缺 `name` 時**狀態碼是 `422`**，而且 `content-type` 是 `application/json`——**兩條都要寫**。通過後把 `raise HTTPException(...)` 改成 `return {"detail": ...}`，截圖必須含失敗。狀態碼變 `200` 時是哪一條發現的？`content-type` 有沒有跟著變？
 7. 為什麼 `test_list_reports_a_count_that_matches_the_items` 斷言 `count == len(items)` 而不是 `count == 1`？各自在什麼情況下會誤報？
 8. 為什麼 `pytest` 取代不了 `curl`，`curl` 取代不了 `pytest`？用課本第 06 節那張表回答。
 

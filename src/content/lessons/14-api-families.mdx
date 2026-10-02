@@ -269,7 +269,7 @@ service NoteService {
 }
 `}</Terminal>
 
-`rpc ListNumbers(ListNotesRequest) returns (ListNotesResponse)` 這一行同時說明了：方法名、輸入型別、輸出型別。**Client stub 是從這裡生成的**，所以 Client 呼叫 `getNote()` 少傳一個參數，編譯期就紅。
+`rpc ListNotes(ListNotesRequest) returns (ListNotesResponse)` 這一行同時說明了：方法名、輸入型別、輸出型別。**Client stub 是從這裡生成的**，所以 Client 呼叫 `getNote()` 少傳一個參數，編譯期就紅。
 
 <Callout type="note" title="和 SOAP 的差別：誰產生 spec">
   SOAP 是**伺服器端**先產出 WSDL，你再去生成 stub。gRPC 是把 `.proto` 當成**原始碼**，Client 與 Server 各自從它生成自己的 stub，兩邊都不手寫。

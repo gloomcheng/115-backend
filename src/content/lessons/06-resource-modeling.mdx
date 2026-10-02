@@ -283,7 +283,7 @@ echo
 第三行是最後的狀態：只剩一份 `carol`，而且是第二次送的那份。這支練習 API 用 `name` 當 key，第二次的 `POST` 是「再執行一次建立」，所以覆蓋了第一次。
 
 <Callout type="note" title="這不是 bug，是 POST 的定義">
-  `POST` 沒有冪等性的保證。網路逾時、使用者重按按鈕、proxy 自動重試，都可能讓同一份 Request 被送兩次。真實系統的兩種做法：用 auto-increment id 或 UUID 當識別，讓每次建立都落在新的位置；針對付款、下單這類重複送出風險高的動作，另外帶一把 idempotency key，讓 Server 認得「這是同一次請求」。資料庫那一段在單元 05 與單元 08。
+  `POST` 沒有冪等性的保證。網路逾時、使用者重按按鈕、proxy 自動重試，都可能讓同一份 Request 被送兩次。真實系統的兩種做法：用 auto-increment id 或 UUID 當識別，讓每次建立都落在新的位置；針對付款、下單這類重複送出風險高的動作，另外帶一把 idempotency key，讓 Server 認得「這是同一次請求」。這一段屬於識別設計，本課不展開；期末專題會用到。
 </Callout>
 
 用不同名字建立三次，就是三筆：
