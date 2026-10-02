@@ -175,6 +175,25 @@ const CONCEPT_CONTRACTS_BY_WEEK = {
       explanation: /(404[^。\n]*(路由|命中|框架|不存在)|(路由|命中|框架|不存在)[^。\n]*404)/i,
     },
   ],
+  5: [
+    {
+      name: 'health check',
+      term: /\/health\b/,
+      explanation:
+        /(\/health[^。\n]*(探測|容器|部署|程式|狀態碼)|(探測|容器|部署|程式|狀態碼)[^。\n]*\/health)/i,
+    },
+    {
+      name: 'HEAD',
+      term: /\bHEAD\b/,
+      explanation: /(HEAD[^。\n]*(method|沒登錄|契約|路由)|(method|沒登錄|契約|路由)[^。\n]*HEAD)/i,
+    },
+    {
+      name: 'contract',
+      term: /契約/,
+      explanation:
+        /(契約[^。\n]*(固定|答應|改動|路徑|Body|狀態碼)|(固定|答應|改動|路徑|Body|狀態碼)[^。\n]*契約)/,
+    },
+  ],
   6: [
     {
       name: 'REST',

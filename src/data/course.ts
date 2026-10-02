@@ -57,9 +57,25 @@ export const chapters: Chapter[] = [
         href: '/lessons/04-routing-handler',
         note: '09/28 教師節放假',
       },
-      { w: 5, dates: '10/05–10/11', title: '寫出第一個 GET /health', note: '10/09 國慶補假' },
-      { w: 6, dates: '10/12–10/18', title: '資源建模與 REST — 集合、成員與 201' },
-      { w: 7, dates: '10/19–10/25', title: 'JSON 與執行期驗證 — 422 是怎麼來的' },
+      {
+        w: 5,
+        dates: '10/05–10/11',
+        title: '寫出第一個 GET /health — 你交付的第一段程式',
+        href: '/lessons/05-first-health-endpoint',
+        note: '10/09 國慶補假',
+      },
+      {
+        w: 6,
+        dates: '10/12–10/18',
+        title: '資源建模與 REST — 集合、成員與 201',
+        href: '/lessons/06-resource-modeling',
+      },
+      {
+        w: 7,
+        dates: '10/19–10/25',
+        title: 'JSON 與執行期驗證 — 422 是怎麼來的',
+        href: '/lessons/07-json-validation',
+      },
     ],
   },
   {

@@ -1,0 +1,290 @@
+---
+title: "寫出第一個 GET /health — 你交付的第一段程式"
+week: 5
+description: "第一次自己寫一條路由，並且讓一個不看畫面的程式判斷它還能不能用。"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+
+前兩課你拆解了別人寫好的 API：`/health` 是框架給你的，你只負責呼叫它。這一課反過來——**你自己寫第一條路由，而且要交給一個不看畫面的程式判斷它能不能用。**
+
+先看課堂 API 給你的那一條：
+
+<Terminal title="bash — the route you already depend on">{`
+curl -i http://127.0.0.1:8000/health
+`}</Terminal>
+
+<svg viewBox="0 0 940 340" role="img" aria-labelledby="health-claim-title health-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="health-claim-title">健康檢查是給不看畫面的程式用的</title>
+  <desc id="health-claim-description">人看到 /health 會想看頁面；容器與部署腳本只讀狀態碼與 Body。狀態碼 200 加 Body 有 ok true，探測程式就判定服務可用；回 404 或 500 它就判定不可用並回報。</desc>
+  <defs>
+    <marker id="health-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="24" width="270" height="86" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="155" y="56" text-anchor="middle" fill="#075486" font-size="19" font-weight="700">人用 curl</text>
+  <text x="155" y="86" text-anchor="middle" fill="#274f67" font-size="14">看到畫面就放心</text>
+  <text x="155" y="106" text-anchor="middle" fill="#274f67" font-size="13">少了一個字也不會知道</text>
+  <rect x="20" y="132" width="270" height="86" rx="8" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="155" y="164" text-anchor="middle" fill="#075486" font-size="19" font-weight="700">容器與部署腳本</text>
+  <text x="155" y="194" text-anchor="middle" fill="#274f67" font-size="14">只讀狀態碼與 Body</text>
+  <text x="155" y="214" text-anchor="middle" fill="#274f67" font-size="13">不會畫任何東西</text>
+  <path d="M298 175 H368" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#health-arrow)" />
+  <rect x="384" y="112" width="200" height="126" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="484" y="146" text-anchor="middle" fill="#075486" font-size="19" font-weight="700">GET /health</text>
+  <text x="484" y="178" text-anchor="middle" fill="#075486" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">&lt; HTTP/1.1 200</text>
+  <text x="484" y="204" text-anchor="middle" fill="#0b3d63" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{`{"ok":true}`}</text>
+  <path d="M592 175 H662" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#health-arrow)" />
+  <rect x="678" y="132" width="242" height="86" rx="8" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="799" y="164" text-anchor="middle" fill="#075486" font-size="18" font-weight="700">探測程式判定</text>
+  <text x="799" y="192" text-anchor="middle" fill="#0b3d63" font-size="15" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">ok is true → 可用</text>
+  <rect x="20" y="244" width="900" height="74" rx="8" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
+  <text x="40" y="272" fill="#ef795e" font-size="16" font-weight="700">同一條路由，回 404 或 500 時，這個程式判定的是「不可用」。</text>
+  <text x="40" y="300" fill="#274f67" font-size="14">所以 /health 不能只回「我活著」，它必須能被機器讀懂。</text>
+  <text x="470" y="332" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">這是你第一次為「不認識你的程式」寫程式。</text>
+</svg>
+
+---
+
+## 01. 這條路由的對象不是人
+
+`/health` 在實際系統裡，讀它的大多不是人。容器平台、部署腳本、負載平衡器都不會畫出你的 JSON。
+
+課堂 repo 裡就有三個真的在讀它的程式。先看其中一個——這是 `examples/http-api/compose.yaml` 裡的 healthcheck：
+
+<Terminal title="compose.yaml — the healthcheck test" flavor="output">{`
+healthcheck:
+  test:
+    - python
+    - -c
+    - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+  interval: 30s
+  timeout: 3s
+  retries: 3
+  start_period: 10s
+`}</Terminal>
+
+這段程式沒有畫任何東西。它只做一件事：送出 Request，如果拿到 `200` 就當作服務還活著；任何例外就當作不健康。
+
+你可以把它複製出來自己跑：
+
+<Terminal title="bash — run the same probe yourself">{`
+python -c "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/health'); print(r.status, r.read())"
+`}</Terminal>
+
+輸出會是 `200 b'{"ok":true}'`。這就是探測程式看到的全部資訊。
+
+<Callout type="important" title="這一課的判斷標準">
+  一個健康的 `/health` 要滿足兩件事：**狀態碼是 `200`**，而且 **Body 的形狀是固定的**。少一個字、多一個字、換成 `true` 的字串或數字 `1`，對人來說都一樣，對程式來說是壞掉。
+</Callout>
+
+---
+
+## 02. 你寫的第一個函式只有三行
+
+打開 `examples/http-api/main.py`，最上面那條路由就是：
+
+<Terminal title="main.py — the first route" flavor="output">{`
+@app.get("/health")
+def health():
+    return {"ok": True}
+`}</Terminal>
+
+這是 `main.py` 裡最短的一段。回傳一個 Python 的 `dict`，框架把它序列化成 JSON。單元 03 已經看過這個過程了。
+
+現在親手改一次，讓你看見改動之後會發生什麼：
+
+<Terminal title="Terminal 1 — edit main.py, then restart">{`
+# 在 health() 裡把 {"ok": True} 改成 {"ok": "yes"}
+# 存檔，等 fastapi dev 重新載入，然後：
+curl -i http://127.0.0.1:8000/health
+`}</Terminal>
+
+<Terminal title="bash — what the probe would now judge" flavor="output">{`
+< HTTP/1.1 200 OK
+< content-type: application/json
+
+{"ok":"yes"}
+`}</Terminal>
+
+狀態碼還是 `200`。人看到會覺得「服務好像還活著」。
+
+但同一個 Request，探測程式正在做這件事：
+
+<Terminal title="bash — a probe that checks the body" flavor="output">{`
+$ python -c "
+import urllib.request, json
+r = urllib.request.urlopen('http://127.0.0.1:8000/health')
+body = json.load(r)
+print('status ok:', r.status == 200)
+print('body ok  :', body.get('ok') is True)
+"
+status ok: True
+body ok  : False
+`}</Terminal>
+
+**這就是這一課最重要的畫面。** `status ok: True`、`body ok: False`。你交付的東西在人類看來正常，在真正使用它的程式看來是壞的。
+
+<Callout type="warning" title="為什麼這個錯誤特別難抓">
+  它不會在你的畫面上跳出來。部署流程會照跑、頁面照樣開、log 也不會紅。只有當探測程式在某一個夜裡判定「這個 container 不健康」並把它重啟時，你才會知道。改完請把 `{"ok": True}` 改回去。
+</Callout>
+
+---
+
+## 03. 健康檢查要檢查什麼
+
+一個容易犯的錯，是把健康檢查寫成「把所有東西都檢查一遍」。想想如果它檢查了資料庫，而資料庫暫時連不上，會發生什麼。
+
+<Terminal title="what a too-broad health check causes" flavor="output">{`
+探測程式 ──> GET /health
+              │
+              ├─ 檢查程式本身存活        ── 必須做
+              ├─ 檢查資料庫連線          ── 不要放進來
+              └─ 檢查外部 API            ── 更不要放進來
+
+資料庫故障 → 回 500 → 探測程式判定整個服務不健康
+                  → 平台重啟 container → 連線全斷，資料庫恢復也沒用
+`}</Terminal>
+
+原因很單純：**Container 被重啟時，裡面正在處理的 Request 全部中斷。** 資料庫短暫故障不該讓你的服務被重啟，因為重啟不會讓資料庫恢復，只會讓你的服務連資料庫的能力暫時歸零。
+
+判斷標準是這樣：
+
+| 該放進 `/health` | 不該放進 `/health` |
+| --- | --- |
+| 程式本身還能接受 Request 並回應 | 資料庫、外部 API、第三方服務 |
+| 回應夠快（這個 API 的十次量測都在 `0.08s` 內） | 任何需要等待的檢查 |
+| 不改動任何狀態（單元 06 的 safe method） | 會寫入或觸發工作的檢查 |
+
+深度檢查有另外的名字與位置，叫 readiness 或 liveness 探針，會分開設。這一課只做最簡單的那一種。
+
+<Callout type="note" title="curl -f 是同一件事的簡化版">
+  執行 `curl -f http://127.0.0.1:8000/health`，成功時 exit status 是 `0`；把它改成不存在的路徑，exit status 會變成 `22`。`curl -f` 把「狀態碼是 `2xx` 才算成功」這條規則直接變成 shell 可以判斷的結果。
+</Callout>
+
+---
+
+## 04. 只接受 GET，也是一個契約
+
+第四課說過，`405` 會附上 `allow`。`/health` 這條路由只登錄了 `GET`，所以：
+
+<Terminal title="bash — the method is part of the contract">{`
+curl -I http://127.0.0.1:8000/health
+`}</Terminal>
+
+<Terminal title="bash — HEAD is not registered" flavor="output">{`
+< HTTP/1.1 405 Method Not Allowed
+< allow: GET
+< content-length: 31
+
+{"detail":"Method Not Allowed"}
+`}</Terminal>
+
+`curl -I` 送的是 `HEAD`，回 `405`。
+
+這個觀察值得停下來想：很多工具習慣用 `HEAD` 來「輕量探測一個 URL」。但這條路由沒有答應過 `HEAD`。**路由表上登錄了什麼，就是這條路徑的全部契約。**
+
+要讓 `HEAD` 也能用，得在程式裡明確登錄它：
+
+<Terminal title="main.py — adding HEAD explicitly" flavor="output">{`
+@app.get("/health")
+@app.head("/health")
+def health():
+    return {"ok": True}
+`}</Terminal>
+
+這一行差別，就是「契約裡有這件事」與「契約裡沒這件事」的差別。探測工具送什麼 method，你的路由就得答應什麼。
+
+---
+
+## 05. 你交付的是契約，不是一個畫面
+
+把這四節合起來，`GET /health` 答應了四件事：
+
+| 契約 | 規格 | 違約的後果 |
+| --- | --- | --- |
+| 路徑 | 固定是 `/health` | 探測程式拿到 `404`，判定不健康 |
+| 方法 | 只接受 `GET` | 送 `HEAD` 拿到 `405`，判定不健康 |
+| 狀態碼 | 正常時固定 `200` | 任何其他數字，判定不健康 |
+| Body | 固定是 `{"ok":true}` | `ok` 不是布林 `true`，判定不健康 |
+
+<Callout type="important" title="這是你第一次被當成 API 的提供者">
+  前兩課你是 API 的使用者：讀別人的文件、觀察別人的 Response。從這一課起，寫在這張表裡的每一列，都是別人會依賴你的地方。**改動任何一列，都是 breaking change。** 單元 06 會看到第一個實際例子：為什麼加了 `Location` 會是好事，而默默改掉 `405` 的 Body 會是壞事。
+</Callout>
+
+這也是為什麼這個 repo 對 `main.py` 有測試。跑一次看看它在檢查什麼：
+
+<Terminal title="bash — the existing test for this route">{`
+cd examples/http-api
+python -m pytest tests/test_main.py -q -k health
+`}</Terminal>
+
+那條測試斷言兩件事：`status_code == 200`，以及 `response.json() == {"ok": True}`。第二個斷言就是第二節的教訓——它擋下來的正是 `{"ok":"yes"}` 那種看起來沒問題的改動。
+
+---
+
+## 06. 終端實戰驗證：當一次探測程式
+
+這條斷言就是第 01 節那份契約的機器版。下一節把它當成探測程式實際跑一次。
+
+### 第一步：正常狀態
+
+<Terminal title="bash — step 1">{`
+curl -i http://127.0.0.1:8000/health
+`}</Terminal>
+
+這一條符合第 01 節的契約：狀態碼 `200`，Body 是 `{"ok":true}`，十一個位元組。探測程式判定：可用。
+
+### 第二步：路徑不存在
+
+<Terminal title="bash — step 2" flavor="output">{`
+> curl -f http://127.0.0.1:8000/healthz
+exit status 22
+`}</Terminal>
+
+換一個拼錯的路徑 `/healthz`。它回 `404`，`curl -f` 用 exit status 22 表達失敗，探測程式判定：不可用。
+
+### 第三步：method 不對
+
+<Terminal title="bash — step 3" flavor="output">{`
+> curl -I http://127.0.0.1:8000/health
+< HTTP/1.1 405 Method Not Allowed
+< allow: GET
+`}</Terminal>
+
+換一個沒登錄的方法 `HEAD`。它回 `405`，探測程式同樣判定：不可用。
+
+### 第四步：量一下它有多快
+
+<Terminal title="bash — step 4">{`
+for i in $(seq 10); do
+  curl -s -o /dev/null -w '%{time_total}\n' http://127.0.0.1:8000/health
+done | sort -n | tail -3
+`}</Terminal>
+
+最慢的一次也在 `0.08s` 之內。這個數字是探測程式設 `timeout: 3s` 的依據——如果這條路由要等兩秒才回，探測程式的設計就得跟著改。
+
+---
+
+## 單元實作作業
+
+在本地環境完成以下操作並記錄成果：
+
+1. 把 `examples/http-api/main.py` 的 `health()` 暫時改成 `return {"ok": "yes"}`，執行 `curl -i http://127.0.0.1:8000/health` 截圖，再執行一支會讀 Body 的探測程式截圖。截圖必須同時顯示 `200` 與 `body ok: False`。**截完立刻改回 `{"ok": True}` 並再次截圖。**
+2. 執行 `cd examples/http-api && python -m pytest tests/test_main.py -q`，截圖必須顯示全部通過。在筆記中寫出：第 1 步那個改動為什麼會讓這條測試失敗？
+3. 執行 `curl -f http://127.0.0.1:8000/health` 與 `curl -f http://127.0.0.1:8000/healthz`，用 `echo $?` 截圖兩次的 exit status。
+4. 執行 `curl -I http://127.0.0.1:8000/health`，截圖必須包含 `405` 與 `allow: GET`，並在筆記中回答：探測工具改送 `HEAD` 會發生什麼？該怎麼修？
+5. 連續量測 `GET /health` 十次，截圖最慢一次的秒數，並寫出：`compose.yaml` 的 `timeout: 3s` 與這個數字有什麼關係？
+6. 用一句話回答：`/health` 為什麼不應該檢查資料庫連線？把答案寫成「重啟之後會發生什麼」。
+
+把作業截圖與簡答筆記存入 `exercises/05-first-health-endpoint/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案，且 `main.py` 已經改回 `{"ok": True}`。
+
+### 本單元使用的正本
+
+- [RFC 9110 §15.3.1 — 200 OK](https://www.rfc-editor.org/rfc/rfc9110.html#name-200-ok)
+- [RFC 9110 §9.3.1 — Safe Methods](https://www.rfc-editor.org/rfc/rfc9110.html#name-safe-methods)
+- [curl — exit codes and `--fail`](https://curl.se/docs/manpage.html#-f)
+- [Docker — HEALTHCHECK reference](https://docs.docker.com/reference/dockerfile/#healthcheck)
+- [FastAPI — Testing with TestClient and pytest](https://fastapi.tiangolo.com/tutorial/testing/)
