@@ -39,7 +39,7 @@ export const chapters: Chapter[] = [
       {
         w: 2,
         dates: '09/14–09/20',
-        title: 'URI / URL / Header / Body 的長相',
+        title: 'URI / URL、Header 與 Body — 看懂網址怎麼變成 Request',
         href: '/lessons/02-url-headers-body',
         note: '加退選截止',
       },
@@ -84,7 +84,7 @@ export const chapters: Chapter[] = [
       {
         w: 7,
         dates: '10/19–10/25',
-        title: 'JSON 與執行期驗證 — 422 是怎麼來的',
+        title: 'JSON — 422 跟 500 不一樣',
         href: '/lessons/07-json-validation',
       },
       {
@@ -174,7 +174,7 @@ export const chapters: Chapter[] = [
       {
         w: 17,
         dates: '12/28–01/03',
-        title: '專題整合 — 串起 API、資料庫與部署',
+        title: '把 VPS 變成公開服務 — Nginx 與 HTTPS',
         href: '/lessons/17-vps-deployment',
         note: '01/01 元旦放假',
       },
