@@ -127,6 +127,26 @@ curl -i http://127.0.0.1:8006/profile -H "Authorization: Bearer $STUDENT"
 
 **換金鑰會讓所有已發出的 token 同時失效**，不是只有一枚。Server 不需要保存任何狀態，代價是每個人都被迫重新登入。
 
+## 速率限制
+
+`main.py` 已經有一個限流中介軟體了。`rate_limit.py` 則把三種演算法並排跑給你看：
+
+```bash
+python rate_limit.py baseline   # 沒有限流會怎樣
+python rate_limit.py fixed      # 固定視窗，以及它在視窗邊界的破口
+python rate_limit.py sliding    # 滑動視窗，同樣 10 個請求只准 5 個
+python rate_limit.py bucket     # token bucket，允許爆量
+python rate_limit.py headers    # 429 與 Retry-After
+```
+
+用真的 Server 試：
+
+```bash
+for i in $(seq 1 31); do curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/open; done | sort | uniq -c
+```
+
+**`30 200` 加 `1 429`。**接著打一個不存在的路徑 `curl -i http://127.0.0.1:8005/nope`，它也會是 `429`——因為中介軟體在路由比對之前就跑了。
+
 ## 繳交
 
 1. 不存在路徑的 `404` 截圖，**必須含 `x-request-id` 與 `x-trace`** + 中介軟體有沒有真的執行。

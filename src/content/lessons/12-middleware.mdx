@@ -310,11 +310,217 @@ SIGNING_KEY=lesson-12-key-b fastapi dev main.py --port 8006
   真正麻煩的是「只踢掉一個人」。那需要 Server 記住「這一枚已經作廢」，記住這件事本身就是狀態，而狀態正是單元 01 說 HTTP 沒有提供的東西。實務上的做法是折衷：把 `exp` 設短（單元 11 的做法），讓撤銷的視窗小到可以接受，再用換金鑰處理真正嚴重的事件。
 </Callout>
 
+## 08. 速率限制：拒絕之前，你得先活著
+
+第 07 節才剛換完金鑰，第 04 到 06 節都在拒絕不該進來的人。但那些判斷要花時間：要讀 Header、要驗簽章、要查表。**一個不帶任何憑證的 Client 照樣能把這些步驟全部走完。**
+
+**你的 Server 只有一顆 CPU。**一個不帶憑證的 Client 送出 10 000 個請求，不代表這支 API 很受歡迎，可能只代表有人正在打你。
+
+<Callout type="important" title="速率限制是唯一一個「沒登入也適用」的控制">
+  `401`、`403` 都要先知道你是誰才能判斷。速率限制不用——它只需要知道「這個來源剛剛叫了幾次」。
+
+  這就是它必須寫在中介軟體裡、而且必須是最外層的原因：它是唯一一個**連路徑都還沒比對，就已經在做決定**的控制。
+</Callout>
+
+### 08.1 429 不是 403
+
+先分清楚這三個碼。它們都會回給同一個 Client，但意義完全不同：
+
+| 狀態碼 | 意思是 | Client 該做的事 |
+| --- | --- | --- |
+| `401` | 你還沒證明你是誰 | 去登入 |
+| `403` | 知道你誰了，但你不能做這件事 | 別再試了 |
+| `429` | 你沒問題，只是**太頻繁** | 等一下再試 |
+
+<Terminal title="exercises/12-middleware/main.py — the limiter" flavor="output">{`
+RATE_LIMIT = 30
+RATE_WINDOW = 60.0
+_hits: dict[str, tuple[int, float]] = {}
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    client = request.client.host if request.client else "unknown"
+    now = time.time()
+    window_start = now - (now % RATE_WINDOW)
+    count, seen_start = _hits.get(client, (0, window_start))
+    if window_start != seen_start:
+        count = 0
+    if count >= RATE_LIMIT:
+        retry_after = int(RATE_WINDOW - (now % RATE_WINDOW)) + 1
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Rate limit exceeded"},
+            headers={"Retry-After": str(retry_after)},
+        )
+    _hits[client] = (count + 1, window_start)
+    response = await call_next(request)
+    response.headers["x-ratelimit-limit"] = str(RATE_LIMIT)
+    response.headers["x-ratelimit-remaining"] = str(RATE_LIMIT - count - 1)
+    return response
+`}</Terminal>
+
+<Callout type="note" title="429 是後來才有的碼">
+  `401`、`403`、`404` 都在 HTTP/1.1 裡（RFC 9110）。`429 Too Many Requests` 是後來用 RFC 6585 補上去的。
+
+  它**不是** `503 Service Unavailable`。`503` 是「我現在壞掉了，等一下再試」，`429` 是「我好好的，是你太急」。Client 的重試策略完全不同，所以不能混用。
+</Callout>
+
+`Retry-After` 這個 Header 是重點：它告訴 Client **具體要等幾秒**，而不是讓它自己猜。沒有它，Client 通常會馬上重試，你剛擋下的流量又回來了。
+
+### 08.2 跑起來看
+
+<Terminal title="bash — remaining counts down" flavor="output">{`
+$ for i in 1 2 3; do curl -s -o /dev/null -w "req $i -> %{http_code}\n" http://127.0.0.1:8005/open; done
+req 1 -> 200
+req 2 -> 200
+req 3 -> 200
+
+$ curl -s -D - -o /dev/null http://127.0.0.1:8005/open | grep -i ratelimit
+x-ratelimit-limit: 30
+x-ratelimit-remaining: 27
+`}</Terminal>
+
+<Callout type="note" title="為什麼是 30 不是 5">
+  `RATE_LIMIT = 30`。這支程式同時還要跑本單元其他八步的練習，限流太緊的話學生會在做毫不相干的作業時收到 `429`。
+
+  想提早看到拒絕，就把 `main.py` 裡那個數字改小。**限流值是政策，不是常數。**
+</Callout>
+
+打到第 31 次：
+
+<Terminal title="bash — the 31st request" flavor="output">{`
+$ for i in $(seq 1 31); do curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/open; done | sort | uniq -c
+     30 200
+      1 429
+
+$ curl -i http://127.0.0.1:8005/open
+HTTP/1.1 429 Too Many Requests
+retry-after: 44
+content-type: application/json
+
+{"detail":"Rate limit exceeded"}
+`}</Terminal>
+
+`retry-after` 的數字會隨著你是在視窗的哪一段送出而變。**這不是 bug**——它就是「距離這個視窗結束還有幾秒」。
+
+現在打一個**這支 API 根本沒有的路徑**：
+
+<Terminal title="bash — the limiter runs before routing" flavor="output">{`
+$ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/nope
+429
+`}</Terminal>
+
+<Callout type="important" title="`/nope` 沒有路由，但它拿到的是 429 不是 404">
+  這是第 01 節的直接後果。中介軟體在路由比對**之前**執行，所以這次請求在還沒有人查「這個路徑存不存在」之前，就被限流擋下來了。
+
+  順帶回答一個你現在應該會好奇的問題——同一段時間內打一個需要登入的路由：
+
+  <Terminal title="bash — which check wins" flavor="output">{`
+  $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/profile
+  429
+  `}</Terminal>
+
+  **是 429，不是 401。**因為 `rate_limit` 是最後註冊的，也就是最外層，它比認證先跑。
+
+  這是取捨，不是錯誤：如果你不想讓「沒登入的人」拿到 `429`（那會洩漏你每分鐘的上限），就要把限流註冊在認證**裡面**。**限流器的位置本身就是一個安全決策。**
+</Callout>
+
+### 08.3 這個寫法有個破口，而且就在視窗邊界
+
+上面那個 `rate_limit` 擋的是每一個打到這支 API 的請求，而它是最多人寫的那一種：固定視窗計數器。它的問題不在效能，在**它答應的東西比它做到的多**。
+
+`rate_limit.py` 把三種算法並排跑給你看。
+
+<Terminal title="bash — fixed window at the boundary" flavor="output">{`
+$ python rate_limit.py fixed
+2. Fixed window: 5 per 60s
+  all inside one window, 1s apart
+    sent 7, allowed 5
+    first refusal: {'retry_after': 56}
+   now the same client, 5 requests at the end of one window...
+  5 at t=56..59, then 5 at t=60..63
+    sent 10, allowed 10
+   10 requests in 9 seconds, limit is 5.
+   The counter went back to zero at t=60, so the second batch never felt it.
+`}</Terminal>
+
+**三種算法裡的第一種，限制是每分鐘 5 個——這個 Client 在 9 秒內送了 10 個，全部通過。**
+
+<Callout type="warning" title="破口的名字叫 double rate burst">
+  計數器在視窗起點歸零。攻擊者在 `t=59.9` 送 5 個，等兩秒到 `t=60` 計數器歸零，再送 5 個。
+
+  **他在任何連續 60 秒內都沒有超過 10 個，而你的規則寫的是 5。**攻擊成本直接翻倍，而且他不需要任何技巧，只要掐時間。
+
+  修法就是把「到點歸零」換成「往回看過去 60 秒」。
+</Callout>
+
+<Terminal title="bash — sliding window log, same 10 requests" flavor="output">{`
+$ python rate_limit.py sliding
+3. Sliding window log, same 10 requests
+  5 at t=56..59, then 5 at t=60..63
+    sent 10, allowed 5
+    first refusal: {'retry_after': 57}
+   timestamps kept for one key: 5
+   memory grows with what you allow, which is the price of exactness
+`}</Terminal>
+
+同樣 10 個請求，只准 5 個。差別在於：**它記住每一個請求發生的時間點，而不是記住「這一格有幾個」。**過期的丟掉，永遠只看「過去 60 秒有幾個」。
+
+<Callout type="important" title="滑動視窗的代價是記憶體，而且要記每一筆">
+  上面那個 `log` 裡存的是 5 個時間戳。上限調到 10 000，它就存 10 000 個。
+
+  而且一個 Client 的紀錄會一直留在 dict 裡，除非你另外安排把它清掉——**否則記憶體會被這些從來不再回來的 Client 慢慢吃光。**
+</Callout>
+
+### 08.4 還有第三種：token bucket
+
+滑動視窗是精確的，但真實 API 通常不想要「精確」。你往往想要的是：**短時間的爆量可以通過，長時間的高頻不行。**
+
+<Terminal title="bash — burst allowed, sustained rate not" flavor="output">{`
+$ python rate_limit.py bucket
+4. Token bucket: burst of 3, refilling 1 per second
+  4 at t=0, then 1 per second
+    sent 8, allowed 7
+    first refusal: {'retry_after': 2}
+   3 got through at t=0, the 4th was refused, then 1 per second
+   this is the shape you want for an API: short bursts pass, sustained load does not
+`}</Terminal>
+
+這種做法是公開 API 實務上最常見的：桶裡預先放 3 枚代幣，每秒補 1 枚。要通行就先花 1 枚，沒錢就等下一枚補滿。
+
+<Callout type="note" title="三種算法怎麼選">
+  - **固定視窗**：最省事、最容易寫。**會被邊界攻擊打兩倍**，不要用在牽涉金錢或權限的路由上。
+  - **滑動視窗**：精確，數字能當合約講。要管記憶體。
+  - **Token bucket**：允許爆量，之後回到穩定速率。**大部分公開 API 應該用這個。**
+
+  三個都是正確的選擇，錯的是不知道自己選了哪一個。
+</Callout>
+
+### 08.5 依照誰來算，是政策不是技術
+
+上面的 key 是 `request.client.host`，也就是來源 IP。這件事你必須想清楚，因為它決定了誰會被誤擋在這支 API 外面。
+
+<Callout type="important" title="用 IP 當 key 的後果">
+  - 同一間公司、同一個 NAT 後面的一整棟樓共用一個 IP。**一個人寫壞的迴圈，會讓整棟樓被擋。**
+  - 反過來，攻擊者換一個 IP 就重置了計數器——**用 IP 擋不住真正的攻擊者。**
+
+  常見的折衷是：**未登入的請求用 IP 當 key，登入後改用帳號當 key。**已驗證的 Client 比較好辨識，攻擊者要換帳號的成本比換 IP 高。
+</Callout>
+
+<Callout type="warning" title="限流器裡的 dict 是一份沒有上限的記憶體">
+  `_hits` 這行會為**每一個來過的 IP** 留一筆，從來不刪。
+
+  攻擊者不需要真的把你的 API 打慢——他只要讓幾百萬個不同 IP 各來一次，你的記憶體就被吃掉了，而當下幾乎沒有真實流量。
+
+  **任何「依照來源分組」的結構，都要問自己：這個 key 的數量有上限嗎？**沒有的話，那是另一種形式的阻斷服務。
+</Callout>
+
 ---
 
-## 08. 終端實戰驗證
+## 09. 終端實戰驗證
 
-Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`，Terminal 2 已經把 `$STUDENT` 和 `$ADMIN` 放出來了。下面八步照順序做，每一步都先看指令再看截圖要求。
+Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`，Terminal 2 已經把 `$STUDENT` 和 `$ADMIN` 放出來了。這支 API 的下面十步照順序做，每一步都先看指令再看截圖要求。**第 9 步會重啟 Terminal 1，重啟之後就不要再打其他請求**，否則第 10 步拿到的不是 `429`。
 
 1. 先打一個這支 API 沒有定義的路徑：`curl -i http://127.0.0.1:8005/nope`。截圖必須同時包含 `404`、`x-request-id` 與 `x-trace`，因為中介軟體有沒有執行，證據就在那兩個 Header 上。
 2. 接著看巢狀順序：`curl -i http://127.0.0.1:8005/open | rg -i '^x-trace'`。把 `outer:in > inner:in > inner:out > outer:out` 整串抄下來，這是第 02 節的證據。
@@ -324,6 +530,8 @@ Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`�
 6. 然後送出未宣告的欄位：`curl -i -X POST http://127.0.0.1:8005/profile -H 'Content-Type: application/json' -H "Authorization: Bearer $STUDENT" -d '{"nickname":"iris","is_admin":true}'`。截圖必須包含 `422`、`extra_forbidden` 與 `["body","is_admin"]`。
 7. 接著把 `SIGNING_KEY` 拿掉，執行 `python -c "import main"`。截圖必須包含 `RuntimeError` 與那句完整訊息，因為重點是它拒絕啟動而不是用預設值。
 8. 最後開 Terminal 3 用 `SIGNING_KEY=lesson-12-key-b` 起 8006，然後跑 `curl -s http://127.0.0.1:8005/key-info` 和 `curl -s http://127.0.0.1:8006/key-info` 比較指紋，再用 `curl -i http://127.0.0.1:8006/profile -H "Authorization: Bearer $STUDENT"` 確認回 `401 Bad signature`。
+9. **重啟 Terminal 1 的 Server**，然後跑 `for i in $(seq 1 31); do curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/open; done | sort | uniq -c`。截圖必須包含 `30 200` 與 `1 429`。接著 `curl -i http://127.0.0.1:8005/open`，截圖必須包含 `429` 與 `retry-after`。**重啟是必要的**：計數器存在記憶體裡，重啟才會歸零。
+10. 不重啟，直接打 `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/nope` 和 `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/profile`。兩張截圖必須**都是 `429`**，然後回答：為什麼 `/profile` 沒有因為你沒帶 token 而回 `401`？
 
 ---
 
@@ -339,6 +547,10 @@ Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`�
 6. 接著把 `SIGNING_KEY` 拿掉再執行 `python -c "import main"`，截圖必須包含 `RuntimeError` 與那句完整訊息。回答：為什麼這支程式選擇拒絕啟動，而不是印警告然後用預設值？
 7. 然後開第二個 Terminal 用不同金鑰起 8006，截圖必須包含兩個 `/key-info` 的**不同指紋**，以及 `8006` 回 `401 Bad signature`。回答：換金鑰讓誰失效？
 8. 最後用一句話回答：`exp` 兩小時的情況下，使用者被開除一個小時，他的 token 還能用多久？用這一堂課的兩個機制回答，不要只用其中一個。
+9. 重啟 Server 後跑 `for i in $(seq 1 31); do curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/open; done | sort | uniq -c`，截圖必須包含 `30 200` 與 `1 429`。再 `curl -i http://127.0.0.1:8005/open`，截圖必須包含 `retry-after`。回答：為什麼這個數字每次跑都不一樣？
+10. 接著跑 `python rate_limit.py fixed` 與 `python rate_limit.py sliding`，兩張截圖都要包含 `5 at t=56..59, then 5 at t=60..63`。**回答：同樣 10 個請求，為什麼固定視窗放行 10 個、滑動視窗只放行 5 個？`main.py` 現在用的是哪一種？**
+11. 用 `grep -n "_hits" main.py` 找到那個 dict。回答：`_hits` 的 key 是什麼？這個 key 的數量有上限嗎？如果沒有，是什麼問題？
+12. 最後回答：你在 Terminal 2 打 `/profile` 忘了帶 token，但因為剛剛超流而拿到 `429`。**你要怎麼分辨「我被限流了」跟「我忘記帶 token 了」？**這兩個狀況 Server 給的 Header 有什麼不同？
 
 把作業截圖與簡答筆記存入 `exercises/12-middleware/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。這一課的作業重點不在截圖數量，而在第 3、4、8 三題的答案是否真的對照到指令輸出。
 
@@ -355,3 +567,7 @@ Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`�
 - [OWASP — Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)
 - [OWASP — Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)
 - [RFC 9110 §15.5.2 — 401 Unauthorized](https://www.rfc-editor.org/rfc/rfc9110.html#name-401-unauthorized)
+- [RFC 6585 §4 — 429 Too Many Requests](https://www.rfc-editor.org/rfc/rfc6585.html#section-4)
+- [RFC 9110 §15.5.29 — 503 Service Unavailable（與 429 的差別）](https://www.rfc-editor.org/rfc/rfc9110.html#name-503-service-unavailable)
+- [RFC 9110 §10.2.3 — Retry-After](https://www.rfc-editor.org/rfc/rfc9110.html#name-retry-after)
+- [OWASP — Denial of Service Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html)

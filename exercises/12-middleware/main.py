@@ -22,6 +22,7 @@ import time
 from itertools import count
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 # The key is read from the environment. If it is missing, the app refuses to
@@ -110,6 +111,43 @@ async def assign_request_id(request: Request, call_next):
     request.state.request_id = f"r{next(ids):04d}"
     response = await call_next(request)
     response.headers["x-request-id"] = request.state.request_id
+    return response
+
+
+# A third middleware, and the first one that refuses work instead of only
+# observing it. Registered last, so it is the OUTERMONE of all three: the
+# limiter runs before the trace middlewares and before routing.
+#
+# The counter is per client key, and the window is fixed. Unit 12 section 08
+# shows exactly what that costs at a window boundary.
+# 30 per minute is deliberately generous: this app also carries the rest of
+# unit 12's exercises, and a tight limit would hand students a 429 halfway
+# through homework that has nothing to do with rate limiting. Lower it when
+# you want to see the refusal sooner.
+RATE_LIMIT = 30
+RATE_WINDOW = 60.0
+_hits: dict[str, tuple[int, float]] = {}
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    client = request.client.host if request.client else "unknown"
+    now = time.time()
+    window_start = now - (now % RATE_WINDOW)
+    count, seen_start = _hits.get(client, (0, window_start))
+    if window_start != seen_start:
+        count = 0
+    if count >= RATE_LIMIT:
+        retry_after = int(RATE_WINDOW - (now % RATE_WINDOW)) + 1
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Rate limit exceeded"},
+            headers={"Retry-After": str(retry_after)},
+        )
+    _hits[client] = (count + 1, window_start)
+    response = await call_next(request)
+    response.headers["x-ratelimit-limit"] = str(RATE_LIMIT)
+    response.headers["x-ratelimit-remaining"] = str(RATE_LIMIT - count - 1)
     return response
 
 
