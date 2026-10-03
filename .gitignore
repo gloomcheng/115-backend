@@ -2,39 +2,29 @@
 dist/
 # generated types
 .astro/
-
 # dependencies
 node_modules/
-
 # logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-
-
 # environment variables
 .env
 .env.*
 !.env.example
-
 # downloaded verification tools
 .cache/
-
 # python artifacts from the practice API
 venv/
 __pycache__/
-
 # macOS-specific files
 .DS_Store
-
 # local browser QA artifacts
 .playwright-cli/
 output/playwright/
-
 # jetbrains setting folder
 .idea/
-
 # sqlite databases produced by lesson exercises
 *.db
 *.db-journal
@@ -43,4 +33,3 @@ output/playwright/
 users.json
 race.json
 race.lock
-injection.db

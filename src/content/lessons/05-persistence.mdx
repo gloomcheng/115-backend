@@ -368,7 +368,200 @@ os.close(lock)
 
 ---
 
-## 07. 什麼時候該用哪一種
+## 07. Index：資料庫怎麼跳過大部分資料
+
+到這裡你會寫 `SELECT ... WHERE`，但你從來不知道資料庫**實際上**做了什麼。它是從第一列讀到最後一列，還是直接跳到你要的那一列？
+
+這兩件事在 5 萬列的差別是幾百倍。`indexes.py` 用一張 5 萬列的 `notes` 表把它量出來。
+
+<Terminal title="bash — one author out of 50000 rows, no index" flavor="output">{`
+$ python indexes.py plan
+1. One author out of 50000 rows, no index
+  author = 'user0042'
+    plan : SCAN notes
+    rows : 10
+    time : 218 ms for 50 runs
+`}</Terminal>
+
+<Callout type="important" title="`SCAN` 的意思不是「查不到」，是「整張表都看過了」">
+  你的條件是「作者是 `user0042`」，符合的只有 **10 列**。但 `SCAN` 這個字的意思是：資料庫從頭到尾讀了 50 000 列，每一列都檢查一次「這列的 author 是不是 `user0042`」，只有 10 列通過。
+
+  **它繞了 50 000 圈，只為了拿出 10 筆。** 而且它很誠實地在 plan 裡寫出來了。
+</Callout>
+
+<Terminal title="bash — the same query, after CREATE INDEX" flavor="output">{`
+$ python indexes.py index
+2. The same query, after CREATE INDEX
+  author = 'user0042'
+    plan : SEARCH notes USING INDEX idx_notes_author (author=?)
+    rows : 10
+    time : 1 ms for 50 runs
+   the primary key was already an index — that is why id was never slow:
+  id = 42000
+    plan : SEARCH notes USING INTEGER PRIMARY KEY (rowid=?)
+    rows : 1
+    time : 0 ms for 50 runs
+`}</Terminal>
+
+同一條查詢，**218 ms 變 1 ms**，而且回傳的資料一模一樣。差別只有一行：
+
+```sql
+CREATE INDEX idx_notes_author ON notes (author)
+```
+
+<Callout type="important" title="Index 沒有改變你的資料，也沒有改變你的結果">
+  這是初學者最常搞錯的一件事。有人以為「有 index」跟「沒 index」是兩種資料。
+
+  不是。`notes` 裡的 5 萬列，索引前後一模一樣。索引只是**另外抄一份排序過的清單**，讓資料庫知道要跳到哪一頁。
+
+  所以刪掉 index 不會刪掉資料，只會讓查詢變慢。反過來，**有 index 也不等於查詢會快**——下面 07.3 會看到資料庫自己放棄使用它的情況。
+</Callout>
+
+### 07.1 你其實早就有一個 index 了
+
+注意第二段：`SEARCH notes USING INTEGER PRIMARY KEY (rowid=?)`。
+
+`id INTEGER PRIMARY KEY` 這行——第 03 節講型別約束的時候提到過——在 SQLite 裡不只是「不能重複」，它**就是 `rowid` 本身**，資料庫本來就把它排好序了。所以 `WHERE id = ?` 從來不需要你自己建索引。
+
+<Callout type="note" title="所以在建 index 之前，先問一句：這張表的主鍵是什麼？">
+  主鍵本來就有一個 index。這是最便宜的一次查詢最佳化，因為你不用做任何事。
+</Callout>
+
+### 07.2 讀 plan 那一行，不要靠猜
+
+<Terminal title="bash — what the plan line actually tells you" flavor="output">{`
+$ python indexes.py composite
+3. Reading the plan line: it says exactly what happened
+   both columns named, both usable:
+  WHERE author = ? AND tag = ?
+    plan : SEARCH notes USING INDEX idx_tag_author (tag=? AND author=?)
+   same query, conditions written in the other order — no difference:
+  WHERE tag = ? AND author = ?
+    plan : SEARCH notes USING INDEX idx_tag_author (tag=? AND author=?)
+   only the right-hand column named — SQLite still uses the index:
+  WHERE author = ?
+    plan : SEARCH notes USING INDEX idx_tag_author (ANY(tag) AND author=?)
+   add the selected column to the index and the plan says COVERING:
+  SELECT title WHERE author = ? AND tag = ?
+    plan : SEARCH notes USING COVERING INDEX idx_cover (author=? AND tag=?)
+   a pattern match on the front of a string is not the same as = :
+  WHERE author LIKE 'user0042%'
+    plan : SCAN notes
+    rows : 10
+    time : 329 ms for 50 runs
+`}</Terminal>
+
+四件事，全部直接寫在 plan 那一行裡：
+
+**一、`WHERE` 裡條件的先後順序不影响資料庫。** 前兩段的 plan 完全一樣，雖然你寫的順序相反。資料庫會自己把條件排到跟索引一致的順序。
+
+**二、索引的最左欄沒有被指定，它還是會被用。** 第三段出現 `ANY(tag)`——意思是「我不確定 tag 是哪一個，但我知道 author 一定是 `user0042`，所以我把 8 個 tag 各查一次」。這跟教科書上「最左欄必須出現」的說法不一樣，**SQLite 實際上就是這樣做的**。
+
+**三、出現 `COVERING` 代表更快。** 第四段把 `title` 也放進索引，資料庫就完全不必回到資料表取資料。這叫「覆蓋索引」。
+
+**四、`LIKE 'user0042%'` 不等於 `=`。** 資料庫一樣在比對 author，條件長得幾乎一樣，最後一段的 plan 卻從 `SEARCH` 掉回 `SCAN`：329 ms 對 1 ms。
+
+<Callout type="warning" title="第四點為什麼會這樣，而修好它的代價不是零">
+  SQLite 的 `LIKE` 預設**不分大小寫**。要它走索引，索引的排序必須跟「大小寫無關的相等」一致，所以要加上 `COLLATE NOCASE`：
+
+  ```sql
+  CREATE INDEX idx_nocase ON notes (author COLLATE NOCASE);
+  ```
+
+  實測之後，`LIKE 'user0042%'` 確實變成了 `SEARCH notes USING INDEX idx_nocase (author>? AND author<?)`。
+
+  **但代價在這裡**：只留 `idx_nocase` 的時候，`WHERE author = ?` 反而退回 `SCAN notes`。
+
+  <Terminal title="bash — the two indexes are not interchangeable" flavor="output">{`
+  $ sqlite3 indexes.db "CREATE INDEX idx_nocase ON notes (author COLLATE NOCASE); ANALYZE;"
+  $ sqlite3 indexes.db "EXPLAIN QUERY PLAN SELECT title FROM notes WHERE author = ?;"
+  SCAN notes
+
+  $ sqlite3 indexes.db "CREATE INDEX idx_author ON notes (author); ANALYZE;"
+  $ sqlite3 indexes.db "EXPLAIN QUERY PLAN SELECT title FROM notes WHERE author = ?;"
+  SEARCH notes USING INDEX idx_author (author=?)
+
+  $ sqlite3 indexes.db "EXPLAIN QUERY PLAN SELECT title FROM notes WHERE author LIKE 'user0042%';"
+  SEARCH notes USING INDEX idx_nocase (author>? AND author<?)
+  `}</Terminal>
+
+  兩個都要建：一個給 `=`，一個給 `LIKE '...%'`。**這正是為什麼規則是「去看 plan」而不是「記住哪種查詢要配哪種索引」**——只靠記憶的話，你很可能會蓋掉一個本來好好的索引。
+</Callout>
+
+<Callout type="important" title="所以「什麼時候該建 index」的答案不是背規則">
+  規則是：**`WHERE`、`JOIN`、`ORDER BY` 裡出現的欄位，考慮建 index。**其餘的都可以先不管。
+
+  然後**每一條查詢都看一次 plan**，確認它真的被用了。資料庫有權不聽你的——第 02 節就是例子：沒有索引時，`tag = 'sql'` 符合 6 250 列，佔全表的八分之一，那時候整表掃描就是對的選擇。
+</Callout>
+
+### 07.3 索引是有代價的
+
+<Terminal title="bash — the same writer, with and without indexes" flavor="output">{`
+$ python indexes.py cost
+4. What an index costs the writer
+    2000 inserts, no index   : 4 ms
+    2000 inserts, 2 indexes : 9 ms
+    the writer got 2.0x slower
+    (median of 3 runs, one transaction, your numbers will differ)
+`}</Terminal>
+
+每一筆新資料進來，資料庫不只要把它寫進資料表，**還要把它插進每一個索引裡**——而索引必須維持排序，所以是插到正確位置，不是 append 到最後面。
+
+<Callout type="important" title="讀取變快，寫入變慢。這是同一個決定的一體兩面">
+  你每次加一個 index，都讓某些查詢變快，同時讓所有寫入變慢。
+
+  所以 index 不是越多越好。它的判斷標準只有一句：**你已經量過這條查詢很慢，而且慢的那個 plan 不是 `SCAN notes`。**沒量過就別加。
+</Callout>
+
+### 07.4 沒人用的索引，是純粹的浪費
+
+<Terminal title="bash — an index nobody can use" flavor="output">{`
+$ python indexes.py unused
+5. An index nobody queries
+    file, before the index : 4.7 MB
+    file, after it         : 8.1 MB
+    indexes on notes now:
+      idx_notes_body
+    the one indexed column is body, and nothing here filters on it:
+  WHERE author = ?
+    plan : SCAN notes
+    rows : 10
+    time : 250 ms for 50 runs
+    dropping it and compacting the file gives the space back:
+    file, after DROP INDEX + VACUUM : 4.7 MB
+`}</Terminal>
+
+<Terminal title="sql — the one query that counts" flavor="output">{`
+$ sqlite3 indexes.db "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index';"
+1
+`}</Terminal>
+
+檔案從 4.7 MB 變成 8.1 MB，這個索引**沒有讓任何一條查詢變快**，而上一節那個寫入代價照樣要付。
+
+<Callout type="warning" title="`DROP INDEX` 之後檔案沒有立刻變小，這不是 bug">
+  最後一行印出 4.7 MB，但那是因為還多跑了一個 `VACUUM`。`DROP INDEX` 只是把那些頁面標記成「空的，可以再用」，檔案不會自己縮。
+
+  **這是資料庫裡少數你會親眼看到「空間還在，但別人拿不到」的情況。**
+</Callout>
+
+<Callout type="note" title="ANALYZE 做的事，和它不做的事">
+  索引要靠統計資料才知道值的分佈。`ANALYZE` 會把估算寫進 `sqlite_stat1`：
+
+  <Terminal title="bash — what ANALYZE recorded" flavor="output">{`
+  $ sqlite3 indexes.db "ANALYZE;"
+  $ sqlite3 indexes.db "SELECT * FROM sqlite_stat1;"
+  notes|idx_author|50000 10
+  notes|idx_nocase|50000 10
+  `}</Terminal>
+
+  `50000 10` 讀作：這張表約 5 萬列，每個不同的 `author` 約對應 10 列。這就是資料庫決定「掃描還是搜尋」的依據——第 07.2 節 `tag = 'sql'` 符合 6 250 列，佔全表八分之一，那時它算完覺得整表掃描比較划算。
+
+  **注意 `sqlite_stat1` 記的是估計值，不是使用次數。**它不會告訴你「這個索引有沒有人用」。要看一條查詢實際怎麼跑，只有一個辦法：`EXPLAIN QUERY PLAN`。
+</Callout>
+
+---
+
+## 08. 什麼時候該用哪一種
 
 這一課不需要你背規則。只需要問三個問題：
 
@@ -388,7 +581,7 @@ os.close(lock)
 
 ---
 
-## 08. 終端實戰驗證：三次對照
+## 09. 終端實戰驗證：三次對照
 
 上面每一節的結論都要自己重跑一次才會記住。三種存法、三組對照，全部在 `exercises/05-persistence/` 執行，先清掉舊檔案讓結果乾淨：
 
@@ -471,6 +664,27 @@ $ cat race.json
 
 這三種寫法唯一的差別是有沒有保護，但結果完全不同：**第一次遺失一個 key、第二次加兩次只得到 1、第三次兩個都在。**這就是第 06 節的整個重點。
 
+### 第六步：看資料庫怎麼讀
+
+第五步是兩個程式搶同一個檔案。現在換一個方向：不搶，讓資料庫做同一件事，只是做得更聰明。
+
+<Terminal title="bash — step 6, the same query twice">{`
+$ rm -f indexes.db
+$ python indexes.py plan
+  author = 'user0042'
+    plan : SCAN notes
+    rows : 10
+    time : 218 ms for 50 runs
+
+$ python indexes.py index
+  author = 'user0042'
+    plan : SEARCH notes USING INDEX idx_notes_author (author=?)
+    rows : 10
+    time : 1 ms for 50 runs
+`}</Terminal>
+
+**回傳的資料一模一樣，差的是 `SCAN` 變成 `SEARCH`。** 這就是索引的全部意義。
+
 ---
 
 ## 單元實作作業
@@ -487,9 +701,14 @@ $ cat race.json
 8. 執行 `python race_fix.py counting A & python race_fix.py counting B & wait` 再 `cat race.json`，截圖必須包含 `count=1`。回答：這比第 7 題更難發現，為什麼？
 9. 執行 `python race_fix.py locked A & python race_fix.py locked B & wait`，截圖必須包含 B 讀到 `{'A': ...}` 那一行。**回答：那一行證明什麼？**如果 B 讀到的是 `{}`，代表什麼？
 10. 把 `acquire_lock()` 裡的 `os.close(lock)` 移到 `fcntl.flock(lock, ...)` 的**正下方**，重跑第 9 題。截圖必須包含資料遺失的結果。回答：為什麼加鎖「看起來在那裡」卻沒有生效？
-11. 回答：你的期末專題會不會有兩個程式同時寫同一份資料？根據第 07 節那三個問題，你會選哪一種？
+11. 回答：你的期末專題會不會有兩個程式同時寫同一份資料？根據第 08 節那三個問題，你會選哪一種？
+12. 執行 `python indexes.py plan`，截圖必須包含 `plan : SCAN notes` 與 `rows : 10`。**回答：符合條件的只有 10 列，資料庫實際上看了幾列？**
+13. 執行 `python indexes.py index`，截圖必須包含 `SEARCH notes USING INDEX`。回答：你的 `rows` 跟第 12 題一樣嗎？索引有沒有改變回傳的資料？
+14. 執行 `python indexes.py composite`，截圖必須包含 `ANY(tag)` 與 `COVERING INDEX` 兩行。回答：`ANY(tag)` 是什麼意思？為什麼你把 `WHERE` 裡的條件左右對調，plan 沒有變？
+15. 用 `sqlite3` 照第 07.2 節那個順序做一次：`CREATE INDEX idx_nocase ON notes (author COLLATE NOCASE)`，然後分別 `EXPLAIN QUERY PLAN` 一條 `=` 和一條 `LIKE '...%'`。截圖兩次。**回答：只有 `idx_nocase` 的時候，`=` 的 plan 是什麼？這跟你原本的預期差在哪？**
+16. 執行 `python indexes.py cost` 與 `python indexes.py unused`，截圖必須包含 `the writer got` 那一行與 `4.7 MB`／`8.1 MB`。回答：索引讓誰變慢？為什麼 `DROP INDEX` 之後還要 `VACUUM`？
 
-把作業截圖與簡答筆記存入 `exercises/05-persistence/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.json`、`notes.db`、`race.json` 或 `race.lock` 一起 commit 進去。
+把作業截圖與簡答筆記存入 `exercises/05-persistence/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.json`、`notes.db`、`race.json`、`race.lock` 或 `indexes.db` 一起 commit 進去。
 
 ### 本單元使用的正本
 
@@ -497,4 +716,9 @@ $ cat race.json
 - [SQLite — Documentation: Datatypes](https://www.sqlite.org/datatype3.html)
 - [SQLite — Documentation: Concurrency](https://www.sqlite.org/lockingv3.html)
 - [SQLite — Documentation: Transactions](https://www.sqlite.org/lang_transaction.html)
+- [SQLite — CREATE INDEX](https://www.sqlite.org/lang_createindex.html)
+- [SQLite — EXPLAIN QUERY PLAN](https://www.sqlite.org/eqp.html)
+- [SQLite — 查詢規劃（query planner）如何選索引](https://www.sqlite.org/queryplanner.html)
+- [SQLite — ANALYZE 與 sqlite_stat1](https://www.sqlite.org/lang_analyze.html)
+- [SQLite — COLLATE NOCASE 與 LIKE 的索引使用](https://www.sqlite.org/lang_expr.html)
 - [Python — `sqlite3` 標準函式庫](https://docs.python.org/3/library/sqlite3.html)
