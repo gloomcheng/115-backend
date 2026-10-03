@@ -39,7 +39,7 @@ content-type: application/json
 
 ## 01. 先分清兩台電腦
 
-伺服器不是某一種特別的電腦。**只要一個程式正在等 Request，收到後回 Response，這個程式此刻就是 Server。**
+在那之前先說清楚「伺服器」是什麼。**它不是某一種特別的機器：只要一個程式正在等 Request、收到後回 Response，這個程式此刻就是伺服器。**
 
 例如你在筆電上執行 `fastapi dev main.py`，FastAPI 等著 `curl` 來問它。這時：
 
@@ -48,7 +48,7 @@ content-type: application/json
 
 兩個程式就算都在同一台筆電，角色也沒變。
 
-VPS 是一台放在網路上、可以長時間運作的遠端電腦。這一課會在同一台 VPS 上跑兩個 Server programs：
+VPS 是一台放在網路上、可以長時間運作的遠端電腦。這一課會在同一台 VPS 上跑兩個伺服器程式：
 
 - Nginx 在公開網路上等同事的 Request。
 - FastAPI 只在 VPS 裡等 Nginx 轉交的 Request。
@@ -225,7 +225,7 @@ sudo docker compose up -d --build
 sudo docker compose ps
 `}</Terminal>
 
-Tests 應顯示 `4 passed`。`docker compose ps` 的 `api` 應是 `running`，健康檢查完成後會顯示 `healthy`。
+測試應顯示 `4 passed`。`docker compose ps` 的 `api` 應是 `running`，健康檢查完成後會顯示 `healthy`。
 
 現在還在 **VPS**。直接問 FastAPI：
 
@@ -391,11 +391,11 @@ curl -i http://127.0.0.1:8000/health
 
 ## 08. 公開成功後，把檢查變成門禁
 
-手動 `curl` 證明這一次有通。它不會在下一次改 code 時自動再跑，也不會阻止密碼被 commit。所以部署還需要四道自動檢查。
+手動 `curl` 證明這一次有通。它不會在下一次改**程式碼**時自動再跑，也不會阻止密碼被**提交**。所以部署還需要四道自動檢查。
 
 ### Test 同時檢查 Status Code 與 Body
 
-`examples/http-api/tests/test_main.py` 的最小 test 是：
+`examples/http-api/tests/test_main.py` 的最小**測試**是：
 
 <Terminal title="Python — tests/test_main.py" flavor="output">{`
 def test_health_returns_200_and_expected_body():
@@ -405,7 +405,7 @@ def test_health_returns_200_and_expected_body():
     assert response.json() == {"ok": True}
 `}</Terminal>
 
-只檢查 Body 不夠。`200` 也是 API contract 的一部分。範例還會測不存在的 user 是 `404`，以及 POST 建立後能再用 GET 讀回來。
+只檢查 Body 不夠。`200` 也是 API **契約**的一部分。範例還會測不存在的 user 是 `404`，以及 POST 建立後能再用 GET 讀回來。
 
 在**開發電腦的 repository root** 執行：
 
@@ -413,11 +413,11 @@ def test_health_returns_200_and_expected_body():
 npm run test:api
 `}</Terminal>
 
-預期是 `4 passed`。Production image 不會收進 `pytest` 與 `tests/`。
+預期是 `4 passed`。production image 不會收進 `pytest` 與 `tests/`。
 
 ### `.gitignore` 擋不住已經 staged 的密碼
 
-Repository 只保留沒有真實值的 `.env.example`：
+`.gitignore` 只擋「還沒被加進索引的檔案」。一旦 `git add` 過，它就在索引裡了，刪掉檔案也不會從索引消失——所以要靠這個範例檔把流程走對。**要放進 repo 的只有沒有真實值的範例檔**：
 
 <Terminal title="dotenv — safe template" flavor="output">{`
 APP_ENV=production
@@ -425,7 +425,7 @@ DATABASE_URL=
 APP_SECRET=
 `}</Terminal>
 
-真實 password、API key、private key、database URL 與 Token 不能出現在程式碼、Compose file、test fixture、截圖或 commit message。程式從環境讀取：
+真實**密碼**、API key、private key、database URL 與 Token 不能出現在程式碼、Compose 檔案、test fixture、截圖或 commit message。程式從環境讀取：
 
 <Terminal title="Python — read from the environment" flavor="output">{`
 import os

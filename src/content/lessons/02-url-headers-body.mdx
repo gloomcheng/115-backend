@@ -186,7 +186,7 @@ Header 是 Request 或 Response 的附加欄位資訊。它描述這個訊息的
 
 ## 05. Path parameter、query parameter 與 FastAPI 路由
 
-在後續單元用 Python (FastAPI) 撰寫後端伺服器時，我們會定義路由來接收 Client 的請求：
+先看它們在**程式裡**長什麼樣。下面這段你先不要試著執行——`FastAPI()` 與 `@app.get(...)` 會在單元 04 才有完整說明，`BaseModel` 在單元 10。**這一節要你記住的只有一件事：path 與 query 的差異，在函式簽名裡是看得見的。**
 
 <Terminal title="Python — FastAPI parameter types" flavor="output">{`
 from fastapi import FastAPI
@@ -222,7 +222,9 @@ def create_item(payload: ItemCreate):
     return {"created_name": payload.name, "created_price": payload.price}
 `}</Terminal>
 
-這三種資料傳遞方式的分工極其清晰：Path Parameter 定義「是誰」、Query Parameter 定義「怎麼篩選」、Request Body 承載「完整資料」。
+這三種資料傳遞方式的分工非常清晰：**Path Parameter 定義「是誰」、Query Parameter 定義「怎麼篩選」、Request Body 承載「完整資料」。**
+
+注意上面兩個函式的差別只有一個字：`item_id: int` 是 `int`（宣告型別，單元 07 會說明宣告型別如何決定 Client 拿到 `422` 還是 `500`），`category: str` 也是。而 `limit: int = 10` 多了一個 `= 10`，那是**有預設值**，省略時 Server 直接用它。
 
 ---
 

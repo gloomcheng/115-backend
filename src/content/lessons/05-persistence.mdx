@@ -131,7 +131,7 @@ $ cat users.json
 
 **`writer-A` 不見了，而兩個 writer 都說「我寫好了」。** 沒有錯誤訊息、沒有例外、沒有任何地方留下紀錄。
 
-`json_race.py` 只有四行，你可以自己去讀：兩個行程都「讀整個檔案 → 加一個 key → 寫回整個檔案」。B 讀到的版本裡還沒有 A 的改動，所以它寫回去的時候，把 A 的改動一併蓋掉了。這種「兩個同時寫入、彼此蓋掉」的結果就叫 lost update—— 資料蓋掉了，而且沒有人知道。
+`json_race.py` 的核心只有四行（先讀、再加一個 key、最後寫回），你可以自己去讀：兩個行程都「讀整個檔案 → 加一個 key → 寫回整個檔案」。B 讀到的版本裡還沒有 A 的改動，所以它寫回去的時候，把 A 的改動一併蓋掉了。這種「兩個同時寫入、彼此蓋掉」的結果就叫 lost update—— 資料蓋掉了，而且沒有人知道。
 
 <Callout type="warning" title="這一課最該記住的一句話">
   資料不見了，而且沒有任何人被告知。這是文字檔最危險的地方——不是它存不住資料，是它在**存不住的那一次完全沒有聲音**。單元 08 CRUD 與單元 10 驗證會處理怎麼預防它。
@@ -158,7 +158,7 @@ $ ls -l notes.db
 
 <Terminal title="bash — the file itself" flavor="output">{`
 $ file notes.db
-notes.db: SQLite 3.x database, database pages 2, UTF-8, ...
+notes.db: SQLite 3.x database, last written using SQLite version 3053004, file counter 2, database pages 2, cookie 0x1, schema 4, UTF-8, version-valid-for 2
 `}</Terminal>
 
 然後問它自己有什麼表：
@@ -342,4 +342,3 @@ writer B 被拒絕，而資料庫裡沒有任何一筆是缺的。
 - [SQLite — Documentation: Concurrency](https://www.sqlite.org/lockingv3.html)
 - [SQLite — Documentation: Transactions](https://www.sqlite.org/lang_transaction.html)
 - [Python — `sqlite3` 標準函式庫](https://docs.python.org/3/library/sqlite3.html)
-- [FastAPI — Bigger Applications and path routing](https://fastapi.tiangolo.com/tutorial/bigger-applications/)

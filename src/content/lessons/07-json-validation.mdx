@@ -25,7 +25,7 @@ curl -i -X POST http://127.0.0.1:8000/users \\
 {"detail":"name is required"}
 `}</Terminal>
 
-Server 收到了、讀懂了、拒絕了。動手的人是你，不是它。這個狀態碼叫 `422 Unprocessable Entity`——它不是「伺服器掛掉」，是「你送來的內容我不接受」。接著我們讓 Server 自己壞掉，看另一個狀態碼長什麼樣。
+Server 收到了、讀懂了、拒絕了。動手的人是你，不是它。這個狀態碼叫 `422 Unprocessable Entity`——它不是「程式掛掉」，是「你送來的內容我不接受」。接著我們讓 Server 自己壞掉，看另一個狀態碼長什麼樣。
 
 <svg viewBox="0 0 940 400" role="img" aria-labelledby="json-claim-title json-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
   <title id="json-claim-title">ELI5 同一個錯誤訊息，422 的責任在 Client，500 的責任在 Server</title>

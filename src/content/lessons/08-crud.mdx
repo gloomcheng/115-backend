@@ -318,7 +318,7 @@ Terminal 1 跑著 `fastapi dev main.py --port 8002`。先清空資料：
 rm -f users.db
 `}</Terminal>
 
-（重啟 Terminal 1 的 Server 讓它重新建立資料表。）
+**接著要重啟 Terminal 1 的 Server。** 這一步不能跳：正在執行的 Server 在啟動時就建好了資料表，你把檔案刪掉之後，它手上的那個連線仍然指向一個已經不存在的檔案。`GET /users` 會回 `500` 而不是 `[]`。重啟之後 Server 才會重新建立空表。
 
 ### 第一步：空集合
 

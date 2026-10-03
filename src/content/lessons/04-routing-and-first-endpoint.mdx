@@ -273,22 +273,14 @@ def health():
 
 這就是為什麼要有 `/health`。先看你剛才那兩條 `/notes` 路由：它們有誰在讀？答應過誰？答不出來。
 
-<Terminal title="examples/http-api/compose.yaml — the healthcheck test" flavor="output">{`
-healthcheck:
-  test:
-    - python
-    - -c
-    - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
-  interval: 30s
-  timeout: 3s
-  retries: 3
-  start_period: 10s
+<Terminal title="the health check itself — copy this, it is five lines of Python" flavor="output">{`
+python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
 `}</Terminal>
 
-這段程式不會畫任何東西。它只做一件事：送出 Request，拿到 `200` 就當作服務還活著，任何例外就當作不健康。你可以把它複製出來自己跑：
+真實的服務會把這段包在一個設定檔裡，讓平台定期執行它（單元 16 會看到那段設定檔長什麼樣）。它不會畫任何東西，只做一件事。**你可以自己跑一次：**
 
 <Terminal title="bash — run the probe yourself">{`
-python -c "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/health'); print(r.status, r.read())"
+python3 -c "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/health'); print(r.status, r.read())"
 `}</Terminal>
 
 輸出是 `200 b'{"ok":true}'`。這就是探測程式看到的全部資訊。
@@ -321,7 +313,7 @@ body ok  : False
 **`status ok: True`、`body ok: False`。** 你交付的東西在人類看來正常，在真正使用它的程式看來是壞的。**請立刻改回 `{"ok": True}`。**
 
 <Callout type="warning" title="這個錯誤特別難抓的原因">
-  它不會在你的畫面上跳出來。部署流程照跑、頁面照樣開、log 也不會紅。只有當探測程式在某一個夜裡判定「這個容器不健康」並把它重啟時，你才會知道。
+  它不會在你的畫面上跳出來。部署流程照跑、頁面照樣開、log 也不會紅。只有當探測程式在某一個夜裡判定「這個服務不健康」並把它**重啟**時（單元 16 會說明服務是怎麼被包成一個可以重啟的單位），你才會知道。
 </Callout>
 
 探測程式判定完成之後，第二個問題才出現：健康檢查該檢查多少，答案盡量少，原因在下一段。
@@ -334,10 +326,10 @@ body ok  : False
               └─ 檢查外部 API            ── 更不要放進來
 
 資料庫故障 → 回 500 → 探測程式判定整個服務不健康
-            → 平台重啟容器 → 連線全斷，資料庫恢復也沒用
+            → 服務被重啟 → 連線全斷，資料庫恢復也沒用
 `}</Terminal>
 
-原因很單純：**容器被重啟時，裡面正在處理的 Request 全部中斷。** 資料庫短暫故障不該讓你的服務被重啟，因為重啟不會讓資料庫恢復，只會讓你連資料庫的能力暫時歸零。
+原因很單純：**服務被重啟時，正在處理中的 Request 全部中斷。** 資料庫短暫故障不該讓你的服務被重啟，因為重啟不會讓資料庫恢復，只會讓你連資料庫的能力暫時歸零。
 
 | 該放進 `/health` | 不該放進 `/health` |
 | --- | --- |
@@ -383,10 +375,12 @@ def health():
 
 <Terminal title="bash — the existing test for this route">{`
 cd examples/http-api
-python -m pytest tests/test_main.py -q -k health
+pytest tests/test_main.py -q -k health
 `}</Terminal>
 
-那條測試斷言兩件事：`status_code == 200`，以及 `response.json() == {"ok": True}`。第二個斷言就是上面那個實驗的機器版——它擋下來的正是 `{"ok":"yes"}` 那種看起來沒問題的改動。怎麼自己寫出這種測試，單元 13 會處理。
+那條測試斷言兩件事：`status_code == 200`，以及 `response.json() == {"ok": True}`。第二個斷言就是上面那個實驗的機器版——它擋下來的正是 `{"ok":"yes"}` 那種看起來沒問題的改動。
+
+`pytest` 是什麼、`assert` 是什麼、測試輸出怎麼讀，單元 13 會完整處理。**這一課你只需要看見一件事：有人已經把你剛才手動做的事寫成一行指令了。**
 
 ---
 
@@ -470,7 +464,7 @@ curl -i http://127.0.0.1:8000/users
 **第三部分：把 `/health` 改壞一次**
 
 9. 把 `main.py` 的 `health()` 暫時改成 `return {"ok": "yes"}`，執行 `curl -i http://127.0.0.1:8000/health` 截圖，再執行一支會讀 Body 的探測程式截圖。兩張都要有，且探測程式那張必須顯示 `status ok: True` 與 `body ok: False`。**截完立刻改回 `{"ok": True}` 並再次截圖。**
-10. 執行 `cd examples/http-api && python -m pytest tests/test_main.py -q`，截圖必須顯示全部通過。在筆記中寫出：第 9 步那個改動為什麼會讓這條測試失敗？
+10. 執行 `cd examples/http-api && pytest tests/test_main.py -q`，截圖必須顯示全部通過。**看著輸出回答：那個 `passed` 是誰決定的？**你只要看得出「這條指令自己對照了某個東西，發現跟你預期的一樣，就印出綠色」，這一題就夠了。單元 13 會拆開那個「對照的東西」是怎麼寫出來的。
 11. 執行 `curl -f http://127.0.0.1:8000/health; echo $?` 與 `curl -f http://127.0.0.1:8000/healthz; echo $?`，截圖兩次的 exit status。
 12. 用一句話回答：`/health` 為什麼不應該檢查資料庫連線？把答案寫成「重啟之後會發生什麼」。
 

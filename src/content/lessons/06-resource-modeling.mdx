@@ -175,12 +175,13 @@ curl -i -X DELETE http://127.0.0.1:8000/users/bob
 
 ## 03. method 決定 Server 做什麼，也決定 Status Code
 
-那個會被自動觸發的 `GET`，正是 method 不能當成可有可無的字的原因。Server 收到一個 Request 之後，只用兩個東西決定要執行哪一段程式——`method` 與 `path`。它把這兩個字對到自己的路由表，對上了就執行並回一個 Status Code。
+那個會被自動觸發的 `GET`，正是 method 不能當成可有可無的字的原因。**單元 04 已經看過路由比對的三種出口**，這裡換一個角度：Server 收到一個 Request 之後，只用 `method` 與 `path` 兩個字對到自己的路由表，對上了才決定回哪一個 Status Code。
 
-<Terminal title="bash — three targets, three answers" flavor="output">{`
-> POST /users HTTP/1.1          < 201 Created
-> GET  /users HTTP/1.1          < 405 Method Not Allowed   allow: POST
-> DELETE /users/bob HTTP/1.1    < 405 Method Not Allowed   allow: GET
+同一條路徑，換一個 method 就換一個答案：
+
+<Terminal title="bash — the same path, three methods" flavor="output">{`
+> POST   /users        HTTP/1.1   < 201 Created
+> DELETE /users/bob    HTTP/1.1   < 405 Method Not Allowed   allow: GET
 `}</Terminal>
 
 <svg viewBox="0 0 940 430" role="img" aria-labelledby="rest-route-title rest-route-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
@@ -326,17 +327,15 @@ curl -i http://127.0.0.1:8000/users/iris
 
 ### 第三步：撞到 method 的牆
 
+第 03 節看過 `405` 是怎麼來的，這裡換一個 method 再確認一次——**同一條路徑，method 換了，答案就換了**：
+
 <Terminal title="bash — step 3" flavor="output">{`
 > curl -i -X DELETE http://127.0.0.1:8000/users/iris
 < HTTP/1.1 405 Method Not Allowed
 < allow: GET
-
-> curl -i http://127.0.0.1:8000/users
-< HTTP/1.1 405 Method Not Allowed
-< allow: POST
 `}</Terminal>
 
-`allow` 這個 Header 要記下來。之後寫 Client 遇到 `405`，第一個反應就是讀它。
+`allow` 這個 Header 要記下來。它是 Server 親口告訴你「這條路徑現在只接受哪一種 method」——之後寫 Client 遇到 `405`，第一個反應就是讀它。
 
 ### 第四步：動作寫進網址的下場
 
@@ -358,7 +357,7 @@ curl -i http://127.0.0.1:8000/users/iris
 1. 送出 `POST /users` 建立一筆你自己的資料，截圖必須包含 Request Line、`201` Status Line 與回來的 Body。
 2. 用 `GET /users/s112306001` 讀回同一筆，截圖必須包含 `200` Status Line。
 3. 送出 `DELETE /users/s112306001` 與 `GET /users` 兩次，截圖必須包含 `405` Status Line 與 `allow` Header。
-4. 送出 `GET /users/delete?id=s112306001`，截圖必須包含 `404` 與 Body，證明 `delete` 被當成 username。
+4. 送出 `POST /users/delete`（把動作當成路徑送出去），截圖必須包含 `404` 與 Body，證明 `delete` 被當成 username 而不是動作。**回答：這跟第 2 步那個 `405` 差在哪？**同樣是「想要的效果做不到」，為什麼一個是 `404`、一個是 `405`？
 5. 用一句話回答：為什麼 `GET /users` 現在回 `405`，而不是回一個空的 users 清單？
 6. 在繳交筆記中指出，上面五個結果分別是 `4xx` 還是 `5xx`，以及它們的責任落在 Client 還是 Server。
 

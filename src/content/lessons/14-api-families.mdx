@@ -252,7 +252,7 @@ SOAP 1.1 讓伺服器端先產出一份 WSDL（Web Services Description Language
 - `notes.proto` — gRPC 的契約
 - `trpc-contract.ts` — tRPC 的契約
 
-**它們不在這一堂課執行，因為它們的價值在「讀」，不在「跑」。**而且它們都不走 JSON。gRPC 走 Protocol Buffers 的二進位編碼，跑在 HTTP/2 上；tRPC 走 JSON，但要求 Client 和 Server 是同一個 TypeScript 專案。
+**它們不在這一堂課執行，因為它們的價值在「讀」，不在「跑」。**而且它們都不走 JSON。gRPC 走 Protocol Buffers 的二進位編碼，跑在 HTTP/2 上；tRPC 走 JSON，線上格式跟 REST 一樣；限制在**型別**——Client 的型別由 Server 的 router 推導出來，所以要用就得兩端在同一個 TypeScript 專案裡。
 
 `notes.proto` 的關鍵在這裡：
 
@@ -274,9 +274,9 @@ service NoteService {
 <Callout type="note" title="和 SOAP 的差別：誰產生 spec">
   SOAP 是**伺服器端**先產出 WSDL，你再去生成 stub。gRPC 是把 `.proto` 當成**原始碼**，Client 與 Server 各自從它生成自己的 stub，兩邊都不手寫。
 
-  這是「contract-first」和「code-first」的差別。你在 `trpc-contract.ts` 裡看到的正是 code-first：契約寫在 Server 的 router 裡，Client 的型別由 TypeScript **推導**出來，所以不需要產生器，但要求兩端同語言同專案。
+  這是「contract-first」和「code-first」的差別。你在 `trpc-contract.ts` 裡看到的正是 code-first：契約寫在 Server 的 router 裡，Client 的型別由 TypeScript **推導**出來，所以不需要產生器，代價是跨語言時拿不到那份型別——其他語言仍然可以呼叫這支 API，只是變成未型別的 HTTP/JSON Client。
 
-  **SOAP/gRPC 是跨語言的必要成本；tRPC 放棄跨語言，換掉整個產生步驟。**
+  **SOAP/gRPC 是跨語言的必要成本；tRPC 放棄跨語言的「型別」，換掉整個產生步驟。**它沒有禁止別的語言呼叫，只是那邊拿不到型別檢查。
 </Callout>
 
 ---
@@ -318,7 +318,7 @@ service NoteService {
 | 誰決定回應形狀 | Server | Server | **Client** | Server | Server |
 | 錯誤怎麼表示 | 狀態碼 | `Fault` | `errors` 陣列 | gRPC status code | TRPCError |
 | 找不到資源 | `404` | `Fault` | `null` | `NOT_FOUND` | TRPCError |
-| 跨語言 | 天然 | 需要產生器 | 天然 | 需要產生器 | **不行** |
+| 跨語言 | 天然 | 需要產生器 | 天然 | 需要產生器 | 線上格式可以，**型別不行** |
 | 瀏覽可直接呼叫 | 可以 | 幾乎不行 | 可以 | 不行 | 不行 |
 
 <Callout type="note" title="這一課真正要記的是那一句">
@@ -327,7 +327,7 @@ service NoteService {
   REST 換掉型別安全性，換到跨語言與可讀性。
   SOAP 和 gRPC 換到建置期的型別安全，代價是產生器與二進位。
   GraphQL 換到 Client 控制回應形狀，代價是聚合複雜度與「狀態碼不再代表成功」。
-  tRPC 換掉跨語言，換掉整個產生步驟。
+  tRPC 換掉跨語言的型別安全，換掉整個產生步驟。
 
   你在職場上讀到一份 API 契約時，真正要問的是：**這份契約的作者把什麼換掉了？**因為那個取捨決定了它會在哪裡壞掉。
 </Callout>
