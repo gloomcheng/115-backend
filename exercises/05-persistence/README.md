@@ -77,6 +77,23 @@ python indexes.py unused     # 沒人用的索引讓檔案變大多少
 
 **你的時間數字會跟課本不同，plan 那行字不會。**看 plan。
 
+## 快取：一份會說謊的資料
+
+```bash
+python cache.py stale       # 改了資料，讀到的還是舊的
+python cache.py ttl         # TTL 限制的是「錯多久」
+python cache.py invalidate  # 寫入時清掉
+python cache.py workers     # 兩個 worker，兩份快取
+```
+
+`stale` 那一段的第三行是重點：
+
+```
+after the database changed to 200              value=100  queries=1  (database says 200)
+```
+
+`value` 跟括號裡的數字**在同一個畫面上互相矛盾**。而且 `queries` 還是 1，所以你的 log 裡不會有任何東西記錄到那個 write。
+
 ## 繳交
 
 1. 六個 `store.py` 模式的輸出截圖（全部六行）+ 回答：哪一個模式在**新行程**裡讀得到資料？

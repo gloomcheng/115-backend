@@ -559,9 +559,125 @@ $ sqlite3 indexes.db "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index';"
   **注意 `sqlite_stat1` 記的是估計值，不是使用次數。**它不會告訴你「這個索引有沒有人用」。要看一條查詢實際怎麼跑，只有一個辦法：`EXPLAIN QUERY PLAN`。
 </Callout>
 
+## 08. Cache：你手上開始有兩份資料
+
+第 07 節的索引已經是一份「抄本」了——只不過那一份是 SQLite 自己抄、自己維持，而且**永遠跟你的一致**。快取是同一個想法，只是抄本的管理變成你的工作。
+
+<Terminal title="bash — the whole benefit, in one line" flavor="output">{`
+$ python cache.py stale
+1. A cache that never expires
+  first read (cache miss)                        value=100  queries=1  (database says 100)
+  second read (cache hit)                        value=100  queries=1  (database says 100)
+   queries stopped at 1. That is the entire benefit of a cache.
+   after the database changed to 200              value=100  queries=1  (database says 200)
+
+   The caller got 100 from a database that says 200.
+   queries is still 1, so nothing in the log shows the write happened.
+   This is the bug a cache introduces, and nothing else in this course does.
+`}</Terminal>
+
+<Callout type="important" title="盯著 `value` 和 `queries` 這兩欄看">
+  第三次讀取，回傳 `value=100`，而括號裡的 `database says 200` 是我直接去資料庫查到的真相。
+
+  **同一個程式裡，兩個數字不一樣。**這就是快取引入的問題，而這門課其他所有內容都不會產生這種矛盾——資料庫的讀寫、併發的加鎖、索引的選用，都不會讓你同時持有兩個互相矛盾的答案。
+</Callout>
+
+<Callout type="warning" title="而且它安靜">
+  注意 `queries` 還是 1。**你的 log 裡不會出現任何東西記錄那個 write。**
+
+  沒有錯誤、沒有警告、沒有異常。讀取成功、回應 200、數字是舊的。這是快取最難查的一類 bug：它不會告訴你，只會告訴你一個錯的答案。
+</Callout>
+
+### 08.1 TTL 限制的是「錯多久」，不是「會不會錯」
+
+最常見的直覺做法是給每筆資料加一個到期時間。這個 TTL 有用，但它的作用跟你想的不一樣。
+
+<Terminal title="bash — a 30 second TTL" flavor="output">{`
+$ python cache.py ttl
+2. A cache with an expiry
+   TTL is 30 seconds. t is in seconds since the server started.
+  t=0  first read                                value=100  queries=1
+  t=10 read again                                value=100  queries=1
+   the database changed to 200, and nobody told the cache
+  t=20 still inside the TTL                      value=100  queries=1  (database says 200, stale)
+  t=40 TTL has passed                            value=200  queries=2  (database says 200, correct)
+
+   A TTL does not make the cache correct. It bounds how wrong it can be.
+`}</Terminal>
+
+看 `t=20` 那一次，TTL 明明還沒到：它是**錯的**，而且沒有任何機制會告訴你它錯了。`t=40` 之所以正確，只是因為它恰好過期了。
+
+<Callout type="important" title="所以要決定的是：可以忍受不對多久">
+  - 顯示商品價格：錯 30 秒通常沒關係 → 給 TTL。
+  - 顯示轉帳餘額：錯 30 秒就是資安問題 → **不能只靠 TTL。**
+
+  這是政策決定，不是技術決定。**先決定你能忍受多久不對，再去選機制**，而不是先加一個 TTL 再想它夠不夠。
+</Callout>
+
+### 08.2 寫入時清掉
+
+<Terminal title="bash — invalidation on write" flavor="output">{`
+$ python cache.py invalidate
+3. Invalidate on write
+  after two reads: queries=1
+  after a write that cleared the cache: value=200 queries=2
+
+   The rule is simple and it is easy to forget:
+     every write path must clear, or the next reader gets the old value.
+   One UPDATE statement that forgets is enough to ship a wrong number.
+`}</Terminal>
+
+把規則寫出來很簡單，簡單到不像工程：**每一條寫入路徑都要清快取**，不管那個寫入是使用者按的、TTL 觸發的，還是腳本跑的。
+
+問題在於「每一條」。第 04 節的 `PUT` 和 `PATCH` 是兩條，第 07 節的遷移腳本是第三條，後臺工作、資料修正、第三方匯入，每一個都是一條。**少清一條，就是一個會上線的錯誤數字。**
+
+<Callout type="warning" title="這就是 cache invalidation 為什麼出了名地難">
+  新增快取本身很簡單——一個 dict，兩行 code。難的是**你必須窮舉所有寫入路徑，而且不能漏**。
+
+  漏掉的時候不會有任何症狀，只會在有人真的去比對數字的時候才發現。這是這門課裡少數「寫錯了也不會壞掉」的主題。
+</Callout>
+
+### 08.3 一個行程裡的快取，不是一個快取
+
+這一節是最後一塊拼圖，也是最容易被忽略的：`worker`。兩個 worker，兩份快取。
+
+<Terminal title="bash — two workers, two caches" flavor="output">{`
+$ python cache.py workers
+4. Two workers, two caches
+  worker A read: queries=1, value=100
+  worker B read after the write: value=200
+  worker A read again:            value=100
+
+   database says 200
+   worker B is correct. worker A is not, and it will stay wrong
+   until its own entry expires or that worker handles a write.
+
+   A cache inside the process is not one cache. It is one cache per worker,
+   and invalidation only ever reaches the worker that performed the write.
+`}</Terminal>
+
+**worker B 正確，worker A 不正確，而 A 會一直錯下去。**
+
+<Callout type="important" title="這是單元 16 與 17 的伏筆">
+  你現在用 `fastapi dev` 跑，只有一個行程，所以第 08.2 節那種寫法「看起來沒問題」。
+
+  部署之後會用多個 worker（第 16、17 單元）。**那時一份行程內的快取變成 N 份**，而「寫入時清掉」只清得到剛才那一份。
+
+  所以正確的順序是：**先假設你有多個行程來設計。**要嘛把快取放在行程外面（Redis 這類，所有行程共用一份），要嘛接受它不一致，並且明確決定哪些資料可以不一致。
+</Callout>
+
+<Callout type="note" title="那什麼時候不該用快取">
+  問自己：**這份資料被改變之後，讓讀取者看到舊值，會產生問題嗎？**
+
+  - 會（價格、餘額、權限）→ 不要用行程內快取，或者 TTL 要短到可以接受。
+  - 不會（商品說明、圖片路徑、幾乎不改的設定）→ 快取很好用，而且 TTL 可以給很長。
+
+  **先量過再說。**第 07 節那個 `218 ms 對 1 ms` 給了 217 倍的空間，值得那份複雜度。第 08.1 節第一次讀取 `queries=1`——如果本來就只要 1 次查詢，快取連賺都沒賺到。
+</Callout>
+
 ---
 
-## 08. 什麼時候該用哪一種
+## 09. 什麼時候該用哪一種
 
 這一課不需要你背規則。只需要問三個問題：
 
@@ -570,6 +686,7 @@ $ sqlite3 indexes.db "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index';"
 | 暫存資料、測試用、單一使用者 | `dict` | 行程結束就丟，正好是你要的 |
 | 設定檔、要進 Git 的資料、人工要能讀能改 | 文字檔 | `git diff` 看得懂，人手改得動 |
 | 會被讀寫的資料、多個程式會同時動它 | SQLite | 規則跟資料同住，並發時會拒絕你 |
+| 同一份資料被重複讀取很多次、而且可以忍受短暫不對 | 快取 | 用記憶體換時間，代價是第 08 節那些一致性問題 |
 
 **判斷的關鍵不是資料量，是「會不會有別的程式同時寫」。** 單機、單一行程的筆記本工具，文字檔完全夠用，強迫自己上資料庫只會增加複雜度。反過來，一旦有第二個執行緒或第二個程式會動同一份資料，文字檔的安靜失敗就變成你必須處理的問題。
 
@@ -581,7 +698,7 @@ $ sqlite3 indexes.db "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index';"
 
 ---
 
-## 09. 終端實戰驗證：三次對照
+## 10. 終端實戰驗證：三次對照
 
 上面每一節的結論都要自己重跑一次才會記住。三種存法、三組對照，全部在 `exercises/05-persistence/` 執行，先清掉舊檔案讓結果乾淨：
 
@@ -685,6 +802,19 @@ $ python indexes.py index
 
 **回傳的資料一模一樣，差的是 `SCAN` 變成 `SEARCH`。** 這就是索引的全部意義。
 
+### 第七步：讓自己手上多一份資料
+
+第六步是讓資料庫少讀一點。第七步反過來，是讓**應用程式**少查一點——而這一步會產生一個新的問題。
+
+<Terminal title="bash — step 7, the cache goes stale" flavor="output">{`
+$ python cache.py stale
+  first read (cache miss)                        value=100  queries=1  (database says 100)
+  second read (cache hit)                        value=100  queries=1  (database says 100)
+   after the database changed to 200              value=100  queries=1  (database says 200)
+`}</Terminal>
+
+**第三次那行的 `value` 和括號裡的數字不一樣。**這個問題就是快取的全部代價。
+
 ---
 
 ## 單元實作作業
@@ -707,8 +837,12 @@ $ python indexes.py index
 14. 執行 `python indexes.py composite`，截圖必須包含 `ANY(tag)` 與 `COVERING INDEX` 兩行。回答：`ANY(tag)` 是什麼意思？為什麼你把 `WHERE` 裡的條件左右對調，plan 沒有變？
 15. 用 `sqlite3` 照第 07.2 節那個順序做一次：`CREATE INDEX idx_nocase ON notes (author COLLATE NOCASE)`，然後分別 `EXPLAIN QUERY PLAN` 一條 `=` 和一條 `LIKE '...%'`。截圖兩次。**回答：只有 `idx_nocase` 的時候，`=` 的 plan 是什麼？這跟你原本的預期差在哪？**
 16. 執行 `python indexes.py cost` 與 `python indexes.py unused`，截圖必須包含 `the writer got` 那一行與 `4.7 MB`／`8.1 MB`。回答：索引讓誰變慢？為什麼 `DROP INDEX` 之後還要 `VACUUM`？
+17. 執行 `python cache.py stale`，截圖必須包含第三行的 `value=100` 與 `(database says 200)`。**回答：那一行裡的 `queries` 是多少？為什麼你的 log 不會記錄到那個 write？**
+18. 執行 `python cache.py ttl`，截圖必須包含 `t=20 still inside the TTL` 那一行標著 `stale`。回答：TTL 是 30 秒，這個答案最晚可以錯多久？
+19. 執行 `python cache.py workers`，截圖必須包含 `worker A read again: value=100` 與 `database says 200`。回答：**worker B 已經清掉自己的快取了，為什麼 worker A 還是不對？**用一句話回答「一個行程內的快取」實際上是幾個快取。
+20. 回答：你的期末專題會快取什麼？把「改了之後多久才發現不對」寫成一個具體秒數，並說明那個秒數是誰決定、為什麼可以接受。**如果你寫不出那個秒數，代表你還沒想清楚，不要只是寫「視情況」。**
 
-把作業截圖與簡答筆記存入 `exercises/05-persistence/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.json`、`notes.db`、`race.json`、`race.lock` 或 `indexes.db` 一起 commit 進去。
+把作業截圖與簡答筆記存入 `exercises/05-persistence/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.json`、`notes.db`、`race.json`、`race.lock` 、`indexes.db` 或 `cache.db` 一起 commit 進去。
 
 ### 本單元使用的正本
 
@@ -721,4 +855,6 @@ $ python indexes.py index
 - [SQLite — 查詢規劃（query planner）如何選索引](https://www.sqlite.org/queryplanner.html)
 - [SQLite — ANALYZE 與 sqlite_stat1](https://www.sqlite.org/lang_analyze.html)
 - [SQLite — COLLATE NOCASE 與 LIKE 的索引使用](https://www.sqlite.org/lang_expr.html)
+- [SQLite — 交易隔離層級（為什麼要讓快取失效）](https://www.sqlite.org/isolation.html)
+- [Redis — 快取與失效策略](https://redis.io/docs/latest/develop/use/client-side-caching/)
 - [Python — `sqlite3` 標準函式庫](https://docs.python.org/3/library/sqlite3.html)
