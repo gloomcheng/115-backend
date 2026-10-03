@@ -301,11 +301,175 @@ TypeError: object of type 'int' has no len()
   要擋，宣告模型時要明確要求：例如禁止未宣告欄位。怎麼宣告、以及這件事在單元 12 的權限邊界裡怎麼延伸，都在那裡處理。
 </Callout>
 
+## 07. XSS：形狀對了，規則也過了，然後呢
+
+第 06 節留了一個問題：有一種東西，**形狀驗證和規則驗證都不會擋**。它是一個完全合法的字串，而且長度剛好符合限制。
+
+<Terminal title="bash — the payload unit 10 already accepts" flavor="output">{`
+> curl -s -X POST http://127.0.0.1:8003/strict \\
+  -H 'Content-Type: application/json' -d '{"name":"<script>alert(1)</script>"}'
+{"name":"<script>alert(1)</script>","role":null,"source":"strict"}
+`}</Terminal>
+
+`200`。形狀是對的（字串），規則也過了（25 字，在 40 以內）。
+
+<Callout type="important" title="驗證通過，從來不等於安全">
+  `max_length=40` 擋掉的是**太長的字串**，不是**危險的字串**。
+
+  <Terminal title="bash — the same payload, one character over" flavor="output">{`
+  $ python -c "print(len('<script>alert(1)</script>'))"
+  25
+
+  # 25 個字：200
+  # 42 個字（同一段 payload 加上 A）：422 string_too_long
+  `}</Terminal>
+
+  同一段文字，25 個字時被接受，42 個字時被拒絕——**理由是長度，不是內容。**
+
+  驗證做的事是「這看起來像不像 `name` 欄位」。XSS 要的是「這段文字到了 HTML 解析器手裡會變成什麼」。**兩個問題沒有重疊。**
+</Callout>
+
+### 07.1 這支 API 結構上不會有 XSS
+
+不過先別急。在單元 01 到 10 裡，這個字串是安全的——所有 API 都回傳 JSON，而 JSON 會被 `JSON.parse()` 讀成資料結構，**不會被當成程式碼執行**。
+
+<Callout type="important" title="和單元 12 的 CSRF 一模一樣的結構">
+  | 攻擊       | 需要什麼                              | 這個課程現在有嗎 |
+  | ---------- | ------------------------------------- | ---------------- |
+  | CSRF       | 憑證被瀏覽器自動附上（Cookie）         | 沒有，用 Bearer    |
+  | **XSS**    | 使用者文字進到 **HTML 解析器**          | **沒有，回 JSON** |
+
+  **兩者都是「攻擊者控制的文字」被送進「會執行它的東西」。**JSON 回應裡沒有 HTML 解析器，所以 `<script>` 就是一個長度 25 的普通字串。
+
+  所以接下來要看的不是「怎麼在 JSON API 裡防 XSS」，而是**在哪一步它會變成真的**。
+</Callout>
+
+### 07.2 漏洞需要一個 HTML 頁面
+
+要看到差異，需要一個會把 HTML 送進瀏覽器的頁面。`xss_server.py` 是一支很小的 FastAPI，唯一的差別就是它回傳 HTML。
+
+<Terminal title="bash — print the HTML without a browser" flavor="output">{`
+$ python xss_server.py --check
+--- GET /raw  name='<script>alert(1)</script>'
+<h1>profile</h1><p>name: <script>alert(1)</script></p>
+
+--- GET /escaped  name='<script>alert(1)</script>'
+<h1>profile</h1><p>name: &lt;script&gt;alert(1)&lt;/script&gt;</p>
+`}</Terminal>
+
+<Callout type="warning" title="`/raw` 那一行裡的 `<script>` 是真的標籤">
+  瀏覽器收到這一行的時候，HTML 解析器會把它當成一個真的 `<script>` 元素，**然後執行裡面的 JavaScript**。
+
+  這不是「看起來像腳本」，這是「就是腳本」。`curl` 只會把字串印出來，所以要親眼看效果必須用瀏覽器：
+
+  ```bash
+  python xss_server.py
+  # 然後在瀏覽器打開：
+  # http://127.0.0.1:8009/raw?name=<script>alert(1)</script>
+  ```
+
+  瀏覽器會跳出 alert。同一個網址換成 `/escaped`，畫面上會出現字面的 `<script>alert(1)</script>` 這幾個字。
+</Callout>
+
+攻擊者能拿到什麼？**他讓受害者的瀏覽器，用受害者自己的權限，執行他寫的程式。**包括讀取頁面上看得到的資料、代替使用者送出表單、竊取別的 cookie（`HttpOnly` 擋得住 session cookie，但擋不住頁面上的東西）。
+
+這跟 CSRF 的結構一模一樣：一個是「攻擊者讓瀏覽器帶著憑證送請求」，一個是「攻擊者讓瀏覽器執行程式」。**後者更嚴重，因為程式是在受害者頁面的環境裡跑的。**
+
+不過跳出 alert 不是重點。重點是跳脫這件事有四種版本，而其中一種最像是「已經做好了」——**它的輸出裡同樣沒有任何尖括號，瀏覽器一樣看起來沒事。**
+
+### 07.3 同一個字串，四個地方要四種跳脫
+
+跳脫本身只差一個參數就能做對。**最危險的是「我以為我已經跳脫過了」**——`/naive-attr` 就是那種錯誤的樣子。
+
+<Terminal title="bash — a naive escape, and what it produced" flavor="output">{`
+--- GET /naive-attr  name='" onfocus=alert(1) x="'
+<h1>profile</h1><input value="" onfocus=alert(1) x="">
+`}</Terminal>
+
+<Callout type="warning" title="跳脫「有做」，注入「成功」">
+  這段 code 確實把 `<` 和 `>` 換掉了，所以輸出裡一個尖括號都沒有。**看起來完全防護了。**
+
+  但送出來的 HTML 是：`<input value="" onfocus=alert(1) x="">`
+
+  **`value` 的內容在第一個引號就結束了，`onfocus=alert(1)` 變成了一個真的屬性。**游標移進輸入框就會觸發。
+
+  這個函式沒有做錯任何它宣稱做的事，它是**不完整**：它假設值會落在頁面本文，而這次落在屬性裡。
+</Callout>
+
+<Terminal title="bash — escaping the quotes too" flavor="output">{`
+--- GET /escaped-attr  name='" onfocus=alert(1) x="'
+<h1>profile</h1><input value="&quot; onfocus=alert(1) x=&quot;">
+`}</Terminal>
+
+`html.escape(name, quote=True)` 多跳脫了 `"`，所以值留在 `value` 裡面，`onfocus` 只是文字。
+
+<Callout type="important" title="所以規則是：依「它要去哪裡」跳脫，不是依「它看起來像什麼」跳脫">
+  同一個使用者文字，放的地方不同，要用的函式不同：
+
+  | 放的位置 | 危險的是 | 正確做法 |
+  | --- | --- | --- |
+  | HTML 本文 | `<` `>` `&` | `html.escape(v)` |
+  | 屬性值裡 | 上面全部 **加上 `"` 和 `'`** | `html.escape(v, quote=True)` |
+  | URL 的查詢字串 | `&` `=` `#` 會改變查詢結構 | `urllib.parse.quote(v, safe='')` |
+
+  比較一下就知道為什麼 HTML 的跳脫在 URL 裡是錯的：
+
+  <Terminal title="bash — two escapes, two different answers" flavor="output">{`
+  $ python -c "import html, urllib.parse; v='a&b=1#x'; \\
+    print('html.escape ->', html.escape(v)); \\
+    print('quote       ->', urllib.parse.quote(v, safe=''))"
+  html.escape -> a&amp;b=1#x
+  quote       -> a%26b%3D1%23x
+  `}</Terminal>
+
+  `html.escape` 把 `&` 變成 `&amp;`，那是**給 HTML 閱讀器**看的。URL 需要的是給**URL 解析器**看的編碼，兩者不同。
+</Callout>
+
+### 07.4 實際上你不用自己寫這段
+
+上面這些是為了讓你看清楚規則。實際上模板引擎預設就會跳脫，所以你平常寫的程式是安全的。
+
+<Callout type="important" title="危險的只有一種情況：明確關掉跳脫">
+  各家模板引擎都有「不跳脫」寫法，長得都像：Jinja 的 `{{ name | safe }}`、Twig 的 `| raw`、Handlebars 的 `{{{ name }}}`。
+
+  **三重括號的意思是「這段已經是安全的 HTML，直接插進來」。**所以 `{{ triple_braces(user_input) }}` 就是一個漏洞，而 `{{ double_braces(user_input) }}` 不是。
+
+  寫法上的差別只有三個字元，安全上差一整個類別的漏洞。
+</Callout>
+
+<Callout type="note" title="為什麼模板引擎預設跳脫，而這不是壞事">
+  因為「跳脫」是安全的那個選擇。預設不跳脫的話，每一個模板都會是危險的，而且要靠每個寫模板的人記得加上跳脫。
+
+  **預設值決定了犯錯的成本。**這一點和單元 08 課的 `extra="forbid"`、單元 12 課的白名單是同一個道理：把允許的列舉出來，比擋掉危險的容易維護。
+</Callout>
+
+### 07.5 回頭看第 06 節
+
+第 06 節那個 `admin: true` 和這裡的 `<script>`，是同一個現象的兩種面貌：
+
+| | 形狀驗證 | 規則驗證 | 結果 |
+| --- | --- | --- | --- |
+| `{"admin": true}` | 通過（欄位被忽略） | 通過（沒人問） | 安靜地沒被拒絕 |
+| `{"name": "<script>…"}` | 通過（是字串） | 通過（長度夠短） | 安靜地沒被拒絕 |
+
+**上表兩列都通過了全部檢查，而且都不會讓你的程式回報任何錯誤。**
+
+接下來兩節把證據補齊，然後回到第 06 節那個 `admin` 一起看。
+
+<Callout type="warning" title="這一課真正要記的是順序，不是 XSS">
+  驗證是**進來的門**，跳脫是**出去的門**。兩者都要，而且不能互相取代。
+
+  - 只做驗證不做跳脫：把 `<script>` 存進資料庫，之後任何一個把它放進 HTML 的頁面就中標。
+  - 只做跳脫不做驗證：使用者存了一百萬個字元的名字，資料庫和畫面都被拖慢。
+
+  這一課的 `422` 擋的是第二種。**第一種要靠下一段那件事擋，而它跟驗證完全無關。**
+</Callout>
+
 ---
 
-## 07. 終端實戰驗證：同一份 Body 兩次
+## 08. 終端實戰驗證：同一份 Body 兩次
 
-`admin` 這件事要親眼看到才算數。Terminal 1 跑著 `fastapi dev main.py --port 8003`，下面四步每一個都留下一張截圖。
+回頭把第 06 節與第 07 節的證據一起看清楚。Terminal 1 跑著 `fastapi dev main.py --port 8003`，下面四步每一個都留下一張截圖。
 
 ### 第一步：形狀錯，兩種答案
 
@@ -343,7 +507,33 @@ curl -s -X POST http://127.0.0.1:8003/strict \\
   -H 'Content-Type: application/json' -d '{"name":"iris","admin":true}'
 `}</Terminal>
 
-比對第 06 節那個被丟掉的 `admin`：回應裡沒有它，也沒有 `422` 或 `409`跳出來。
+比對第 06 節那個被丟掉的 `admin`：回應裡沒有它，也沒有 `422` 或 `409` 跳出來。沒有人反對過，所以它安靜地通過。
+
+### 第五步：一個通過所有檢查的危險字串
+
+第四步是「該擋的沒擋」。第五步是相反的方向：**每一條規則都通過了，東西還是危險。**
+
+<Terminal title="bash — step 5, the payload passes">{`
+curl -s -X POST http://127.0.0.1:8003/strict \
+  -H 'Content-Type: application/json' -d '{"name":"<script>alert(1)</script>"}'
+`}</Terminal>
+
+<Terminal title="bash — step 5, and the rule that rejected it" flavor="output">{`
+$ python -c "print(len('<script>alert(1)</script>'))"
+25
+`}</Terminal>
+
+`200`。25 個字，遠低於 40 的上限。**沒有任何一條規則拒絕它**——因為每一條規則都在回答別的問題：長度多少、型別對不對、有沒有宣告。
+
+### 第六步：把同一段文字放進 HTML
+
+<Terminal title="bash — step 6, print the HTML first">{`
+python xss_server.py --check
+`}</Terminal>
+
+`/raw` 的輸出裡有一個真的 `<script>` 標籤，`/escaped` 只有 `&lt;script&gt;`。**同一個字串，兩種結果。**
+
+要親眼確認 `<script>` 標籤真的會執行，curl 做不到，因為它只會把字串印出來。**用瀏覽器：**先跑 `python xss_server.py`，再開 `http://127.0.0.1:8009/raw?name=<script>alert(1)</script>`，截圖必須包含跳出的 alert 視窗。接著打 `http://127.0.0.1:8009/escaped?name=<script>alert(1)</script>`，截圖必須顯示畫面上出現的是字面的 `<script>alert(1)</script>` 幾個字、沒有 alert。**兩張截圖並排放，這是本課的證據。**
 
 ---
 
@@ -354,6 +544,12 @@ curl -s -X POST http://127.0.0.1:8003/strict \\
 1. 送出 `{"name":123}` 到 `/strict` 與 `/loose`，截圖兩份並排。**必須看到一個 `422` 一個 `500`。** 再截 Terminal 1 的 traceback。
 2. 對 `/strict` 分別送出缺欄位、型別錯、空字串、超長四種 Body，截圖四個 `422` 的完整 Body。整理一張表：`type` 值、錯誤發生在 Body 的哪裡、Client 該做什麼。
 3. 送出那個巢狀的 `post-strict` Body，截圖必須包含 `"loc":["body","tags",1,"weight"]`。用一句話回答：這個 `1` 代表什麼？
+4. 送出 `{"name":"<script>alert(1)</script>"}` 到 `/strict`，截圖必須包含 `200`。**回答：這個請求被擋下來了嗎？沒有的話，是哪一條規則可以擋它，而那條規則實際上在做什麼？**
+5. `python -c "print(len('<script>alert(1)</script>'))"` 截圖。用一句話回答：把同一段 payload 補到 42 個字，`/strict` 會回什麼？**那個 `422` 的理由是「太危險」還是「太長」？**
+6. `python xss_server.py --check`，截圖必須包含 `/raw` 與 `/escaped` 兩段輸出。**回答：這兩段裡的 `<script>` 有什麼不同？一個是程式碼，另一個是什麼？**
+7. 跑 `python xss_server.py`，用瀏覽器開 `/raw?name=<script>alert(1)</script>` 與 `/escaped?name=<script>alert(1)</script>`，截圖兩張並排。回答：怎麼從畫面分辨哪一個有執行？
+8. `python xss_server.py --check` 的第三、四段（`/naive-attr` 與 `/escaped-attr`），截圖必須包含 `onfocus=alert(1)`。**回答：`naive_escape` 有跳脫 `<` 和 `>`，為什麼注入還是成功？它假設了什麼？**
+9. 回答：你的期末專題如果要顯示使用者輸入的名稱，會放在哪裡（HTML 本文、屬性、URL、還是 JSON）？**那個位置決定你要用哪一個跳脫函數，寫出你的選擇和理由。**
 4. 送出 `[1,2,3]`、`{"name":` 與完全沒有 Body 三種，截圖三個 `detail`。回答：第二個的 `loc` 最後一個成員是數字還是字串？這兩種 `loc` 的形狀差異代表什麼？
 5. 送出 `{"name":"iris","admin":true}` 到 `/strict`，截圖回應。回答：這個欄位去哪裡了？兩種驗證都沒有擋下它，這說明什麼？
 6. 回答一句話：判斷一個失敗該回 `422` 還是 `409`，你的判斷標準是什麼？用「改完資料重送一次會不會成功」回答。
@@ -369,3 +565,8 @@ curl -s -X POST http://127.0.0.1:8003/strict \\
 - [Pydantic — Field constraints](https://docs.pydantic.dev/latest/concepts/fields/)
 - [RFC 9110 §15.5.21 — 422 Unprocessable Content](https://www.rfc-editor.org/rfc/rfc9110.html#name-422-unprocessable-content)
 - [RFC 9110 §15.5.10 — 409 Conflict](https://www.rfc-editor.org/rfc/rfc9110.html#name-409-conflict)
+- [OWASP — Cross Site Scripting Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)
+- [OWASP — DOM based XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html)
+- [MDN — JavaScript 是什麼（瀏覽器會執行它）](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/What_is_JavaScript)
+- [Python — html.escape](https://docs.python.org/3/library/html.html#html.escape)
+- [Python — urllib.parse.quote](https://docs.python.org/3/library/urllib.parse.html#urllib.parse.quote)

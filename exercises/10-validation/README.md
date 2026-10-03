@@ -71,6 +71,17 @@ curl -s -X POST http://127.0.0.1:8003/strict \
 
 沒有 `422`，沒有 `409`。`admin` 去哪裡了？形狀沒擋（沒宣告就忽略），規則也沒擋（根本沒人問）。
 
+## 危險字串 vs 危險輸出
+
+```bash
+python xss_server.py --check     # 不用瀏覽器，先看 HTML 長什麼樣
+python xss_server.py             # 起在 8009，用瀏覽器看真的會不會執行
+```
+
+瀏覽器打開 `http://127.0.0.1:8009/raw?name=<script>alert(1)</script>`，alert 會跳出來。換成 `/escaped`，畫面上出現的是字面的那幾個字。
+
+最值得看的是 `/naive-attr`：它**有**跳脫尖括號，輸出裡一個 `<` 都沒有，但注入一樣成功——因為它沒跳脫引號。
+
 ## 繳交
 
 1. 第一節兩份並排截圖 + Terminal 1 的 traceback。
