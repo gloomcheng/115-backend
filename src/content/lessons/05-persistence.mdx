@@ -238,7 +238,137 @@ $ sqlite3 notes.db "SELECT id, text FROM notes;"
 
 ---
 
-## 06. 什麼時候該用哪一種
+## 06. 併發：把「同時」看清楚
+
+第 05 節看的是資料庫怎麼**拒絕**同時寫入。但真實的後端很少有「只有一個人會動」的時刻——你的 API 同時有幾個 Request 在跑，每一個都是一個執行緒。
+
+要看出差別，最好的方式是讓同一件事壞三次。`race_fix.py` 把「讀→改→寫」寫成三種，同一組資料，跑三次。
+
+<Terminal title="bash — two processes, no protection" flavor="output">{`
+$ rm -f race.json race.lock
+$ python race_fix.py naive A & python race_fix.py naive B & wait
+B: read {}, writing back in 1s
+B: wrote the file
+A: read {}, writing back in 1s
+A: wrote the file
+
+$ cat race.json
+{"A": {"at": 1790996440.988849}}
+`}</Terminal>
+
+**兩個行程都讀到空物件，兩個都說寫成功了，檔案裡只有一個。**沒有任何一行輸出提到出錯。
+
+把同一組指令再跑一次，這次遺失的可能是 `B`：
+
+<Terminal title="bash — and again, a different one is lost" flavor="output">{`
+$ rm -f race.json race.lock
+$ python race_fix.py naive A & python race_fix.py naive B & wait
+$ cat race.json
+{"B": {"at": 1790996439.915694}}
+`}</Terminal>
+
+**誰消失是不確定的。**這就是第 05 節說的 lost update：沒有任何一行輸出告訴你出了事。
+
+<Callout type="warning" title="「讀→改→寫」這三步之間，任何東西都可以插進來">
+  `read()` 返回之後、`write()` 之前，是一段真空。另一個行程完全可以在這段裡面讀到同樣的舊資料、算出自己的版本、寫回去，把你的改動蓋掉。
+
+  這個視窗在真實系統裡不是一秒，是**你把資料從網路讀完、算完、寫回去的所有時間**——可能幾百毫秒。單機上你用 `sleep(1)` 才看得到；線上它天天發生，而且通常只在尖峰時才出現。
+</Callout>
+
+### 06.1 計數器：更安靜的遺失
+
+第三種寫法更常見：把「加一個 key」換成「把數字加一」。瀏覽次數、庫存、購物車數量、投票數，用的都是這一行。
+
+<Terminal title="bash — two increments, count ends at one" flavor="output">{`
+$ rm -f race.json race.lock
+$ python race_fix.py counting A & python race_fix.py counting B & wait
+B: read count=0, writing back in 1s
+B: wrote count=1
+A: read count=0, writing back in 1s
+A: wrote count=1
+
+$ cat race.json
+{"count": 1, "A": {"at": 1790996442.054744}}
+`}</Terminal>
+
+**兩個行程各加一次，檔案裡的 `count` 是 1。**
+
+這比遺失一個 key 更難發現：key 消失你會注意到檔案少東西，計數器少加一次，**沒有任何東西看起來不對**。
+
+<Callout type="important" title="這是後端最常見、也最貴的一類 bug">
+  計數器少算，庫存賣超賣，投票少計。這些錯誤上線之後不會自己復原——資料已經錯了，而且沒有任何機制會把它修回來。
+
+  判斷標準只有一句：**這個值是「算出來的」還是「讀出來的事實」？** 讀出來的事實不會自己變；算出來的東西每一次計算都可能踩到同一段真空。
+</Callout>
+
+### 06.2 加鎖：讓真空消失
+
+正確的作法是把「讀→改→寫」整段圈起來，讓第二個行程進來之前必須等：
+
+<Terminal title="bash — the same race, serialised" flavor="output">{`
+$ rm -f race.json race.lock
+$ python race_fix.py locked A & python race_fix.py locked B & wait
+A: hold lock, read {}, writing back in 1s
+A: wrote the file, released lock
+B: hold lock, read {'A': {'at': 1790996459.28441}}, writing back in 1s
+B: wrote the file, released lock
+
+$ cat race.json
+{"A": {"at": 1790996459.28441}, "B": {"at": 1790996460.289021}}
+`}</Terminal>
+
+**兩個都在。**而且注意第二行程讀到的是 `{'A': ...}`——它讀得到 A 剛剛寫進去的東西，代表 A 確實已經寫完並釋放鎖，B 才進來。
+
+跑三次，三次都是 `["A", "B"]`，而 `naive` 跑三次遺失的是不同的一個。**這不是運氣好，是機制。**
+
+<Terminal title="race_fix.py — the part that actually does the work" flavor="output">{`
+def acquire_lock() -> int:
+    # O_CREAT without O_TRUNC: open the lock file without destroying it.
+    # The returned fd must stay open for the whole critical section. flock is
+    # tied to the open file description, so closing it early releases the lock.
+    lock = os.open("race.lock", os.O_CREAT | os.O_RDWR, 0o644)
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    return lock
+
+
+lock = acquire_lock()
+data = read()
+time.sleep(1)
+data[label] = {"at": time.time()}
+write(data)
+fcntl.flock(lock, fcntl.LOCK_UN)
+os.close(lock)
+`}</Terminal>
+
+<Callout type="warning" title="我第一版寫錯了，而它是這裡最值得學的一件事">
+  我第一次寫的 `acquire_lock()` 是開檔、`flock`、然後**立刻 `close()`**。跑起來結果是資料照樣遺失。
+
+  原因是 `flock` 綁在「開啟檔案的那個敘述」上，不是綁在那個檔案路徑上。你一 close，鎖就立刻被釋放——所以它從來沒有生效過，只是一段看起來很專業的程式碼。
+
+  **這是併發最典型的失敗模式：防禦看起來在那裡，實際上不在。**你在測試時幾乎不會發現，因為測試通常一次只跑一件事。只有當兩個行程真的同時進來，你才會知道那把鎖是假的。
+</Callout>
+
+### 06.3 三個詞分清楚
+
+這三個詞常被混用，但它們回答的是不同問題：
+
+| 詞 | 解決什麼 | 誰來管 |
+| --- | --- | --- |
+| **臨界區段**（critical section） | 哪一段程式碼不該同時被兩個執行緒執行 | **你**要畫出範圍 |
+| **鎖**（lock） | 不讓別人同時進來 | 作業系統提供機制 |
+| **交易**（transaction） | 一組操作要嘛全成功要嘛全不做 | 資料庫保證 |
+
+<Callout type="important" title="為什麼上一節 SQLite 直接就解決了">
+  `hold_the_lock.py` 沒有手寫任何鎖，它靠 `BEGIN EXCLUSIVE` 就擋住第二個 writer。那個 `BEGIN` 同時做了兩件事：畫出臨界區段，並且替你取得鎖。
+
+  **這就是優先用資料庫的理由。**你手寫 `flock` 時要自己決定鎖哪裡、鎖多久、忘了釋放會怎樣；資料庫已經把這些規則收進去了。
+
+  所以實務上的順序是：**先問「資料庫能不能幫我擋」，可以就用資料庫；只有在它擋不住的時候（例如兩個行程各自快取了一份資料）才自己加鎖。**
+</Callout>
+
+---
+
+## 07. 什麼時候該用哪一種
 
 這一課不需要你背規則。只需要問三個問題：
 
@@ -258,7 +388,7 @@ $ sqlite3 notes.db "SELECT id, text FROM notes;"
 
 ---
 
-## 07. 終端實戰驗證：三次對照
+## 08. 終端實戰驗證：三次對照
 
 上面每一節的結論都要自己重跑一次才會記住。三種存法、三組對照，全部在 `exercises/05-persistence/` 執行，先清掉舊檔案讓結果乾淨：
 
@@ -318,6 +448,29 @@ $ sqlite3 notes.db "SELECT id, text FROM notes;"
 
 writer B 被拒絕，而資料庫裡沒有任何一筆是缺的。
 
+### 第五步：把「同時」跑三次
+
+第四步是資料庫擋下來的情形。現在換成沒有資料庫保護的三種寫法，看同一件事怎麼壞掉。
+
+<Terminal title="bash — step 5, three ways to lose data">{`
+$ rm -f race.json race.lock
+$ python race_fix.py naive A & python race_fix.py naive B & wait
+$ cat race.json
+{"A": {"at": 1790996440.988849}}
+
+$ rm -f race.json race.lock
+$ python race_fix.py counting A & python race_fix.py counting B & wait
+$ cat race.json
+{"count": 1, "A": {"at": 1790996442.054744}}
+
+$ rm -f race.json race.lock
+$ python race_fix.py locked A & python race_fix.py locked B & wait
+$ cat race.json
+{"A": {"at": 1790996459.28441}, "B": {"at": 1790996460.289021}}
+`}</Terminal>
+
+這三種寫法唯一的差別是有沒有保護，但結果完全不同：**第一次遺失一個 key、第二次加兩次只得到 1、第三次兩個都在。**這就是第 06 節的整個重點。
+
 ---
 
 ## 單元實作作業
@@ -330,10 +483,13 @@ writer B 被拒絕，而資料庫裡沒有任何一筆是缺的。
 4. 執行 `sqlite3 notes.db "INSERT INTO notes (id, text) VALUES ('carol','x');"`，截圖必須包含錯誤訊息。回答：這個錯誤是誰產生的？
 5. 執行 `python json_race.py A & python json_race.py B & wait` 再 `cat users.json`，截圖必須同時看得到「兩邊都報成功」與「檔案裡只剩一筆」。
 6. 在兩個 Terminal 分別執行 `python hold_the_lock.py hold` 與 `python hold_the_lock.py write`，截圖必須包含 `database is locked`。最後執行 `sqlite3 notes.db "SELECT id, text FROM notes;"`，截圖並確認沒有任何一筆是缺的。
-7. 用一段話回答：`users.json` 與 `notes.db` 都把資料存下來了，那 `notes.db` 多做的事是什麼？不要寫「比較安全」，寫出你親眼看到的那件事。
-8. 回答：你的期末專題會不會有兩個程式同時寫同一份資料？根據第 06 節那三個問題，你會選哪一種？
+7. **連續跑三次** `rm -f race.json race.lock && python race_fix.py naive A & python race_fix.py naive B & wait && cat race.json`。截圖必須包含三次輸出。回答：三次消失的是同一個嗎？
+8. 執行 `python race_fix.py counting A & python race_fix.py counting B & wait` 再 `cat race.json`，截圖必須包含 `count=1`。回答：這比第 7 題更難發現，為什麼？
+9. 執行 `python race_fix.py locked A & python race_fix.py locked B & wait`，截圖必須包含 B 讀到 `{'A': ...}` 那一行。**回答：那一行證明什麼？**如果 B 讀到的是 `{}`，代表什麼？
+10. 把 `acquire_lock()` 裡的 `os.close(lock)` 移到 `fcntl.flock(lock, ...)` 的**正下方**，重跑第 9 題。截圖必須包含資料遺失的結果。回答：為什麼加鎖「看起來在那裡」卻沒有生效？
+11. 回答：你的期末專題會不會有兩個程式同時寫同一份資料？根據第 07 節那三個問題，你會選哪一種？
 
-把作業截圖與簡答筆記存入 `exercises/05-persistence/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.json` 或 `notes.db` 一起 commit 進去。
+把作業截圖與簡答筆記存入 `exercises/05-persistence/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.json`、`notes.db`、`race.json` 或 `race.lock` 一起 commit 進去。
 
 ### 本單元使用的正本
 

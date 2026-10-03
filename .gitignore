@@ -41,3 +41,5 @@ output/playwright/
 *.db-wal
 *.db-shm
 users.json
+race.json
+race.lock
