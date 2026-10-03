@@ -43,3 +43,4 @@ output/playwright/
 users.json
 race.json
 race.lock
+injection.db

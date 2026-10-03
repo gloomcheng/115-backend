@@ -310,7 +310,216 @@ GET  /users -> 200
 
 ---
 
-## 07. 終端實戰驗證：五個 method 各跑一次
+## 07. SQL injection：值可以綁，欄位名不行
+
+五個 method 都通了，資料也存得下來。但在討論「Client 送什麼進來」之前，有一件事必須先確認：**這些字是怎麼進到資料庫的？** 答案在每一個 `execute()` 裡。
+
+先看最常見的那一行：
+
+```python
+row = connection.execute("SELECT name, role FROM users WHERE name = ?", (name,)).fetchone()
+```
+
+那個 `?` 就是全部的防線。Client 送的 `name` 不管長什麼樣，都被當成**值**綁進去，不會變成句子的結構。
+
+<Callout type="important" title="先把這個區分講清楚，後面的注入才有意義">
+  SQL 句子有兩種東西：**結構**（`SELECT`、`WHERE`、逗號、欄位名）與**值**（`iris`、`student`）。
+
+  `?` 只能替換**值**。你可以綁十個值，但你沒有辦法把 `?` 放在 `ORDER BY` 後面讓它變成一個欄位名。
+
+  注入的定義因此是：**Client 的文字改變了句子的結構**。
+</Callout>
+
+### 07.1 值被接進去：整張表被讀出來
+
+`injection.py` 把同一個查詢寫兩種版本。差別只有一個地方：
+
+<Terminal title="bash — the bug, then the fix" flavor="output">{`
+$ python injection.py value
+1. The value is pasted into the statement
+   searching for the user named iris:
+    SQL: SELECT name, role FROM users WHERE name = 'iris'
+    -> ('iris', 'student')
+   searching for ' OR '1'='1:
+    SQL: SELECT name, role FROM users WHERE name = '' OR '1'='1'
+    -> ('iris', 'student')
+    -> ('root', 'admin')
+   the same search with a bound parameter:
+    SQL: SELECT name, role FROM users WHERE name = ?
+    -> 0 rows
+`}</Terminal>
+
+看中間那行 SQL 是怎麼來的。Client 送 `' OR '1'='1`，程式碼把它放進單引號裡，於是資料庫讀到的句子是：
+
+```sql
+SELECT name, role FROM users WHERE name = '' OR '1'='1'
+                   ↑ 這個閉合引號，把字串結束掉了
+```
+
+從 `WHERE` 開始，條件變成了 `name 等於空字串，**或者** 1 等於 1`。後面那半句恆為真，所以每一列都通過。
+
+這個條件一個字都沒被擋下。**Client 送的是一個名字，Server 執行的是「回傳所有人」**，而且沒有任何錯誤——這是一個成功的 `200`。
+
+<Terminal title="bash — the same mistake in a DELETE" flavor="output">{`
+$ python injection.py delete
+2. The same mistake in a DELETE
+   deleting the user named iris:
+    SQL: DELETE FROM users WHERE name = 'iris'
+    -> deleted 1, 1 left
+   deleting 'x' OR '1'='1 :
+    SQL: DELETE FROM users WHERE name = 'x' OR '1'='1'
+    -> deleted 2, 0 left
+   the same request with a bound parameter:
+    SQL: DELETE FROM users WHERE name = ?
+    -> deleted 0, 2 left
+`}</Terminal>
+
+<Callout type="warning" title="`deleted 2, 0 left`：一個請求，兩筆資料，沒了">
+  讀出來的資料至少還會出現在回應裡，攻擊者看得到就知道成功了。
+
+  `DELETE` 不會回傳任何東西。Server 會回 `204 No Content`，乾淨俐落，跟正常刪除一模一樣。**被刪掉的人不會收到通知，因為根本沒有人通知過他們。**
+</Callout>
+
+### 07.2 同一堂課的 `main.py` 也有一次「字串被接進去」
+
+回到 `main.py` 的 `update_user`：
+
+```python
+assignments = ", ".join(f"{column} = ?" for column in updates)
+cursor = connection.execute(
+    f"UPDATE users SET {assignments} WHERE name = ?",
+    (*updates.values(), name),
+)
+```
+
+這裡有 f-string，但**它不是漏洞**——因為 `updates` 已經被過濾了：
+
+```python
+updates = {key: value for key, value in payload.items() if key in {"name", "role"}}
+```
+
+<Callout type="important" title="這個白名單就是防線本體">
+  值（`?` 綁的）本來就安全，不需要白名單。**欄位名沒有 `?` 可以用**，唯一的做法就是自己檢查。
+
+  所以這裡的白名單不是「多寫一層防禦」，是**唯一**的防禦。拿掉它，這段程式碼立刻變成注入點。
+</Callout>
+
+這個白名單有多重要，用實驗量得出來。先送一個從來不存在的欄位名，看它擋不擋得住：
+
+<Terminal title="bash — a key name that was never a column" flavor="output">{`
+$ curl -i -X PATCH http://127.0.0.1:8002/users/iris \\
+    -H 'Content-Type: application/json' \\
+    -d '{"role = '"'"'admin'"'"', name":"x"}'
+< HTTP/1.1 422 Unprocessable Entity
+{"detail":"No supported field to update"}
+
+$ sqlite3 users.db "SELECT name, role FROM users;"
+iris|student
+root|admin
+`}</Terminal>
+
+白名單擋住了，`422`，資料沒動。
+
+現在把 `if key in {"name", "role"}` 改成 `if isinstance(key, str)`，重啟 Server，再送一次：
+
+<Terminal title="bash — the same request after removing the allow-list" flavor="output">{`
+$ curl -i -X PATCH http://127.0.0.1:8002/users/iris \\
+    -H 'Content-Type: application/json' \\
+    -d '{"role = '"'"'admin'"'"', name":"x"}'
+< HTTP/1.1 500 Internal Server Error
+
+$ sqlite3 users.db "SELECT name, role FROM users;"
+x|admin
+root|admin
+`}</Terminal>
+
+<Callout type="warning" title="回應是 500，但資料庫已經被改了">
+  `role = 'admin', name` 這個字串被接進去之後，湊出來的句子是：
+
+  ```sql
+  UPDATE users SET role = 'admin', name = ? WHERE name = ?
+  ```
+
+  逗號讓 SET 多了一個欄位，攻擊者用一個**欄位名**指定了 `role` 的值。`iris` 從 `student` 變成 `admin`。
+
+  然後為什麼是 `500`？因為程式接著用舊的 `name`（`iris`）去查回這一筆，`iris` 已經不存在了，取到 `None`，然後 `None["name"]` 就炸了。
+
+  **所以這一次回應騙了你。** 攻擊者看到 `500`，會以為失敗然後收手——但權限已經被改掉了。這比乾乾淨淨的成功更難察覺。
+
+把 `main.py` 改回去。白名單和 `?` 兩道防線都在的時候，你根本不需要想注入這件事。
+</Callout>
+
+### 07.3 你可以防 Injection，沒有辦法靠「把字串濾乾淨」
+
+Server 端最常見的直覺做法是：擋掉那些看起來很壞的字元。`injection.py identifier` 示範了為什麼這行不通。
+
+<Terminal title="bash — the column name cannot be bound" flavor="output">{`
+$ python injection.py identifier
+3. The column name cannot be a placeholder
+   ORDER BY name, checked against an allow-list:
+    SQL: SELECT name, role FROM users ORDER BY name
+    -> ('iris', 'student')
+    -> ('root', 'admin')
+   ORDER BY role, checked against an allow-list:
+    SQL: SELECT name, role FROM users ORDER BY role
+    -> ('root', 'admin')
+    -> ('iris', 'student')
+   ORDER BY name; DROP TABLE users -- , with the allow-list:
+    -> 0 rows
+   the same input, with the allow-list removed:
+    SQL: SELECT name, role FROM users ORDER BY name; DROP TABLE users --
+    -> ('ERROR', 'You can only execute one statement at a time.')
+   and a column the author never imagined, still unchecked:
+    SQL: SELECT name, role FROM users ORDER BY 1
+    -> ('iris', 'student')
+    -> ('root', 'admin')
+`}</Terminal>
+
+看最後那兩段示範的輸出，兩段的差別是整個安全觀念的關鍵。
+
+先看第二段的輸出：它送 `name; DROP TABLE users --`，**資料庫驅動程式擋了下來**，回 `You can only execute one statement at a time.`。表還在。你看到這裡可能會覺得「那沒差，驅動程式擋住了」。
+
+第三段就是為什麼這個想法不成立：
+
+<Terminal title="bash — no DROP needed to cause damage" flavor="output">{`
+    SQL: SELECT name, role FROM users ORDER BY 1
+    -> ('iris', 'student')
+    -> ('root', 'admin')
+`}</Terminal>
+
+`ORDER BY 1` 沒有任何危險字元，驅動程式也沒有理由擋它。它只是安靜地改了排序——**攻擊者不需要拿到 admin，也不需要刪表，改掉查詢結果的順序就已經改掉了資料。**
+
+<Callout type="important" title="為什麼字串過濾一定會漏">
+  你要擋的是「壞的輸入」，但你沒辦法列出所有輸入。你能擋掉 `DROP TABLE`，擋不掉 `ORDER BY 1`；你擋掉引號，會擋掉 `O'Brien` 這個合法的名字。
+
+  **白名單不一樣。**它不問「這個輸入看起來安不安全」，它問「這個輸入是不是我預期的那一個」。`{"name", "role"}` 這個集合是有限的、你自己寫的、可以讀完的。
+
+  這是整個後端安全最重要的一條：**能列舉允許的值，就不要過濾拒絕的值。**
+</Callout>
+
+### 07.4 判斷注入風險，只看一件事
+
+<Callout type="important" title="一個問題">
+  這一行裡，Client 的文字是綁進去的，還是被接進去的？
+
+  - **綁進去**（`?` + 參數）→ 安全。
+  - **接進去**（f-string、`%`、`+` 組字串）→ 看有沒有白名單擋著。沒有就是漏洞。
+</Callout>
+
+拿本課的 `main.py` 對照，那十幾個 `execute` 呼叫裡：
+
+- 值全部用 `?` 綁（`name`、`payload.name`、`payload.role`）——安全。
+- 只有一處用 f-string（`f"UPDATE users SET {assignments} ..."`）——靠白名單活著。
+
+<Callout type="note" title="為什麼 ORM 之後這件事還是會出現">
+  用 ORM（SQLAlchemy、Django ORM）的時候，你幾乎不會自己寫 SQL，所以注入少很多。但 ORM 仍然提供「原生 SQL」的入口讓你繞過去，那個入口一樣要自己綁參數。
+
+  **ORM 減少的是打錯字的機會，不是你的責任。**判斷標準還是一樣：Client 的文字有沒有被接進去。
+</Callout>
+
+---
+
+## 08. 終端實戰驗證：五個 method 各跑一次
 
 Terminal 1 跑著 `fastapi dev main.py --port 8002`。先清空資料：
 
@@ -389,6 +598,27 @@ curl -s http://127.0.0.1:8002/users
 
 `0` 與 `[]`。
 
+### 第七步：把白名單拿掉
+
+前六步都在用白名單擋欄位名。停掉 Server，把 `main.py` 裡的 `if key in {"name", "role"}` 改成 `if isinstance(key, str)`，重啟 Server，塞兩筆資料進去，然後送那個從來不存在的欄位名：
+
+<Terminal title="bash — step 7, allow-list removed" flavor="output">{`
+> curl -s -X POST http://127.0.0.1:8002/users -H 'Content-Type: application/json' -d '{"name":"iris","role":"student"}'
+{"name":"iris","role":"student"}
+
+> curl -i -X PATCH http://127.0.0.1:8002/users/iris \\
+    -H 'Content-Type: application/json' \\
+    -d '{"role = '"'"'admin'"'"', name":"x"}'
+< HTTP/1.1 500 Internal Server Error
+
+$ sqlite3 users.db "SELECT name, role FROM users;"
+x|admin
+`}</Terminal>
+
+資料庫裡的 `iris` 已經變成 `admin`，但回應是 `500`。這是第 07 節那個教訓的完整現場。
+
+第七步結束後，**把 `main.py` 改回去**，後面的單元都建立在那個白名單上。
+
 ---
 
 ## 單元實作作業
@@ -403,8 +633,14 @@ curl -s http://127.0.0.1:8002/users
 6. 刪除同一筆兩次，截圖必須包含兩個 `204`。再讀一次，截圖必須包含 `404`。用 `sqlite3 users.db "SELECT COUNT(*) FROM users;"` 截圖確認。
 7. 執行 `curl -i -X PUT http://127.0.0.1:8002/users -H 'Content-Type: application/json' -d '{"name":"x"}'`，截圖必須包含 `405` 與 `allow` Header 的完整值。寫出：這個 `allow` 和第六課看到的那個有什麼不同？
 8. 完成第 06 節那張對照表，把「目標不存在時」那一欄全部填滿。其中 `DELETE` 那一格是本課的選擇，不是唯一答案——寫出你的理由。
+9. 執行 `python injection.py value`，截圖必須同時包含 `WHERE name = '' OR '1'='1'` 與回傳兩筆。回答：Client 送的是一個使用者名稱，資料庫實際上收到的條件是什麼？
+10. 執行 `python injection.py delete`，截圖必須包含 `deleted 2, 0 left`。**回答：Server 回給 Client 的是什麼狀態碼？Client 有辦法知道資料被刪了兩筆嗎？**
+11. 執行 `python injection.py identifier`，截圖必須包含 `You can only execute one statement at a time.` 與 `ORDER BY 1` 兩段。回答：哪一段的傷害比較大？為什麼「驅動程式擋住了」不能當成安全的理由？
+12. 執行 `curl -i -X PATCH http://127.0.0.1:8002/users/<你的名字> -H 'Content-Type: application/json' -d '{"role = '"'"'admin'"'"', name":"x"}'`，截圖必須包含 `422`。接著把 `main.py` 裡的 `if key in {"name", "role"}` 改成 `if isinstance(key, str)`，**重啟 Server**，再送一次同樣的請求，截圖必須包含 `500`。最後執行 `sqlite3 users.db "SELECT name, role FROM users;"` 截圖。
+13. 回答第 12 題：請求回 `500`，但資料庫裡 `role` 變成 `admin`。**如果你是 Client，只看得到 `500`，你會怎麼判斷這次攻擊有沒有成功？**
+14. 在 `main.py` 裡找出所有把字串接進 SQL 的地方（用 `grep -n 'f"' main.py`）。列出每一處，並寫下每一處的安全是靠什麼維持的。**如果 `main.py` 裡完全沒有 f-string 組 SQL，你會更安心嗎？為什麼？**
 
-把作業截圖與簡答筆記存入 `exercises/08-crud/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.db` 一起 commit 進去。
+把作業截圖與簡答筆記存入 `exercises/08-crud/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.db` 或 `injection.db` 一起 commit 進去。
 
 ### 本單元使用的正本
 
@@ -413,5 +649,8 @@ curl -s http://127.0.0.1:8002/users
 - [RFC 9110 §15.3.3 — 204 No Content](https://www.rfc-editor.org/rfc/rfc9110.html#name-204-no-content)
 - [RFC 9110 §15.5.10 — 409 Conflict](https://www.rfc-editor.org/rfc/rfc9110.html#name-409-conflict)
 - [SQLite — CREATE TABLE 與 PRIMARY KEY / NOT NULL 約束](https://www.sqlite.org/lang_createtable.html)
+- [SQLite — Prepared Statement 參數綁定](https://www.sqlite.org/c3ref/bind_blob.html)
+- [OWASP — SQL Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
+- [OWASP — Input Validation Cheat Sheet（白名單為何勝過封鎖清單）](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html)
 - [FastAPI — Custom Response](https://fastapi.tiangolo.com/advanced/custom-response/)
 - [Full Stack Open — Node.js and Express](https://fullstackopen.com/en/part3/node_js_and_express)

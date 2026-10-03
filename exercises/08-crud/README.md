@@ -85,6 +85,32 @@ curl -i -X PUT http://127.0.0.1:8002/users -H 'Content-Type: application/json' -
 
 `405` 加上 `allow: GET, POST`。第 06 課時這裡只有 `allow: POST`。
 
+## 七、欄位名不能綁參數，所以要自己擋
+
+`injection.py` 不需要啟動 Server，直接跑：
+
+```bash
+python injection.py value       # ' OR '1'='1 讀出整張表
+python injection.py delete      # 同一個錯誤，但資料沒了
+python injection.py identifier  # 欄位名沒有 ? 可以用
+```
+
+`delete` 那段會印出 `deleted 2, 0 left`：**一個請求刪掉兩列，Server 回的是乾淨的 `204`。**
+
+## 八、拿掉白名單，看它怎麼壞
+
+停掉 Server，把 `main.py` 裡的 `if key in {"name", "role"}` 改成 `if isinstance(key, str)`，重啟：
+
+```bash
+curl -i -X PATCH http://127.0.0.1:8002/users/iris \
+  -H 'Content-Type: application/json' \
+  -d '{"role = '"'"'admin'"'"', name":"x"}'
+
+sqlite3 users.db "SELECT name, role FROM users;"
+```
+
+回 `500`，但 `iris` 變成 `admin`。**做完記得改回去。**
+
 ## 繳交
 
 1. `.schema users` 的截圖。回答：`409` 是 Python 的檢查還是 SQLite 的規則？
@@ -95,7 +121,12 @@ curl -i -X PUT http://127.0.0.1:8002/users -H 'Content-Type: application/json' -
 6. 兩個 `204` 加一個 `404` 加 `COUNT(*)` 的截圖。
 7. `PUT /users` 的 `405` 與 `allow` 截圖。和第 06 課那個相比，多了什麼？
 8. 完成第 06 節的對照表，「目標不存在時」那一欄全部填滿。`DELETE` 那格是本課的選擇，不是唯一答案——寫出你的理由。
+9. `python injection.py value` 的截圖，要同時看得到 `WHERE name = '' OR '1'='1'` 和回傳兩筆。
+10. `python injection.py delete` 的截圖，含 `deleted 2, 0 left`。Server 回什麼狀態碼？Client 有辦法知道被刪了兩列嗎？
+11. `python injection.py identifier` 的截圖，含 `You can only execute one statement at a time.` 和 `ORDER BY 1`。哪一段傷害比較大？
+12. 第八步的 `500` 與 `sqlite3` 輸出截圖。回答：只看得到 `500`，你怎麼判斷攻擊有沒有成功？
+13. `grep -n 'f"' main.py` 的輸出。列出每一處接進 SQL 的地方，寫下每一處靠什麼維持安全。
 
 ## 繳交前
 
-`users.db` 是練習產生的檔案，**不要 commit 進去**。`git status` 應該看不到它。
+`users.db` 與 `injection.db` 是練習產生的檔案，**不要 commit 進去**。`git status` 應該看不到它。
