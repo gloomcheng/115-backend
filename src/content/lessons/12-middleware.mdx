@@ -516,11 +516,189 @@ $ python rate_limit.py bucket
   **任何「依照來源分組」的結構，都要問自己：這個 key 的數量有上限嗎？**沒有的話，那是另一種形式的阻斷服務。
 </Callout>
 
+### 08.6 CSRF：這個漏洞，你的專題目前沒有
+
+限流擋的是「同一個來源叫太多次」。CSRF 是反過來的方向：**攻擊者不在你的 Server 上，也沒有你的 token，他只是讓你的瀏覽器替他送出請求。**
+
+先講結論，這件事會改變你看待單元 11 和 12 所有工作的方式——尤其那種把 Bearer 換成 Cookie session 的改法。
+
+<Callout type="important" title="單元 11 和 12 的 `Authorization: Bearer` 方案，結構上就沒有 CSRF">
+  `bearer` 那一組就是本課一直在用的做法：
+
+  <Terminal title="bash — the scheme already in units 11 and 12" flavor="output">{`
+  $ python csrf_server.py bearer 8008 &
+
+  $ curl -s -X POST http://127.0.0.1:8008/transfer -d "amount=10000"
+  {"detail":"Authorization header required"} [401]
+
+  $ curl -s -X POST http://127.0.0.1:8008/transfer -H "Authorization: Bearer abc"
+  {"ok":true} [200]
+
+  $ curl -s -i -X POST http://127.0.0.1:8008/login -d "name=iris&password=lesson" | grep -c set-cookie
+  0
+  `}</Terminal>
+
+  三件事同時成立：
+
+  1. 認證憑證放在 **Header**，不是 Cookie。
+  2. **瀏覽器不會自動幫你填 Header。**只有同一個 origin 的 JavaScript 可以設它，而攻擊者的頁面不是同一個 origin。
+  3. `login` 回應裡**沒有 `Set-Cookie`**，因為 token 根本不存進瀏覽器。
+
+  攻擊者能控制的只有「你的瀏覽器自動附上的東西」。這三點讓那個集合是空的。
+
+  <Callout type="warning" title="但這是結構上的幸運，不是有人想過">
+    這個設計擋住 CSRF，是因為 token 放在 Header 裡。**它沒有做任何 CSRF 防護**——沒有 token 比對、沒有 Origin 檢查。
+
+    所以第 06 節的結論要說完整：JWT 是無狀態的，但「無狀態」不等於「自動安全」。這個安全性來自你選的傳輸方式，不是來自 JWT。
+  </Callout>
+</Callout>
+
+### 08.7 把 Cookie 放回去，漏洞就回來了
+
+真實系統幾乎都用 Cookie 存 session：它記得住、跨頁自動帶、而且 `HttpOnly` 可以擋掉 `document.cookie`。**換成 Cookie session 取代 Bearer 的那一刻，CSRF 就出現了。**
+
+<Callout type="important" title="CSRF 的真正成因，是一句話">
+  **Cookie 是瀏覽器在「不管你從哪裡來」的情況下自動附上的。**
+
+  這是它的本分工作：使用者按了「登入」，網站記住他。問題是這個「他」只代表 session，**不包含他此刻正在看哪個網頁。**
+</Callout>
+
+`victim`、`guarded` 和 `attacker` 是同一個檔案裡的三組 Server，差別只有防護有沒有做。攻擊者頁面在第三個 origin。
+
+`csrf_server.py` 的開頭就說明了要開幾個 Server：
+
+<Terminal title="bash — three origins, because an attack needs more than one">{`
+$ python csrf_server.py victim 8006 &
+$ python csrf_server.py attacker 8007 &
+$ python csrf_server.py guarded 8010 &
+`}</Terminal>
+
+登入之後，去 `http://127.0.0.1:8007/`。那個頁面上只有一個按鈕：
+
+<Terminal title="bash — what the attacker page contains" flavor="output">{`
+$ curl -s http://127.0.0.1:8007/ | grep -o 'action="[^"]*"'
+action="http://127.0.0.1:8006/transfer"
+`}</Terminal>
+
+按下去之後看 `victim` 的終端機：
+
+<Terminal title="victim terminal — the part that matters" flavor="output">{`
+[server] TRANSFER 10000 from iris
+`}</Terminal>
+
+<Callout type="warning" title="伺服器上發生的事，和攻擊者完全無關">
+  攻擊者的頁面**沒有**你的 token、**沒有**你的密碼、**沒有**任何你給過他的東西。
+
+  你的瀏覽器讀到攻擊者的 `<form>`，把它送到 `8006`，同時因為這是 `127.0.0.1` 而**自動附上了 `session` Cookie**。`8006` 看到一張有效的 session cookie，執行了轉帳。
+
+  整個過程裡，使用者看到的是「我點了一個按鈕」。**沒有任何畫面顯示錢掉了。**
+</Callout>
+
+現在打同一個請求，但繞過瀏覽器：
+
+<Terminal title="bash — the same request, made explicit" flavor="output">{`
+$ curl -s -X POST http://127.0.0.1:8006/transfer \\
+    -H "Cookie: session=iris" -d "amount=10000"
+ok, moved 10000 from iris
+`}</Terminal>
+
+這行指令沒有用到任何機密。`Cookie: session=iris` 是攻擊者的頁面**也會**帶上的東西，而它就是全部的憑證。
+
+所以重點不是「攻擊者很會偽造 cookie」，而是**他根本不需要偽造**。
+
+### 08.8 三道防線，而且它們擋的不是同一件事
+
+這就是漏洞的形狀：憑證由瀏覽器自動附上，而 Server 沒有任何東西能分辨「本人來的」還是「別的頁面叫來的」。
+
+要堵它，`guarded` 那組一次做了三件事，我們逐個拆開看。三道防線擋的東西不一樣，這點比記住設定值更重要。
+
+<Terminal title="bash — the cookie it actually sets" flavor="output">{`
+$ curl -s -i -X POST http://127.0.0.1:8010/login -d "name=iris&password=lesson" \\
+    | grep -i set-cookie
+set-cookie: session=iris; HttpOnly; Path=/; SameSite=lax
+set-cookie: csrf=lesson-12-csrf-token; Path=/; SameSite=lax
+`}</Terminal>
+
+<Terminal title="bash — legitimate request, all three satisfied" flavor="output">{`
+$ curl -s -X POST http://127.0.0.1:8010/transfer \\
+    -H "Cookie: session=iris" \\
+    -H "Origin: http://127.0.0.1:8010" \\
+    -d "amount=100&csrf=lesson-12-csrf-token"
+ok, moved 100 from iris
+`}</Terminal>
+
+<Terminal title="victim of the attack, pointing at the defended server" flavor="output">{`
+$ curl -s -X POST http://127.0.0.1:8010/transfer \\
+    -H "Cookie: session=iris" \\
+    -H "Origin: http://127.0.0.1:8007" \\
+    -d "amount=10000&csrf=" -w " [%{http_code}]"
+bad origin [403]
+
+$ curl -s -X POST http://127.0.0.1:8010/transfer \\
+    -H "Cookie: session=iris" \\
+    -H "Origin:" \\
+    -d "amount=10000&csrf=" -w " [%{http_code}]"
+bad csrf token [403]
+`}</Terminal>
+
+<Callout type="important" title="三道防線各擋什麼">
+  - **`SameSite=Lax`**：瀏覽器層的規則。跨站的 POST 不附 cookie，所以 `8006` 那條路根本走不到 `session`。**這是最強的一道，因為它讓憑證不出發。**
+  - **CSRF token**：攻擊者讀不到的那個值。`csrf` Cookie 設在 `8010`，攻擊者的頁面在 `8007`，同源政策擋住讀取，所以表單只能送出空字串。
+  - **`Origin` 檢查**：瀏覽器送的 `Origin` 無法被頁面內容覆寫，跨站 POST 會誠實地寫上攻擊者的 origin（`8007`）。
+
+  **三道都要有。**任何單獨一道被廢掉的時候——`SameSite` 的預設值改掉、token 在 XSS 裡外洩、某個舊客戶端不送 `Origin`——另外兩道還在。
+</Callout>
+
+<Callout type="warning" title="Origin 檢查有個洞，而且程式碼裡看得到">
+  守衛的寫法是：
+
+  ```python
+  if origin and origin != ALLOWED_ORIGIN:
+  ```
+
+  注意開頭的 `origin and`。**沒有 `Origin` 的請求會被放行**，因為不是每個客戶端都會送它（`curl` 預設就不送）。
+
+  照上面那段測試繼續往下打，可以量到這件事的真實代價：
+
+  <Terminal title="bash — no Origin header, and the token is known" flavor="output">{`
+  $ curl -s -X POST http://127.0.0.1:8010/transfer \\
+      -H "Cookie: session=iris" \\
+      -H "Origin:" \\
+      -d "amount=10000&csrf=lesson-12-csrf-token" -w " [%{http_code}]"
+  ok, moved 10000 from iris [200]
+  `}</Terminal>
+
+  **通了。**因為這個請求沒有帶 `Origin`，檢查直接跳過，而 token 又剛好是對的。
+
+  這不是漏洞，是這兩道防線的邊界。攻擊者能不能走到這一步，取決於他能不能同時拿到 token 並且讓瀏覽器不送 `Origin`——真實瀏覽器在跨站情境會送，所以純網頁攻擊走不到。
+
+  **但它說明了一件事：不要把「擋住大部分攻擊」當成「安全」。**你能說出它在哪裡失效，才算真的懂這三道防線。
+</Callout>
+
+### 08.9 判斷題：你的專題要不要處理 CSRF
+
+<Callout type="important" title="一條規則，不是感覺">
+  **你的認證憑證會不會被瀏覽器「自動附上」？**
+
+  - 會（存在 Cookie 裡）→ **需要** CSRF 防護。
+  - 不會（放 Header、由呼叫端自己帶）→ 這個攻擊不成立。
+
+  然後記住第二件事：**改了傳輸方式，防護要跟著改。**從 Bearer 換到 Cookie session 的那一天，就是漏洞回來的那一天，而 git 不會提醒你。
+</Callout>
+
+<Callout type="note" title="SameSite 預設值這件事">
+  現代瀏覽器已經把 `SameSite=Lax` 設為預設，所以很多系統「看起來沒事」——那是瀏覽器在替你擋。
+
+  但 `Lax` **不擋跨站 POST**，只擋跨站 GET。也就是說「讀取資料」的路由安全，**「改資料」的路由並沒有**。
+
+  要完全靠 cookie 本身擋住 POST，需要 `SameSite=Strict`，代價是所有從外部連結進來的第一次導覽都會沒有 cookie。**多數實務上是 `Lax` 加上 CSRF token，而不是只靠 `SameSite`。**
+</Callout>
+
 ---
 
 ## 09. 終端實戰驗證
 
-Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`，Terminal 2 已經把 `$STUDENT` 和 `$ADMIN` 放出來了。這支 API 的下面十步照順序做，每一步都先看指令再看截圖要求。**第 9 步會重啟 Terminal 1，重啟之後就不要再打其他請求**，否則第 10 步拿到的不是 `429`。
+第 08 節的限流與 CSRF 都做完了，下面回到 `main.py`。Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`，Terminal 2 已經把 `$STUDENT` 和 `$ADMIN` 放出來了。這支 API 的下面十步照順序做，每一步都先看指令再看截圖要求。**第 9 步會重啟 Terminal 1，重啟之後就不要再打其他請求**，否則第 10 步拿到的不是 `429`。
 
 1. 先打一個這支 API 沒有定義的路徑：`curl -i http://127.0.0.1:8005/nope`。截圖必須同時包含 `404`、`x-request-id` 與 `x-trace`，因為中介軟體有沒有執行，證據就在那兩個 Header 上。
 2. 接著看巢狀順序：`curl -i http://127.0.0.1:8005/open | rg -i '^x-trace'`。把 `outer:in > inner:in > inner:out > outer:out` 整串抄下來，這是第 02 節的證據。
@@ -532,6 +710,10 @@ Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`�
 8. 最後開 Terminal 3 用 `SIGNING_KEY=lesson-12-key-b` 起 8006，然後跑 `curl -s http://127.0.0.1:8005/key-info` 和 `curl -s http://127.0.0.1:8006/key-info` 比較指紋，再用 `curl -i http://127.0.0.1:8006/profile -H "Authorization: Bearer $STUDENT"` 確認回 `401 Bad signature`。
 9. **重啟 Terminal 1 的 Server**，然後跑 `for i in $(seq 1 31); do curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/open; done | sort | uniq -c`。截圖必須包含 `30 200` 與 `1 429`。接著 `curl -i http://127.0.0.1:8005/open`，截圖必須包含 `429` 與 `retry-after`。**重啟是必要的**：計數器存在記憶體裡，重啟才會歸零。
 10. 不重啟，直接打 `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/nope` 和 `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/profile`。兩張截圖必須**都是 `429`**，然後回答：為什麼 `/profile` 沒有因為你沒帶 token 而回 `401`？
+11. 開三個新的 Terminal：`python csrf_server.py victim 8006`、`python csrf_server.py attacker 8007`、`python csrf_server.py guarded 8010`。**瀏覽器**打開 `http://127.0.0.1:8006/` 登入（`iris` / `lesson`），然後開新的分頁打 `http://127.0.0.1:8007/` 按那個按鈕。截圖必須包含 `victim` 終端機的 `TRANSFER 10000 from iris`，以及瀏覽器上「你已經是 iris」的那個畫面。**這兩張截圖要放在一起，因為重點是它們同時成立。**
+12. 對照組：`python csrf_server.py bearer 8008`，執行 `curl -s -X POST http://127.0.0.1:8008/transfer -d "amount=10000"`，截圖必須包含 `401`。再執行 `curl -s -i -X POST http://127.0.0.1:8008/login -d "name=iris&password=lesson" | grep -c set-cookie`，截圖必須包含 `0`。**回答：同一個 `transfer` 路由，為什麼一支有 CSRF 風險、一支沒有？差別只有哪一個地方？**
+13. 對 `guarded` 做三次請求，三張截圖都要有：`curl -s -X POST http://127.0.0.1:8010/transfer -H "Cookie: session=iris" -H "Origin: http://127.0.0.1:8010" -d "amount=100&csrf=lesson-12-csrf-token"`（成功）、加上 `-H "Origin: http://127.0.0.1:8007"`（`bad origin [403]`）、再把 `Origin:` 留空且 `csrf=` 留空（`bad csrf token [403]`）。**回答：`SameSite=Lax`、CSRF token、`Origin` 檢查，各自擋住了什麼？**
+14. 最後送出 `-H "Origin:"` 且 `-d "amount=10000&csrf=lesson-12-csrf-token"`，截圖必須包含 `200`。**回答：這次成功了。這代表 `Origin` 檢查有什麼限制？為什麼這不代表真實瀏覽器上的攻擊可以成功？**
 
 ---
 
@@ -551,6 +733,8 @@ Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`�
 10. 接著跑 `python rate_limit.py fixed` 與 `python rate_limit.py sliding`，兩張截圖都要包含 `5 at t=56..59, then 5 at t=60..63`。**回答：同樣 10 個請求，為什麼固定視窗放行 10 個、滑動視窗只放行 5 個？`main.py` 現在用的是哪一種？**
 11. 用 `grep -n "_hits" main.py` 找到那個 dict。回答：`_hits` 的 key 是什麼？這個 key 的數量有上限嗎？如果沒有，是什麼問題？
 12. 最後回答：你在 Terminal 2 打 `/profile` 忘了帶 token，但因為剛剛超流而拿到 `429`。**你要怎麼分辨「我被限流了」跟「我忘記帶 token 了」？**這兩個狀況 Server 給的 Header 有什麼不同？
+13. 照第 11 到 14 步在瀏覽器裡跑一次完整的 CSRF 實驗，截圖必須包含 `victim` 的 `TRANSFER 10000 from iris`、`bearer` 的 `401`、以及 `guarded` 的兩次 `403`。回答：`victim` 和 `guarded` 的差別只有防護，而 `bearer` 連 cookie 都沒有——**三組分別對應到哪一種「憑證會不會被瀏覽器自動附上」？**
+14. 用一句話回答：假設你的期末專題現在把登入方式從 Bearer 改成 Cookie session，**你要多寫哪幾行**？那些行的作用分別是什麼？如果改成 Cookie 卻什麼都不加，**哪一個請求會成功、金額會是多少？**
 
 把作業截圖與簡答筆記存入 `exercises/12-middleware/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。這一課的作業重點不在截圖數量，而在第 3、4、8 三題的答案是否真的對照到指令輸出。
 
@@ -571,3 +755,7 @@ Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`�
 - [RFC 9110 §15.5.29 — 503 Service Unavailable（與 429 的差別）](https://www.rfc-editor.org/rfc/rfc9110.html#name-503-service-unavailable)
 - [RFC 9110 §10.2.3 — Retry-After](https://www.rfc-editor.org/rfc/rfc9110.html#name-retry-after)
 - [OWASP — Denial of Service Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html)
+- [OWASP — Cross-Site Request Forgery Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
+- [MDN — Set-Cookie 的 SameSite 屬性](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#samesitesamesite-value)
+- [MDN — Origin header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Origin)
+- [RFC 6265bis — SameSite 屬性與 Lax/Strict 的行為](https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html)

@@ -147,6 +147,27 @@ for i in $(seq 1 31); do curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0
 
 **`30 200` 加 `1 429`。**接著打一個不存在的路徑 `curl -i http://127.0.0.1:8005/nope`，它也會是 `429`——因為中介軟體在路由比對之前就跑了。
 
+## CSRF
+
+`csrf_server.py` 需要**同時開三個 Server**，因為攻擊一定要有第二個 origin：
+
+```bash
+python csrf_server.py victim 8006     # 沒有防護
+python csrf_server.py guarded 8010    # 有防護
+python csrf_server.py attacker 8007   # 攻擊者頁面
+python csrf_server.py bearer 8008     # 本課一直在用的 Bearer 方案
+```
+
+**用瀏覽器做，不要用 curl。**先在 `http://127.0.0.1:8006/` 登入（`iris` / `lesson`），再開一個分頁到 `http://127.0.0.1:8007/` 按那個按鈕，然後回頭看 `victim` 的終端機：
+
+```
+[server] TRANSFER 10000 from iris
+```
+
+攻擊者沒有你的 token、沒有你的密碼。**他什麼都不需要有。**
+
+對照 `bearer`：同樣的請求是 `401`，而且 `login` 完全沒有 `Set-Cookie`。因為憑證在 Header 裡，瀏覽器不會自動附上。
+
 ## 繳交
 
 1. 不存在路徑的 `404` 截圖，**必須含 `x-request-id` 與 `x-trace`** + 中介軟體有沒有真的執行。
