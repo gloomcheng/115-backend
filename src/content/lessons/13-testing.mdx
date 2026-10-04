@@ -17,7 +17,7 @@ import Callout from '../../components/Callout.astro';
 cd exercises/13-testing
 pytest -q
 .......                                                                  [100%]
-7 passed, 1 warning in 2.12s
+7 passed in 0.39s
 `}</Terminal>
 
 七條全過。這證明的事情比你想的少。**綠色只證明「現在沒有壞」，不證明「壞的時候會被抓到」。**
@@ -99,7 +99,7 @@ E         Differing items:
 E         {'ok': 'yes'} != {'ok': True}
 
 tests/test_contract.py:39: AssertionError
-1 failed, 6 passed, 1 warning in 0.28s
+1 failed, 6 passed in 1.51s
 `}</Terminal>
 
 `.F.....` — 七個點中間夾著一個 `F`。**是那個斷言 Body 的測試失敗，不是那個斷言狀態碼的測試。**
@@ -148,17 +148,19 @@ tests/test_contract.py::test_create_without_name_is_rejected PASSED      [100%]
 <Terminal title="bash — restore and confirm" flavor="output">{`
 > pytest -q
 .......                                                                  [100%]
-7 passed, 1 warning in 0.62s
+7 passed in 0.39s
 `}</Terminal>
 
 ---
 
 ## 04. 測試裡的 `assert` 到底在做什麼
 
-`<Callout>` 之外沒有框架魔法。把上面那條失敗的測試攤開看，它其實只是三行：取得 response、取出 Body、拿它跟契約比。
+`<Callout>` 之外沒有框架魔法。把上面那條失敗的測試攤開看，扣掉註解它其實只有三行：取得 response、取出 Body、拿它跟契約比。**那段註解是檔案裡原本就有的**，它先說明了這一條為什麼存在。
 
-<Terminal title="tests/test_contract.py — the whole test" flavor="output">{`
+<Terminal title="tests/test_contract.py — the whole test, as it is in the file" flavor="output">{`
 def test_health_body_is_exactly_ok_true(client):
+    # This is the assertion that earns its keep. Change True to "yes" in
+    # main.py and this one fails while the one above still passes.
     response = client.get("/health")
 
     assert response.json() == {"ok": True}
@@ -229,11 +231,11 @@ AssertionError
 <Terminal title="bash — run one test by name or by keyword" flavor="output">{`
 > pytest -q -k health
 ...                                                                     [100%]
-3 passed, 4 deselected, 1 warning in 0.23s
+3 passed, 4 deselected in 0.37s
 
 > pytest -q -k test_health_returns_200
 .                                                                        [100%]
-1 passed, 6 deselected, 1 warning in 0.19s
+1 passed, 6 deselected in 0.28s
 `}</Terminal>
 
 `-k` 是關鍵字篩選。改壞程式碼之後只跑那一條，比跑全部七條快得多。
@@ -250,7 +252,7 @@ no server running
 
 $ pytest -q
 .......                                                                  [100%]
-7 passed, 1 warning in 1.00s
+7 passed in 0.29s
 `}</Terminal>
 
 `TestClient` 把 Request 直接送進應用程式本身，**不經過網路、不經過 socket、不占用 port**。上一課的 `SIGNING_KEY` 也不需要設定，因為 `main.py` 裡沒有那個檢查。
