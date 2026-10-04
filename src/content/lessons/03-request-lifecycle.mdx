@@ -208,11 +208,168 @@ curl -s http://127.0.0.1:8000/health | wc -c
 
 接下來把這五個階段各跑一次，讓你看到每一步各自留下什麼證據。
 
+## 07. 沒有 Request 的工作
+
+第 06 節那張表從連線走到執行，五個階段，最後一個產出 Response。**整個生命週期到這裡就結束了**，而且它有個前提你還沒注意到：從頭到尾都有一個人在等。
+
+<Terminal title="bash — doing the work during the request" flavor="output">{`
+$ python queue_demo.py inline
+1. Doing the work during the request
+  request handled, client got its response
+    jobs: 1 (done=1)   effects: 1
+   The client knows the answer, because the client was still waiting.
+   If charge() had raised, the client would have gotten a 500.
+`}</Terminal>
+
+<Callout type="important" title="Client 還在等，所以成功與失敗都有地方送">
+  這是 Request 生命週期給你的東西：一條**已經接好的、雙向的**回報通道。
+
+  成功就是 `200`。失敗就是 `500`。逾時就是 Client 自己的錯。**每一種結果都有一個位置可以送到。**
+
+  背景工作沒有這條通道。這一節講的就是沒有通道之後該怎麼辦。
+</Callout>
+
+### 07.1 把工作丟到 Client 看不到的地方
+
+最常見的做法是：把工作寫進一個佇列（先是一張表），立刻回 `202 Accepted`，然後交給另一個行程慢慢做。
+
+<Terminal title="bash — the request ends, the work has not" flavor="output">{`
+$ python queue_demo.py queued
+2. The same work, after the response
+  request handled, client got 202 Accepted
+    jobs: 1 (pending=1)   effects: 0
+    ^ these disagree. nothing raised. nothing was logged.
+   The client no longer knows the answer, and that is the trade.
+
+  worker finished
+    jobs: 1 (done=1)   effects: 1
+   Now the client knows nothing, the worker knows, and only the log ties them.
+`}</Terminal>
+
+<Callout type="important" title="`202` 的意思是「我收到了」，不是「我辦完了」">
+  這兩個字在這裡差得很遠。`202` 只保證一件事：**這筆工作不會丟掉，它在某個地方排隊。**
+
+  它不保證工作會成功，不保證什麼時候完成，也不保證會完成。**所以 Client 想知道結果，就必須自己再問一次**——輪詢一個狀態端點，或者接受 webhook。
+
+  這是設計，不是缺陷。`202` 存在的唯一理由就是「我現在還不知道答案」。
+</Callout>
+
+順帶一提：`202` 在 RFC 9110 裡跟 `200`、`201` 是同一層的 **2xx**，它**不是**錯誤。「非同步」不等於「失敗」。
+
+### 07.2 工作跑到一半，行程死了
+
+這是第一個沒有 Client 幫你擋住的東西。
+
+<Terminal title="bash — killed after the charge, before the bookkeeping" flavor="output">{`
+$ python queue_demo.py crash
+3. The worker dies between the charge and the bookkeeping
+  worker killed after charging, before marking done
+    jobs: 1 (running=1)   effects: 1
+   status is stuck at 'running'. No exception, no 500, no Client to tell.
+   The queue still holds a job that will never finish on its own.
+`}</Terminal>
+
+<Callout type="warning" title="注意 `effects: 1`——錢已經扣了">
+  這個狀態最危險的地方在於**它看起來還在進行中**。`status` 是 `running`，不是 `failed`。
+
+  - 沒有例外，因為行程不是因為錯誤死的。
+  - 沒有 log，因為 log 只記到「開始執行」。
+  - 沒有 Client 會來問，因為 Client 早就拿到 `202` 走人了。
+
+  **三個你在前六課學會用來發現問題的機制，在這裡全部失效。**這是本節存在的理由。
+</Callout>
+
+<Callout type="note" title="單元 15 會處理怎麼讓它至少留下紀錄">
+  單元 15 教的是用 request id 把兩段 log 接起來。但這裡要誠實地說：**就算 log 接得很好，這個工作還是卡住了。**log 讓你看見問題，不會解決問題。
+
+  解決問題的是下面這個機制。
+</Callout>
+
+### 07.3 重試，然後收兩次錢
+
+這個 `running` 不會自己好。有人在監控看到，或直接手動重試一次。
+
+<Terminal title="bash — one retry" flavor="output">{`
+$ python queue_demo.py retry
+4. The operator retries the stuck job
+  after one retry
+    jobs: 1 (done=1)   effects: 2
+    ^ these disagree. nothing raised. nothing was logged.
+
+   1 job, 2 charges. The customer was billed twice.
+
+   A queue cannot promise exactly-once. It promises at-least-once, which
+   means 'at least', and the second time is your problem to make safe.
+`}</Terminal>
+
+<Callout type="important" title="「至少一次」的意思是「至少」，不是「只有一次」">
+  幾乎所有訊息佇列（Redis、SQS、RabbitMQ）提供的都是 at-least-once 語意。原因很直覺：**寧可重複執行，也不要漏掉執行。**
+
+  重複執行在純計算上是無害的——把一個數字加兩次，你重算一次就會覆蓋掉。但只要工作有**對外的作用**（扣款、寄信、寫進另一個系統），重複就是真的重複。
+
+  **所以 exactly-once 不是佇列給你的，是你自己在那一行的程式碼裡做出來的。**
+</Callout>
+
+### 07.4 讓那一次「副作用」自己 idempotent
+
+<Terminal title="bash — the same retry, with a guard" flavor="output">{`
+$ python queue_demo.py idempotent
+5. The same retry, when the charge is idempotent
+   second attempt: 1 record(s) for job 1 already, skipping
+  after the same retry
+    jobs: 1 (done=1)   effects: 1
+
+   1 job, 1 charge. The retry was safe.
+
+   The key is not the queue. It is the side effect recording which job it
+   already did — in the same transaction, or it is not a guarantee.
+`}</Terminal>
+
+差別只有一行：**執行前先問「這個 job 做過了嗎」。**這個問句才是重試安全的原因，佇列本身沒有做任何事。
+
+<Callout type="warning" title="那個「問」和那個「做」必須在同一個 transaction 裡">
+  如果你先問、有沒有做過、答案是沒有，然後**分開**寫入，那麼在這兩步之間行程死掉，你就會有同樣的問題，只是換成「已經標記做過但其實沒做」。
+
+  這叫 **check-then-act 的競態**，跟單元 05 第 05 節的 lost update 是同一個形狀，只是發生在別的地方。
+
+  正確的寫法是讓「記錄我已經做過」和「實際做」由資料庫一次完成，順序不重要、重跑也不會重複。單元 05 教過 `INSERT OR IGNORE`，這裡就是它的用途。
+</Callout>
+
+<Callout type="important" title="所以背景工作的三個實際規則">
+  1. **假設它會被執行不只一次**，因為它一定會。重試是復原手段，不是例外。
+  2. **副作用必須 idempotent**，而且 idempotency 的證明要跟副作用寫在同一個 transaction。
+  3. **沒有人在等，所以失敗要自己留下紀錄。**沒有 `500` 會跳出來，沒有 Client 會重試，也沒有人會注意到。
+
+  第三條是最容易被忽略的，而且它正好是單元 15 的主題。
+</Callout>
+
+### 07.5 什麼時候該丟出去，什麼時候不該
+
+<Callout type="important" title="不要為了「看起來比較好」而丟到背景">
+  背景工作是**用延遲換可靠性**，不是免費的。
+
+  | 該丟出去 | 不該丟出去 |
+  | --- | --- |
+  | 寄信、產生日報、呼叫第三方 | 密碼檢查、權限判斷 |
+  | 影片轉檔、圖片縮圖 | 驗證碼、付款前的前置檢查 |
+  | Client 願意等 3 秒以上的事 | 使用者正在螢幕上等結果的事 |
+
+  **判斷標準只有一個：Client 需不需要在畫面上立刻看到結果。**需要，就留在 Request 裡，並且讓它慢一點但誠實。
+
+  用背景工作包裝一個 20 毫秒就能完成的事，得到的只是一個更難查的錯誤。
+</Callout>
+
+<Callout type="note" title="這個課程還沒教的部分">
+  真實系統的佇列還要處理：工作的優先順序、同一個使用者的事件順序（先後順序不能反）、死信佇列、逾時、重試次數上限。
+
+  那些都是同一個問題的變體：**沒有人在等，所以每一件事都要你自己定規則。**
+</Callout>
+
 ---
 
-## 07. 終端實戰驗證：五個階段各留一次證據
+## 08. 終端實戰驗證：五個階段各留一次證據
 
-五個階段都要親眼看到一次。接著兩個 Terminal 都開著，逐條跑。
+第 07 節那個 job 已經送出去了，現在把五個階段也親眼看一次。接著兩個 Terminal 都開著，逐條跑。
 
 ### 第一步：連線
 
@@ -269,7 +426,37 @@ curl -s http://127.0.0.1:8000/health | wc -c
 {"ok":true}
 `}</Terminal>
 
-觀察數出來的 11 個位元組，就是框架寫進 `content-length` 的那個 11。
+觀察數出來的 11 個位元組，就是框架寫進 `content-length` 的那個 11，而它是這條生命週期的最後一個 Response。
+
+### 第六步：沒有 Request 的工作
+
+前五步每一個都有 Client 在等，Response 也因此有地方可送。第六步把 Client 拿掉，看還剩什麼。
+
+<Terminal title="bash — step 6, inline then queued" flavor="output">{`
+$ python queue_demo.py inline
+  request handled, client got its response
+    jobs: 1 (done=1)   effects: 1
+
+$ python queue_demo.py queued
+  request handled, client got 202 Accepted
+    jobs: 1 (pending=1)   effects: 0
+    ^ these disagree. nothing raised. nothing was logged.
+`}</Terminal>
+
+### 第七步：重試，然後收兩次錢
+
+<Terminal title="bash — step 7, the retry" flavor="output">{`
+$ python queue_demo.py retry
+  after one retry
+    jobs: 1 (done=1)   effects: 2
+
+$ python queue_demo.py idempotent
+   second attempt: 1 record(s) for job 1 already, skipping
+  after the same retry
+    jobs: 1 (done=1)   effects: 1
+`}</Terminal>
+
+**第一段是 `effects: 2`，第二段是 `effects: 1`。**同一個重試，唯一差別是那個副作用有沒有記錄自己做過。
 
 ---
 
@@ -283,6 +470,10 @@ curl -s http://127.0.0.1:8000/health | wc -c
 4. 執行 `curl -i -X DELETE http://127.0.0.1:8000/health`，截圖必須包含 `405` 與 `allow: GET`，並在筆記中回答：這個 `405` 是在五個階段的哪一步決定的？`def health()` 有沒有執行？
 5. 在 Terminal 1 的 access log 找到對應這四個 Request 的四行，截圖並按時間順序標出各自的 Status Code。
 6. 回答一句話：你在後端寫的函式決定了 Response 的哪些部分？框架決定了哪些部分？
+7. 執行 `python queue_demo.py queued`，截圖必須包含 `jobs: 1 (pending=1)   effects: 0` 那一行和它下面的 `^ these disagree`。**回答：這個檔案裡有沒有任何一行是錯的？為什麼 Client 還是拿不到結果？**
+8. 執行 `python queue_demo.py crash`，截圖必須包含 `jobs: 1 (running=1)   effects: 1`。回答：這個狀態下**沒有例外、沒有 log、沒有 Client**——三個在前五課用來發現問題的機制為什麼都沒作用？
+9. 執行 `python queue_demo.py retry` 與 `python queue_demo.py idempotent`，兩張截圖並排，必須分別看到 `effects: 2` 與 `effects: 1`。**回答：這兩次的差別只有哪一個地方？為什麼那個地方必須跟副作用寫在同一個 transaction？**
+10. 回答：如果把你期末專題裡的一件事丟到背景執行，那件事的「成功」由誰確認？在第 01 到 06 課學到的機制裡，有哪一個可以沿用？**如果答案是「沒有」，那你要自己加什麼？**
 
 把作業截圖與簡答筆記存入 `exercises/03-request-lifecycle/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
 
@@ -292,3 +483,5 @@ curl -s http://127.0.0.1:8000/health | wc -c
 - [RFC 9112 §6 — Message Body](https://www.rfc-editor.org/rfc/rfc9112.html#name-message-body)
 - [RFC 9110 §6.3.1 — Content-Length](https://www.rfc-editor.org/rfc/rfc9110.html#name-content-length)
 - [FastAPI — Bigger Applications and path routing](https://fastapi.tiangolo.com/tutorial/bigger-applications/)
+- [RFC 9110 §15.3.3 — 202 Accepted](https://www.rfc-editor.org/rfc/rfc9110.html#name-202-accepted)
+- [RFC 9110 §15.5.22 — 500 Internal Server Error](https://www.rfc-editor.org/rfc/rfc9110.html#name-500-internal-server-error)

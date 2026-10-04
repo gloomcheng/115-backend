@@ -46,6 +46,25 @@ curl -i -X DELETE http://127.0.0.1:8000/health
 
 回 `405` 與 `allow: GET`。接著看 Terminal 1：只有一行 access log，沒有 traceback。
 
+## 四、沒有 Request 的工作
+
+```bash
+python queue_demo.py inline     # 在 Request 裡做
+python queue_demo.py queued     # 丟到佇列，回 202
+python queue_demo.py crash      # worker 做到一半死掉
+python queue_demo.py retry      # 重試 → 收兩次錢
+python queue_demo.py idempotent # 加了防護 → 只收一次
+```
+
+`queued` 回應之後那一行是重點：
+
+```
+jobs: 1 (pending=1)   effects: 0
+^ these disagree. nothing raised. nothing was logged.
+```
+
+沒有任何一行是錯的。重點在 `retry` 的 `effects: 2` 對上 `idempotent` 的 `effects: 1`——同一個重試，差別只在副作用有沒有記錄自己做過。
+
 ## 繳交
 
 1. 完整 `curl -v` 截圖，必須包含 `*` 連線行、Request 的空行、`<` Status Line 與 `{ [11 bytes data]`，並在圖上標出五個階段各對應哪一行。
