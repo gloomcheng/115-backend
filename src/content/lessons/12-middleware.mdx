@@ -138,7 +138,6 @@ def current_subject(authorization: str | None = Header(default=None)) -> str:
         raise HTTPException(status_code=401, detail="Missing credentials", headers=CHALLENGE)
     return read_token(authorization.removeprefix("Bearer ").strip())["sub"]
 
-
 def require_admin(subject: str = Depends(current_subject)) -> str:
     if USERS[subject]["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admins only")
@@ -336,7 +335,6 @@ SIGNING_KEY=lesson-12-key-b fastapi dev main.py --port 8006
 RATE_LIMIT = 30
 RATE_WINDOW = 60.0
 _hits: dict[str, tuple[int, float]] = {}
-
 
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):

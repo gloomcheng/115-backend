@@ -330,7 +330,6 @@ def acquire_lock() -> int:
     fcntl.flock(lock, fcntl.LOCK_EX)
     return lock
 
-
 lock = acquire_lock()
 data = read()
 time.sleep(1)

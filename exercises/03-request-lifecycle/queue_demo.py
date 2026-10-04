@@ -134,28 +134,49 @@ def run_retry() -> None:
     connection.close()
 
 
+def charge_once(connection: sqlite3.Connection, job_id: int) -> str:
+    """Let the database decide, instead of asking first.
+
+    There is no SELECT here. The UNIQUE constraint is the check, and the
+    INSERT is the answer, in one statement the database can serialise. Two
+    processes racing on the same job produce one charge and one refusal.
+    """
+    try:
+        connection.execute("INSERT INTO effects (job_id, note) VALUES (?, ?)", (job_id, EFFECT))
+        connection.commit()
+        return "charged"
+    except sqlite3.IntegrityError:
+        connection.rollback()
+        return "already charged, skipping"
+
+
 def run_idempotent() -> None:
-    print("5. The same retry, when the charge is idempotent")
+    print("5. The same retry, protected by a UNIQUE constraint")
     connection = reset()
+    # This constraint is the whole mechanism. It is absent from the schema
+    # above on purpose, because without it you cannot watch the duplicate.
+    connection.execute("CREATE UNIQUE INDEX idx_effect ON effects (job_id)")
+
     connection.execute("INSERT INTO jobs VALUES (1, 'charge', 'running', 1)")
     charge(connection, 1)
     connection.execute("UPDATE jobs SET attempts = 2 WHERE id = 1")
 
-    # The charge checks whether it already happened, keyed by job id.
-    already = connection.execute("SELECT COUNT(*) FROM effects WHERE job_id = 1").fetchone()[0]
-    if already == 0:
-        charge(connection, 1)
-        print("   second attempt: no record for job 1, charging")
-    else:
-        print(f"   second attempt: {already} record(s) for job 1 already, skipping")
+    outcome = charge_once(connection, 1)
+    print(f"   second attempt: {outcome}")
     connection.execute("UPDATE jobs SET status = 'done' WHERE id = 1")
     report(connection, "after the same retry")
 
     print()
     print("   1 job, 1 charge. The retry was safe.")
     print()
-    print("   The key is not the queue. It is the side effect recording which job it")
-    print("   already did — in the same transaction, or it is not a guarantee.")
+    print("   Compare this with checking first and inserting second:")
+    print("     SELECT whether it happened  ->  INSERT")
+    print("   That is two statements, so there is a gap between them. Die in the")
+    print("   gap and the next attempt cannot tell 'never started' from 'finished'.")
+    print()
+    print("   With a UNIQUE constraint there is no gap: the insert either lands")
+    print("   once, or the database refuses it. Asking the question and recording")
+    print("   the answer are the same statement, so nothing can slip between them.")
     connection.close()
 
 

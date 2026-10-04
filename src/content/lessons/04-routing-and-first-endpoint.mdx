@@ -103,11 +103,9 @@ def create_user(body: dict):
 def list_notes():
     return {"notes": ["buy milk"]}
 
-
 @app.get("/notes/{note_id}")
 def read_note(note_id: int):
     return {"id": note_id, "text": "buy milk"}
-
 
 @app.get("/health")
 def health():
