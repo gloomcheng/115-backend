@@ -2,6 +2,25 @@
 
 交付的不是「網頁打得開」這句話，而是 Request 通過每一關的證據。
 
+## Pipeline 是什麼（不需要 VPS）
+
+這支程式**不需要**任何 VPS、任何憑證，也不需要安裝套件：
+
+```bash
+python pipeline_demo.py gate    # 為什麼「門禁」不等於「會顯示紅字」
+python pipeline_demo.py env     # 同一段程式碼，兩種環境，兩種結果
+python pipeline_demo.py steps   # pipeline 的四個部分
+```
+
+`env` 那一段是本單元最重要的連結：
+
+```bash
+env -u SIGNING_KEY python pipeline_demo.py env   # RuntimeError
+SIGNING_KEY=demo python pipeline_demo.py env     # App started
+```
+
+**你的電腦有這個變數，所以你看不見這個錯誤。**CI 是一台沒有你的 shell 設定的機器，那才是它存在的理由。
+
 ## 驗收環境
 
 - Ubuntu 24.04 或 26.04 LTS VPS

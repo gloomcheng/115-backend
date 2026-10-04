@@ -489,6 +489,231 @@ npm run check:deployment -- \\
 
 `curl -f` 遇到 `4xx` 或 `5xx` 會回傳失敗。`{"ok":true}` 與 live deployment harness 都通過，這次更新才結束。
 
+## 10. 把第 08 與第 09 節交給機器
+
+第 08 節結尾說了一句「GitHub Actions 會在 push 後重跑這些檢查」，第 09 節則是一整串手動的 deployment 指令。
+
+這兩段都停在關鍵的一半：**誰保證那些指令真的被執行？**這一節把那個保證補上。
+
+<Terminal title="bash — this repository's pipeline, on every push" flavor="output">{`
+$ gh run list --limit 3
+STATUS  NAME                  WORKFLOW
+success security             Deploy course to GitHub Pages
+success api-tests            Deploy course to GitHub Pages
+success deployment-contract  Deploy course to GitHub Pages
+success course-harness       Deploy course to GitHub Pages
+success build                Deploy course to GitHub Pages
+success deploy               Deploy course to GitHub Pages
+`}</Terminal>
+
+<Callout type="important" title="「CI」和「CD」是兩件事，多數人把它們混著講">
+  - **CI（Continuous Integration）**：push 之後自動跑檢查，**決定這次能不能過**。
+  - **CD（Continuous Delivery / Deployment）**：通過之後自動把它部署上去。
+
+  這門課的 repository **只有 CI**。第 09 節那串部署指令仍然是手動的，而這是刻意的——理由在 10.5 節。
+
+  先把 CI 講清楚，因為它是 CD 的前提。**沒有通過檢查就自動部署，等於自動把壞的東西推給使用者。**
+</Callout>
+
+### 10.1 門禁只有在跳不過的時候才是門禁
+
+<Terminal title="bash — the two copies of the same check" flavor="output">{`
+$ npm run check
+
+[1/16] Running Secret Policy Guard... PASSED
+[2/16] Running Secret Harness Tests... PASSED
+...
+[16/16] Running Accessibility (A11y) & Font Size Guard... PASSED
+ALL CHECKS PASSED in 8.51s. Ready for publishing & peer review.
+`}</Terminal>
+
+<Terminal title="bash — the point of the same command" flavor="output">{`
+$ python pipeline_demo.py gate
+1. A gate only works if nothing can walk past it
+
+   The repository runs its checks with one command:
+
+     npm run check
+
+   Sixteen checks, and a failure in any one of them stops the build.
+   That command is the pipeline. It is not a GitHub feature.
+
+   What makes it a gate rather than advice:
+
+     you can run it            -> catches mistakes before you push
+     the server runs it too     -> catches what you did not run
+
+   So there are two copies of the same check, not one check and a
+   separate review process. If they ever disagree, the disagreement
+   is itself the bug.
+`}</Terminal>
+
+<Callout type="important" title="這十六項不是 GitHub 的功能，是這個 repository 的一個指令">
+  `npm run check` 在你的電腦上跑，和在 GitHub 上跑的是**同一個指令**。
+
+  所以 pipeline 的第一個設計問題不是「怎麼設定 GitHub Actions」，而是「**我要檢查什麼**」。檢查還沒想清楚就先去接 CI，接出來的只是一台跑得很貴的空機器。
+</Callout>
+
+### 10.2 環境不同，同一段程式碼會有兩種結果
+
+這是 CI 存在的主要理由，而它可以自己跑出來：
+
+<Terminal title="bash — the same code, with the variable missing" flavor="output">{`
+$ env -u SIGNING_KEY python pipeline_demo.py env
+2. The same code, two environments
+
+   SIGNING_KEY is not set
+
+   Starting the app anyway...
+
+   RuntimeError: SIGNING_KEY is not set.
+
+   This is unit 12's rule, and this is why it exists.
+   The app refuses to start instead of falling back to a default
+   that would work on your laptop and fail on the server.
+
+   On your computer you have the variable in your shell, so you
+   never see this. On a fresh machine there is no shell profile,
+   no .env you forgot to copy, and no muscle memory.
+
+   The pipeline is the first place that fresh machine exists.
+`}</Terminal>
+
+<Terminal title="bash — with the variable present" flavor="output">{`
+$ SIGNING_KEY=demo-key python pipeline_demo.py env
+2. The same code, two environments
+
+   SIGNING_KEY is set
+
+   App started. Every check passed.
+`}</Terminal>
+
+<Callout type="warning" title="你已經學過這個規則，只是不知道它在哪裡被用到">
+  單元 12 的 `main.py` 有一行 `RuntimeError`，要求 `SIGNING_KEY` 不存在就拒絕啟動。當時的理由是「金鑰不能寫在程式碼裡」。
+
+  **那個 RuntimeError 的第二個理由就是 CI。**
+
+  一段在你自己機器上跑得很好的程式，在一台沒有你的 shell 設定、沒有你的 `.env`、沒有你的肌肉記憶的機器上，會因為一個環境變數而拒絕啟動。
+
+  **那台機器就是 CI。**單元 12 教的不是「多寫一行防禦」，是「**讓失敗發生在可以被看到的地方**」。
+</Callout>
+
+<Callout type="note" title="同一個道理的其他版本">
+  - 開發用 `localhost` 連資料庫，CI 上沒有那台資料庫。
+  - 你有 `.env`，repository 沒有，而且不該有。
+  - 你的 Python 是 3.11，伺服器是 3.14（`workflow` 裡寫死）。
+  - macOS 檔名大小寫不敏感，Linux 敏感——`import Users.py` 在你的機器上過，在 CI 上失敗。
+
+  最後一個尤其值得記：**它在你寫程式的那個小時裡完全不會發生，然後在你最沒時間的時候發生。**
+</Callout>
+
+### 10.3 Pipeline 的四個部分
+
+<Terminal title="bash — every pipeline has these four" flavor="output">{`
+$ python pipeline_demo.py steps
+3. What a pipeline is made of
+
+   Four steps, and every real pipeline has all four whether or not
+   the author named them:
+
+     1. get the code          checkout the exact commit
+     2. install what it needs  dependencies, pinned
+     3. run the checks         the same command you run locally
+     4. decide                 pass means continue, fail means stop
+
+   Step 3 is the one people mean when they say CI. Steps 1, 2 and 4
+   are where the surprises live.
+`}</Terminal>
+
+<Callout type="important" title="用這個 repository 的 workflow 對照這四步">
+  <Terminal title=".github/workflows/deploy-pages.yml — security job" flavor="output">{`
+  jobs:
+    security:                       # 3. run the checks
+      steps:
+        - uses: actions/checkout@v7  # 1. get the code
+          with:
+            fetch-depth: 0          #     完整 history，secret 才掃得到舊 commit
+        - run: node scripts/secret-harness.mjs --all
+        - run: (install gitleaks)
+        - run: gitleaks detect ...
+  `}</Terminal>
+
+  - **步驟 1** 是 `checkout`。注意 `fetch-depth: 0`：secret 要掃的是**所有歷史**，只抓最新一版 commit 會漏掉三年前 commit 進去的密碼。
+  - **步驟 2** 在別的 job（`course-harness` 裡 `bun install --frozen-lockfile`）。`--frozen-lockfile` 就是「步驟 2 必須釘住」的意思。
+  - **步驟 3** 是 `bun run check`，和本機同一個指令。
+  - **步驟 4** 是 `needs`：
+
+    <Terminal title="the gate itself" flavor="output">{`
+    build:
+      needs: [security, api-tests, deployment-contract, course-harness]
+    deploy:
+      needs: build
+    `}</Terminal>
+
+    **`deploy` 不會在 `build` 之前跑，`build` 不會在任何一項檢查失敗時跑。**這四個 job 各自獨立執行（所以總時間是最慢的那個，不是四個相加），任何一個失敗就整條停住。
+
+    <Callout type="important" title="「會顯示紅字」不等於「門禁」">
+      一個只報告失敗、但部署仍然繼續的 pipeline，是**報表**，不是門禁。
+
+      `needs` 這兩行才是門禁本體。如果沒有它們，紅字會出現在通知裡，然後部署照跑，網站壞掉，而沒有人把兩件事連起來。
+    </Callout>
+</Callout>
+
+### 10.4 第一次看 pipeline 失敗
+
+<Terminal title="bash — what a red run looks like" flavor="output">{`
+$ gh run list --limit 1
+FAIL   security   Deploy course to GitHub Pages
+
+$ gh run view --log-failed
+security  Scan Git history with Gitleaks  WRN  leaks found: 5
+`}</Terminal>
+
+<Callout type="note" title="那次失敗是真的，而且原因是正確的">
+  這份教材第一次加上 WebSocket 時，CI 就在這裡擋下來了。
+
+  擋下的不是密碼——是 RFC 6455 公開範例裡的 nonce，被 gitleaks 誤判成 API key。而允許清單寫的是新語法，執行的掃描器版本太舊看不懂，所以沒有生效。
+
+  **這件事值得說明，因為它正好是本節的內容：**
+
+  - 門禁**有**生效。它擋住了一個 push，沒有東西被部署。
+  - 修法有兩種：把允許清單降級成舊語法（CI 退步），或者升級掃描器（今天的做法）。
+  - 「修正」和「讓檢查變得比較不嚴」是兩件事，後者要寫得出理由才做。
+
+  這個 repository 現在把掃描器版本和它的 checksum 一起釘在 workflow 裡，就是那次失敗的結果。
+</Callout>
+
+### 10.5 為什麼這裡沒有自動部署到 VPS
+
+<Callout type="warning" title="CD 是有風險的，而且風險不在部署，在「部署錯了沒人知道」">
+  自動部署很吸引人：一個 commit 進去，網站更新，你不用做事。
+
+  但它有兩個前提，而且第二個通常不成立：
+
+  1. 通過檢查就代表可以上線——**幾乎不成立。**檢查證明的是契約沒被破壞，不是「這個功能是對的」。
+  2. 部署失敗時有人會看到——**這一點最常被忽略。**自動部署把「網站掛了」變成一個沒有人通知的事故，可能持續幾小時。
+
+  所以第 09 節的部署仍然是手動的，而這是一個**決定**，不是還沒做完。
+
+  <Callout type="note" title="成熟的順序通常是反過來的">
+    1. 先有可靠的手動部署（第 09 節）。
+    2. 自動化那個**已經可靠**的部署。
+    3. 加上自動回滾。
+    4. 最後才讓部署不需要人按。
+
+    **從第 1 步跳到第 4 步的後果，是某個星期五晚上有個沒有人看過的 push 直接上了線。**
+
+    順帶一提，這份教材的網頁部署**確實**是自動的（`deploy` 那個 job），因為 GitHub Pages 沒有 production 資料庫、沒有金鑰、沒有別人的 VPS。**自動化程度要跟「弄壞了會怎樣」成反比。**
+  </Callout>
+</Callout>
+
+<Callout type="important" title="這一課的最後一句">
+  第 08 節說「檢查要變成門禁」，第 09 節說「先驗收再交付」，這一節說的是：**這兩件事不該由你一個人記得做。**
+
+  pipeline 的價值不在於跑得快，而在於它**每天都會跑，而且你繞不過去**。
+</Callout>
+
+---
 ## 單元實作作業
 
 部署一個 FastAPI 服務，交付這六組證據：
@@ -499,6 +724,10 @@ npm run check:deployment -- \\
 4. `sudo nginx -t` 與 `sudo certbot renew --dry-run` 通過。
 5. 從另一台電腦執行 `curl -v https://你的網域/health`，同時看得到 Request Line、`200` Status Line 與 `{"ok":true}`。
 6. Live deployment harness 回傳 exit status `0`。
+7. 在你自己的 repository（期末專題）加一個 GitHub Actions workflow，只做兩件事：跑 `npm run test:api`，然後在失敗時讓 `build` 不能執行。截圖必須包含一次**綠燈**的 run 和一次**紅燈**的 run。**紅燈那一次要真的改壞一個測試去產生，不能假造。**
+8. 執行 `env -u SIGNING_KEY python pipeline_demo.py env` 與 `SIGNING_KEY=demo python pipeline_demo.py env`，兩張截圖並排。回答：同一段程式碼，差別只有一個環境變數，為什麼結果不同？這跟你第 12 課寫的那個 `RuntimeError` 有什麼關係？
+9. 打開你的 workflow 檔，回答：`fetch-depth` 沒寫（預設淺層）的話，secret 掃描會漏掉什麼？`needs:` 那一行如果刪掉，pipeline 會變成什麼？
+10. 回答：你的專題要不要自動部署到 VPS？**用第 10.5 節的順序（先手動、後自動化、再回滾、最後才全自動）寫出你現在在哪一步**，以及你憑什麼判斷。
 
 截圖前遮住公司 IP、SSH 使用者名稱、email、Token 與密鑰。對外公開的服務網域可以保留。
 
@@ -515,4 +744,7 @@ npm run check:deployment -- \\
 - [FastAPI — Testing with TestClient and pytest](https://fastapi.tiangolo.com/tutorial/testing/)
 - [Gitleaks — Detect hardcoded secrets](https://github.com/gitleaks/gitleaks)
 - [GitHub — Push protection](https://docs.github.com/en/code-security/concepts/secret-security/push-protection)
+- [GitHub Actions — Workflow syntax（`needs`、`fetch-depth` 等）](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions)
+- [GitHub Actions — Events that trigger workflows](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows)
+- [GitHub — Security hardening for GitHub Actions（第三方 action 要釘 commit SHA）](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions)
 - [GitHub — Removing sensitive data from a repository](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository)
