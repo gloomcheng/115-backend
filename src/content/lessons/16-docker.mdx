@@ -180,6 +180,8 @@ INFO:     192.168.215.1:49432 - "GET /health HTTP/1.1" 200 OK
 
 `192.168.215.1` 不是你的筆電 IP，也不是 `127.0.0.1`。它是 docker 網路裡的閘道位址。
 
+**你那邊的數字會不同。**這是 Docker 在這台機器上配的 bridge 閘道，換一台可能變成別的 `192.168.x.1`。要看的不是數字，是**它既不是你的主機 IP，也不是 `127.0.0.1`**。
+
 **這是單元 15 那個警告的實例。**你若靠 access log 的 IP 做稽核，在容器環境裡會記到一個完全沒有意義的位址。
 
 那怎麼拿到真實的來源？改用 proxy 傳來的 Header，而單元 15 提過的那個 `X-Forwarded-For` 就是它的來源，這支 API 的 Dockerfile 已經開了：
@@ -232,7 +234,7 @@ PYTHONDONTWRITEBYTECODE = 1
 
 ## 05. 為什麼要分兩個 stage
 
-Dockerfile 有三個 stage：`base`、`test`、`runtime`。`base` 只有一個 runtime image 大小是 306MB，而且**沒有 pytest**：
+Dockerfile 有三個 stage：`base`、`test`、`runtime`。`runtime` 和 `base` **一樣大，都是 306MB** —— 因為它只多了一個 `main.py` 和一個非 root 使用者，加起來不到 60kB。而且**沒有 pytest**：
 
 <Terminal title="bash — the runtime image has no test tooling" flavor="output">{`
 > docker run --rm lesson16-runtime python -c "import pytest"
@@ -244,7 +246,7 @@ ModuleNotFoundError: No module named 'pytest'
 <Callout type="note" title="stage 不是三個 image，是三份 build 說明">
   `runtime` 沒有繼承 `test`，它繼承的是 `base`。Docker 只會建 `runtime` 實際用到的部分，而且把相同的那層共用一份。
 
-  分開的好處是**攻擊面**：執行時不需要的工具，就不會在執行時的環境裡。`docker history lesson16-runtime` 可以看到實際組成的層，那 81.8MB 是 `pip install`，53.2MB 是 `useradd`。
+  分開的好處是**攻擊面**：執行時不需要的工具，就不會在執行時的環境裡。`docker history lesson16-runtime` 可以看到實際組成的層，那 81.8MB 是 `pip install`，而 `useradd` 只有 53.2kB —— 它只是建立一個使用者，不是 53MB 的東西。
 </Callout>
 
 順便看那個 `useradd`。這是另一個刻意的決定：
@@ -376,7 +378,7 @@ null
 2. `docker run` 與 `docker port` 的截圖（必須含 `8000/tcp -> 127.0.0.1:8016`）。回答：`8016` 這個數字是誰決定的？改成 `9000:8000` 會影響到容器裡的程式嗎？
 3. 從主機 `curl 127.0.0.1:8016/health` 得 `200`，從容器內 `curl 127.0.0.1:8016/health` 得 `URLError`，**兩張截圖並排**。回答：容器的網路和主機的網路是同一個嗎？用「網路命名空間」這個詞回答。
 4. `docker logs` 裡的 `192.168.x.x` 截圖 + 用 `curl -H 'X-Forwarded-For: 203.0.113.9'` 證明 `request-info` 會回那個 IP。回答：這個 Header 可以被誰偽造？Dockerfile 為什麼敢開 `--proxy-headers`？
-5. `docker exec l16 whoami` 對 `lesson16-base`（`root`）與 `lesson16-runtime`（`appuser`）兩張截圖。回答：如果程式被塞住，這個差異保護了什麼？
+5. `docker run --rm lesson16-base whoami`（`root`）與 `docker run --rm lesson16-runtime whoami`（`appuser`）兩張截圖。**注意這裡用 `docker run` 不用 `docker exec`** —— image 沒有容器，`exec` 只能進已經在跑的那一個。回答：如果程式被塞住，這個差異保護了什麼？
 6. `docker exec l16 ls /app` 與 `ls /app/tests` 失敗的截圖。回答：`.env` 被 `docker build` 送進 image 和被 `git add` 進 repo，是同一個問題的兩個出口嗎？各自該在哪裡擋？
 7. 把 `compose.yaml` 的 healthcheck 埠從 `8000` 改成 `8016`，`docker compose up` 之後 `docker compose ps` 的 STATUS 會變成什麼？截圖必須包含那個狀態。改回去之後說明：`start_period` 存在的原因是什麼？
 8. 回答：以下四個檔案該不該進 `.dockerignore`？各用一句話說明。`.git/`、`__pycache__/`、`.env`、你的作業截圖資料夾。其中一個的答案取決於它是什麼，你會怎麼分辨？
