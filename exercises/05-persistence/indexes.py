@@ -5,6 +5,7 @@
     python indexes.py composite # the order of the columns matters
     python indexes.py cost      # indexes make writes slower
     python indexes.py unused    # an index nobody queries is pure overhead
+    python indexes.py build     # what CREATE INDEX costs, and why it is not linear
     python indexes.py all
 
 Every number printed here was measured on the machine that ran this file.
@@ -227,6 +228,80 @@ def run_unused() -> None:
     connection.close()
 
 
+def run_build() -> None:
+    """What CREATE INDEX costs, measured against ADD COLUMN at three sizes.
+
+    Section 09.4 of the lesson claims that building an index rewrites the
+    table while adding a column does not. This mode is where that claim's
+    numbers come from.
+    """
+    print("6. What it costs to BUILD the index, at three table sizes")
+    print(f"    {'rows':>9}  {'CREATE INDEX':>14}  {'ADD COLUMN':>11}  {'per row':>9}  {'db size':>9}")
+    for rows in (50_000, 200_000, 800_000):
+        path = f"build_{rows}.db"
+        if os.path.exists(path):
+            os.remove(path)
+        connection = sqlite3.connect(path)
+        connection.executescript(SCHEMA)
+        connection.executemany(
+            "INSERT INTO notes VALUES (?, ?, ?, ?, ?)",
+            (
+                (
+                    number,
+                    f"note {number}",
+                    f"body of note {number}, padded so rows are not suspiciously small",
+                    AUTHORS[number % len(AUTHORS)],
+                    TAGS[number % len(TAGS)],
+                )
+                for number in range(rows)
+            ),
+        )
+        connection.commit()
+        connection.execute("ANALYZE")
+        connection.commit()
+
+        # Median of 3: DROP INDEX is cheap, so the rows are only paid for once.
+        # One untimed build first, so the first timed run is not paying for a
+        # cold cache on a file that was written seconds ago.
+        connection.execute("CREATE INDEX idx_build_author ON notes (author)")
+        connection.commit()
+        connection.execute("DROP INDEX idx_build_author")
+        connection.commit()
+
+        builds = []
+        for _ in range(3):
+            start = time.perf_counter()
+            connection.execute("CREATE INDEX idx_build_author ON notes (author)")
+            connection.commit()
+            builds.append((time.perf_counter() - start) * 1000)
+            connection.execute("DROP INDEX idx_build_author")
+            connection.commit()
+        build = sorted(builds)[1]
+
+        start = time.perf_counter()
+        connection.execute("ALTER TABLE notes ADD COLUMN build_probe TEXT")
+        connection.commit()
+        add = (time.perf_counter() - start) * 1000
+
+        size_mb = connection.execute("PRAGMA page_count").fetchone()[0] * 4096 / 1048576
+        print(
+            f"    {rows:>9,}  {build:>11.0f} ms  {add:>8.1f} ms"
+            f"  {build / rows * 1000:>6.2f} us  {size_mb:>6.1f} MB"
+        )
+        connection.close()
+        os.remove(path)
+
+    print()
+    print("    Read the ratio, not the absolute numbers. ADD COLUMN stays")
+    print("    under a millisecond at every size because it only rewrites the")
+    print("    schema. CREATE INDEX grows with the rows, because it has to")
+    print("    read all of them and sort them.")
+    print("    The per row column is here so you can see it is not constant,")
+    print("    but the run-to-run spread is as wide as the trend, so do not")
+    print("    read a law into it.")
+    print("    (median of 3 after one warm-up build, one machine)")
+
+
 def main() -> None:
     mode = sys.argv[1] if len(sys.argv) > 1 else "all"
     runners = {
@@ -235,6 +310,7 @@ def main() -> None:
         "composite": run_composite,
         "cost": run_cost,
         "unused": run_unused,
+        "build": run_build,
     }
     if mode == "all":
         for runner in runners.values():

@@ -761,7 +761,7 @@ $ python migrations.py limits
 <Callout type="note" title="它能做、你以為它不能做的事">
   SQLite 3.25 之後支援 `RENAME COLUMN`，3.35 之後支援 `DROP COLUMN`——這兩個在舊版本是做不到的。
 
-  **但它從頭到尾沒有 `ALTER COLUMN`。**改欄位型別、幫既有欄位加約束、改欄位名稱以外的任何事，都要靠下一節那條路。
+  **但它從頭到尾沒有 `ALTER COLUMN`。**所以除了改名字以外的每一件事——改欄位型別、幫既有欄位加約束——都要靠下一節那條路。
 </Callout>
 
 ### 09.3 換欄位型別，唯一不丟資料的做法
@@ -820,12 +820,12 @@ $ python migrations.py expand
   2. **backfill**：把資料搬過去。這可以是一個 migration，也可以是一段背景作業。
   3. **部署一次**，讓程式改讀新欄位。**舊欄位還在**，所以出問題時改回去就好。
   4. **contract**：確認沒有人讀舊的了，才 `DROP`。
+</Callout>
 
-  <Callout type="warning" title="第 3 步和第 4 步之間，必須真的隔一段時間">
-    如果你把四個動作放在同一次部署裡，expand 的保護就等於不存在——舊表在你確認新程式運作正常之前就已經被刪了。
+<Callout type="warning" title="第 3 步和第 4 步之間，必須真的隔一段時間">
+  如果你把四個動作放在同一次部署裡，expand 的保護就等於不存在——舊表在你確認新程式運作正常之前就已經被刪了。
 
-    **「確認沒有人在讀」需要時間，而時間是唯一的證據。**這也是為什麼大型系統的 migration 有時會跨好幾個禮拜。
-  </Callout>
+  **「確認沒有人在讀」需要時間，而時間是唯一的證據。**這也是為什麼大型系統的 migration 有時會跨好幾個禮拜。
 </Callout>
 
 ### 09.4 在你的機器上 0.1 秒，在正式環境可能是幾分鐘
@@ -833,14 +833,27 @@ $ python migrations.py expand
 <Callout type="important" title="這是本節唯一真正會造成 production 事故的規則">
   你在這台 Mac 上跑 `ALTER TABLE` 只需要幾毫秒，因為資料只有兩三列。
 
-  正式環境的資料表可能有幾千萬列。`ADD COLUMN` 在很多資料庫上是**便宜的**（只改結構描述），但**`CREATE INDEX` 要重寫整張表**——第 07 節那個 50 000 列的表建索引要幾秒，幾千萬列就是幾十分鐘，而那段時間裡那張表可能整個被鎖住。
+  正式環境的資料表可能有幾千萬列。`ADD COLUMN` 在很多資料庫上是**便宜的**（只改結構描述），但**`CREATE INDEX` 要讀完整張表再排序**。這兩件事的差距是可以量的：
 
-  <Callout type="warning" title="所以有兩件事必須在寫 migration 之前想">
-    1. **這個動作在正式環境要跑多久？**如果答案需要估算，去找有幾百萬列的測試環境實測，不要用本機的時間推估。
-    2. **跑的時候，那張表還能被讀寫嗎？**如果不能，你就是在讓整個服務停機。
+  <Terminal title="bash — CREATE INDEX against ADD COLUMN, at three sizes" flavor="output">{`
+  $ python indexes.py build
+  6. What it costs to BUILD the index, at three table sizes
+           rows    CREATE INDEX   ADD COLUMN    per row    db size
+         50,000           10 ms       0.3 ms    0.20 us     5.4 MB
+        200,000           67 ms       0.4 ms    0.34 us    22.1 MB
+        800,000          335 ms       0.5 ms    0.42 us    89.2 MB
+  `}</Terminal>
 
-    這兩個問題的答案決定了你能不能在維護時段做，還是必須改用「在線新增索引」那種工具——而那些工具在 SQLite 上不存在，因為 SQLite 本身就是一個檔案。
-  </Callout>
+  **看那個比例，不要看絕對數字。**`ADD COLUMN` 在三個尺寸都停在零點幾毫秒，因為它只改結構描述；`CREATE INDEX` 跟著資料長，因為它必須讀完再排序。同一個動作在 800 000 列時是 335 ms——**而那個檔案只有 89 MB**，一台正式環境的機器上，一個 89 MB 的索引建置就已經不能放在尖峰時間做了。
+
+  `per row` 那一欄存在的目的是讓你看見它不是固定的。但這個程式的執行間變動跟趨勢一樣寬，所以不要從裡面讀出法則；它在 200 000 列那一列每次跑都不一樣。
+</Callout>
+
+<Callout type="warning" title="所以有兩件事必須在寫 migration 之前想">
+  1. **這個動作在正式環境要跑多久？**如果答案需要估算，去找有幾百萬列的測試環境實測，不要用本機的時間推估——上面那個 `per row` 欄就是為什麼不能推估。
+  2. **跑的時候，那張表還能被讀寫嗎？**如果不能，你就是在讓整個服務停機。
+
+  這兩個問題的答案決定了你能不能在維護時段做，還是必須改用「在線新增索引」那種工具——而那些工具在 SQLite 上不存在，因為 SQLite 本身就是一個檔案。
 </Callout>
 
 <Callout type="note" title="這一課的取捨，你現在應該能自己說出來了">

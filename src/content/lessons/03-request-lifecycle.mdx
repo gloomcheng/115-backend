@@ -334,24 +334,24 @@ $ python queue_demo.py idempotent
   下一次重試會重新問一次，然後插進去 —— 這次沒問題。但如果死掉發生在**插入之後、更新狀態之前**，下一個人就分不清「從來沒做過」和「做完了但沒記錄」。
 
   這叫 **check-then-act 的競態**，跟單元 05 第 02 節那個 lost update 是同一個形狀，只是發生在別的地方。
+</Callout>
 
-  <Callout type="important" title="正確的機制是讓資料庫擋，不是讓你先問">
-    `queue_demo.py` 做的事是加一個約束，然後讓插入自己失敗：
+<Callout type="important" title="正確的機制是讓資料庫擋，不是讓你先問">
+  `queue_demo.py` 做的事是加一個約束，然後讓插入自己失敗：
 
-    ```python
-    try:
-        connection.execute("INSERT INTO effects (job_id, note) VALUES (?, ?)", ...)
-        connection.commit()
-        return "charged"
-    except sqlite3.IntegrityError:
-        connection.rollback()
-        return "already charged, skipping"
-    ```
+  ```python
+  try:
+      connection.execute("INSERT INTO effects (job_id, note) VALUES (?, ?)", ...)
+      connection.commit()
+      return "charged"
+  except sqlite3.IntegrityError:
+      connection.rollback()
+      return "already charged, skipping"
+  ```
 
-    **沒有 SELECT。**提問和記錄是同一條語句，資料庫保證它只會成功一次，所以中間沒有空隙可以掉進去。
+  **沒有 SELECT。**提問和記錄是同一條語句，資料庫保證它只會成功一次，所以中間沒有空隙可以掉進去。
 
-    順帶一提，上一節那個 `effects` 表**故意沒有這個約束** —— 沒有它，你根本看不到重複是怎麼發生的。看 schema 是這個練習的一部分。
-  </Callout>
+  順帶一提，上一節那個 `effects` 表**故意沒有這個約束** —— 沒有它，你根本看不到重複是怎麼發生的。看 schema 是這個練習的一部分。
 </Callout>
 
 <Callout type="important" title="所以背景工作的三個實際規則">
