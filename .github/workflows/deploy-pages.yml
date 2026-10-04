@@ -23,10 +23,37 @@ jobs:
           fetch-depth: 0
       - name: Enforce repository secret policy
         run: node scripts/secret-harness.mjs --all
+      # gitleaks-action v3 takes no inputs and always fetches its own pinned
+      # gitleaks (8.24.3), which predates the [[allowlists]] config syntax that
+      # .gitleaks.toml uses. So the binary is installed here with both the
+      # version and its published sha256 pinned: the scanner version becomes
+      # explicit, and the tarball is verified before anything runs.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: v8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -euo pipefail
+          # The release tag carries a leading "v"; the asset name does not.
+          archive="gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz"
+          curl -sSfL --retry 3 --proto '=https' --tlsv1.2 \
+            -o "$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum --check --strict -
+          tar -xzf "$archive" gitleaks
+          install -m 0755 gitleaks /usr/local/bin/gitleaks
+          gitleaks version
       - name: Scan Git history with Gitleaks
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gitleaks detect \
+            --redact \
+            -v \
+            --exit-code=2 \
+            --report-format=sarif \
+            --report-path=results.sarif
 
   api-tests:
     runs-on: ubuntu-latest
