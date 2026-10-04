@@ -675,9 +675,185 @@ $ python cache.py workers
   **先量過再說。**第 07 節那個 `218 ms 對 1 ms` 給了 217 倍的空間，值得那份複雜度。第 08.1 節第一次讀取 `queries=1`——如果本來就只要 1 次查詢，快取連賺都沒賺到。
 </Callout>
 
+## 09. Migration：改資料庫的順序
+
+前三節都在改變「怎麼讀資料」，資料本身一直沒動。這一節要動結構了——而且動的是**已經有真實資料在裡面**的那個結構。
+
+<Callout type="important" title="Migration 和 `CREATE TABLE` 差在哪">
+  `CREATE TABLE` 是你在空地上蓋房子。**Migration 是在已經有人住的房子裡施工**，而且住戶還在裡面走動。
+
+  差別在於：`CREATE TABLE` 失敗了就是沒蓋成，沒有後果。Migration 失敗了，可能已經改了一半。
+</Callout>
+
+### 09.1 Runner 就是一份編號清單加一本帳
+
+`migrations.py` 示範一個最小的 runner：每一步有個編號，跑完就把編號記進資料庫。
+
+<Terminal title="bash — applying nine steps" flavor="output">{`
+$ python migrations.py runner
+1. A migration runner is just a numbered list and a ledger
+  applied 0001
+    users columns: ['name', 'role']
+
+  applied 0004
+    users columns: ['name', 'role', 'email']
+    row: ('iris', 'student', None)
+    row: ('root', 'admin', None)
+
+  applied 0005
+    users columns: ['name', 'role', 'email']
+    row: ('iris', 'student', 'iris@example.test')
+    row: ('root', 'admin', 'root@example.test')
+`}</Terminal>
+
+<Callout type="note" title="0004 和 0005 是兩步，不是一步，這個安排是刻意的">
+  `0004` 先加一個可以存 `NULL` 的欄位，所以既有的兩列都變成 `None`。
+
+  `0005` 才把值補回去。
+
+  **為什麼要分兩次？**因為如果合併成一步「加一個 NOT NULL 欄位並且填好」，你就必須在同一個動作裡同時改結構和改資料——中途失敗會留下半完成的狀態。拆開之後，`0004` 失敗了資料還在，`0005` 失敗了也只是沒補完，兩種都可以重跑。
+</Callout>
+
+這份帳本（ledger）就是 runner 真正在做的事：
+
+<Terminal title="bash — running it a second time" flavor="output">{`
+  ledger: ['0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009']
+
+  Run it again and nothing happens:
+  every version was already in the ledger, so every step was skipped
+
+  The ledger is the whole point. Without it you cannot tell which
+  migrations ran, and re-running INSERT would duplicate rows.
+`}</Terminal>
+
+<Callout type="important" title="帳本讓「重跑」變成安全的事">
+  沒有帳本的話，你第二次執行 runner 會再做一次 `INSERT`，資料變兩倍。有了帳本，runner 就變成**冪等**的——跑幾次結果都一樣。
+
+  這也是為什麼 migration 的編號要進 Git：**它是程式碼，要跟著部署走。**記在某個人的筆記裡等於沒有記。
+</Callout>
+
+### 09.2 SQLite 拒絕幫你做三件事
+
+<Terminal title="bash — what SQLite will not do" flavor="output">{`
+$ python migrations.py limits
+2. Three things SQLite will not do
+  change a column's type: refused
+    OperationalError: near "TYPE": syntax error
+  add a NOT NULL column with no default: refused
+    OperationalError: Cannot add a NOT NULL column with default value NULL
+
+  The same column WITH a default is accepted:
+    age exists, every row has 0
+    users columns: ['name', 'role', 'age']
+    row: ('iris', 'student', 0)
+`}</Terminal>
+
+<Callout type="warning" title="第二個錯誤是整個資料庫設計的核心問題">
+  `Cannot add a NOT NULL column with default value NULL`
+
+  翻譯：**新欄位要說每一列舊資料的值，但舊資料不知道自己該是什麼。**
+
+  SQLite 拒絕是對的，因為它沒有辦法猜。`iris` 的 `age` 該是 0、18、還是 `NULL`？這是**你的業務決定，不是資料庫的決定**。
+
+  這也是上一節 `0004` 為什麼要分兩步：先用可空的欄位佔位，再補值，最後才收緊成 `NOT NULL`。
+</Callout>
+
+<Callout type="note" title="它能做、你以為它不能做的事">
+  SQLite 3.25 之後支援 `RENAME COLUMN`，3.35 之後支援 `DROP COLUMN`——這兩個在舊版本是做不到的。
+
+  **但它從頭到尾沒有 `ALTER COLUMN`。**改欄位型別、幫既有欄位加約束、改欄位名稱以外的任何事，都要靠下一節那條路。
+</Callout>
+
+### 09.3 換欄位型別，唯一不丟資料的做法
+
+這三個拒絕記下來之後，先看一個真實的改欄位需求：`role` 存文字不好用，要改成 `role_id INTEGER`。SQLite 沒有 `ALTER COLUMN`，所以答案不在「怎麼改」而在「繞開」。
+
+答案是**不要改欄位**。另外建一個新形狀，把資料轉過去，再把舊的刪掉。
+
+<Terminal title="bash — the order, with both tables visible at every step" flavor="output">{`
+$ python migrations.py expand
+3. Changing a column, without losing data
+    before
+    users columns: ['name', 'role']
+    row: ('iris', 'student')
+    row: ('root', 'admin')
+    row: ('ada', 'student')
+
+    expand: the new table exists, the old one is untouched
+    users columns: ['name', 'role']
+
+    and the new one starts empty
+    users_new columns: ['name', 'role_id']
+
+    backfill: rows copied and converted, nothing dropped yet
+    users_new columns: ['name', 'role_id']
+    row: ('iris', 0)
+    row: ('root', 1)
+    row: ('ada', 0)
+
+    reads can switch to users_new here, while users is still intact
+    if this release breaks, roll back by pointing reads at users again
+
+    contract: the old table is gone
+    users: does not exist
+
+    and the new one is still complete
+    users_new columns: ['name', 'role_id']
+    row: ('iris', 0)
+    row: ('root', 1)
+    row: ('ada', 0)
+
+    final shape
+    users columns: ['name', 'role_id']
+    row: ('iris', 0)
+    row: ('root', 1)
+    row: ('ada', 0)
+
+  Three rows in, three rows out. The old column went away with a DROP,
+  and by then nothing was reading it.
+`}</Terminal>
+
+<Callout type="important" title="expand → backfill → contract，中間隔著一次部署">
+  這個順序最重要的不是四行 SQL，是**中間那個部署**。
+
+  1. **expand**：加上新欄位或新表，舊的完全不動。**這個版本可以安全部署**，因為沒有東西被破壞。
+  2. **backfill**：把資料搬過去。這可以是一個 migration，也可以是一段背景作業。
+  3. **部署一次**，讓程式改讀新欄位。**舊欄位還在**，所以出問題時改回去就好。
+  4. **contract**：確認沒有人讀舊的了，才 `DROP`。
+
+  <Callout type="warning" title="第 3 步和第 4 步之間，必須真的隔一段時間">
+    如果你把四個動作放在同一次部署裡，expand 的保護就等於不存在——舊表在你確認新程式運作正常之前就已經被刪了。
+
+    **「確認沒有人在讀」需要時間，而時間是唯一的證據。**這也是為什麼大型系統的 migration 有時會跨好幾個禮拜。
+  </Callout>
+</Callout>
+
+### 09.4 在你的機器上 0.1 秒，在正式環境可能是幾分鐘
+
+<Callout type="important" title="這是本節唯一真正會造成 production 事故的規則">
+  你在這台 Mac 上跑 `ALTER TABLE` 只需要幾毫秒，因為資料只有兩三列。
+
+  正式環境的資料表可能有幾千萬列。`ADD COLUMN` 在很多資料庫上是**便宜的**（只改結構描述），但**`CREATE INDEX` 要重寫整張表**——第 07 節那個 50 000 列的表建索引要幾秒，幾千萬列就是幾十分鐘，而那段時間裡那張表可能整個被鎖住。
+
+  <Callout type="warning" title="所以有兩件事必須在寫 migration 之前想">
+    1. **這個動作在正式環境要跑多久？**如果答案需要估算，去找有幾百萬列的測試環境實測，不要用本機的時間推估。
+    2. **跑的時候，那張表還能被讀寫嗎？**如果不能，你就是在讓整個服務停機。
+
+    這兩個問題的答案決定了你能不能在維護時段做，還是必須改用「在線新增索引」那種工具——而那些工具在 SQLite 上不存在，因為 SQLite 本身就是一個檔案。
+  </Callout>
+</Callout>
+
+<Callout type="note" title="這一課的取捨，你現在應該能自己說出來了">
+  第 08 節的快取和第 07 節的索引，都是在**讀**的路上加東西。Migration 是在**寫**的路上動東西。
+
+  三者的風險剛好是遞增的：索引弄錯了查詢變慢，快取弄錯了資料不準，**migration 弄錯了資料沒了。**
+
+  所以 migration 是這三個裡面最需要慢下來的一個，而它最需要的東西也一樣：**先量，再改。**
+</Callout>
+
 ---
 
-## 09. 什麼時候該用哪一種
+## 10. 什麼時候該用哪一種
 
 這一課不需要你背規則。只需要問三個問題：
 
@@ -698,7 +874,7 @@ $ python cache.py workers
 
 ---
 
-## 10. 終端實戰驗證：三次對照
+## 11. 終端實戰驗證：三次對照
 
 上面每一節的結論都要自己重跑一次才會記住。三種存法、三組對照，全部在 `exercises/05-persistence/` 執行，先清掉舊檔案讓結果乾淨：
 
@@ -813,7 +989,38 @@ $ python cache.py stale
    after the database changed to 200              value=100  queries=1  (database says 200)
 `}</Terminal>
 
-**第三次那行的 `value` 和括號裡的數字不一樣。**這個問題就是快取的全部代價。
+**第三次那行的 `value` 和括號裡的數字不一樣。**這個問題就是快取的全部代價，而結構改錯的後果比它更重。
+
+### 第八步：改結構，而不是改資料
+
+第七步是資料本身不對。第八步換成比較嚴重的情況：**結構要變，而資料已經在裡面了。**
+
+<Terminal title="bash — step 8, the runner and its ledger" flavor="output">{`
+$ python migrations.py runner
+  applied 0004
+    users columns: ['name', 'role', 'email']
+    row: ('iris', 'student', None)
+  applied 0005
+    users columns: ['name', 'role', 'email']
+    row: ('iris', 'student', 'iris@example.test')
+`}</Terminal>
+
+<Terminal title="bash — step 8, retyped without losing a row" flavor="output">{`
+$ python migrations.py expand
+    before
+    users columns: ['name', 'role']
+    row: ('iris', 'student')
+    row: ('root', 'admin')
+    row: ('ada', 'student')
+
+    final shape
+    users columns: ['name', 'role_id']
+    row: ('iris', 0)
+    row: ('root', 1)
+    row: ('ada', 0)
+`}</Terminal>
+
+`users` 三列進、`users_new` 三列出。**資料沒有少，舊的結構也還沒被碰。**中間每一個狀態下那張舊表都在——這就是 expand 的全部意義。
 
 ---
 
@@ -841,8 +1048,12 @@ $ python cache.py stale
 18. 執行 `python cache.py ttl`，截圖必須包含 `t=20 still inside the TTL` 那一行標著 `stale`。回答：TTL 是 30 秒，這個答案最晚可以錯多久？
 19. 執行 `python cache.py workers`，截圖必須包含 `worker A read again: value=100` 與 `database says 200`。回答：**worker B 已經清掉自己的快取了，為什麼 worker A 還是不對？**用一句話回答「一個行程內的快取」實際上是幾個快取。
 20. 回答：你的期末專題會快取什麼？把「改了之後多久才發現不對」寫成一個具體秒數，並說明那個秒數是誰決定、為什麼可以接受。**如果你寫不出那個秒數，代表你還沒想清楚，不要只是寫「視情況」。**
+21. 執行 `python migrations.py runner`，截圖必須包含 `applied 0004`（`email` 是 `None`）與 `applied 0005`（`email` 有值），以及最後那行 `ledger:`。**回答：為什麼這要拆成兩步？如果合併成一步「加 NOT NULL 欄位並填值」，中途失敗會是什麼狀況？**
+22. 執行 `python migrations.py limits`，截圖必須包含 `near "TYPE": syntax error` 與 `Cannot add a NOT NULL column with default value NULL`。**回答：第二個錯誤為什麼是「正確的拒絕」而不是資料庫的缺陷？它要求你先決定什麼？**
+23. 執行 `python migrations.py expand`，截圖必須包含 `users: does not exist` 那一段，**而且後面還要有一整段 `users_new` 的三列。**回答：什麼時候才允許對舊表下 `DROP`？為什麼這個時機不能和前面的步驟放在同一次部署？
+24. 回答：你的期末專題如果有 100 萬列資料，`CREATE INDEX` 大概要跑多久？**你會用本機量到的時間推估嗎？**寫出你實際會怎麼取得那個數字。
 
-把作業截圖與簡答筆記存入 `exercises/05-persistence/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.json`、`notes.db`、`race.json`、`race.lock` 、`indexes.db` 或 `cache.db` 一起 commit 進去。
+把作業截圖與簡答筆記存入 `exercises/05-persistence/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.json`、`notes.db`、`race.json`、`race.lock` 、`indexes.db`、`cache.db` 或 `migrations.db` 一起 commit 進去。
 
 ### 本單元使用的正本
 
@@ -857,4 +1068,7 @@ $ python cache.py stale
 - [SQLite — COLLATE NOCASE 與 LIKE 的索引使用](https://www.sqlite.org/lang_expr.html)
 - [SQLite — 交易隔離層級（為什麼要讓快取失效）](https://www.sqlite.org/isolation.html)
 - [Redis — 快取與失效策略](https://redis.io/docs/latest/develop/use/client-side-caching/)
+- [SQLite — ALTER TABLE](https://www.sqlite.org/lang_altertable.html)
+- [SQLite — 資料庫檔案格式（表結構存在哪裡）](https://www.sqlite.org/fileformat.html)
+- [Prisma — 展開／收縮式遷移](https://www.prisma.io/docs/orm/prisma-migrate/understanding-prisma-migrate/limitations-and-known-issues)
 - [Python — `sqlite3` 標準函式庫](https://docs.python.org/3/library/sqlite3.html)

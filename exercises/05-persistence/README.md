@@ -94,6 +94,25 @@ after the database changed to 200              value=100  queries=1  (database s
 
 `value` 跟括號裡的數字**在同一個畫面上互相矛盾**。而且 `queries` 還是 1，所以你的 log 裡不會有任何東西記錄到那個 write。
 
+## 改結構：migration
+
+```bash
+python migrations.py runner    # 編號清單 + 帳本，跑第二次什麼都不會發生
+python migrations.py limits    # SQLite 拒絕幫你做的事
+python migrations.py expand    # 換欄位型別而不丟資料
+```
+
+`limits` 會印出兩個真實的拒絕：
+
+```
+change a column's type: refused
+    OperationalError: near "TYPE": syntax error
+add a NOT NULL column with no default: refused
+    OperationalError: Cannot add a NOT NULL column with default value NULL
+```
+
+`expand` 是重點：SQLite 沒有 `ALTER COLUMN`，所以改欄位只能**另外建一個新形狀、轉資料、再刪舊的**。跑完看 `before` 和 `final shape`，三列進、三列出，中間舊表一直都在。
+
 ## 繳交
 
 1. 六個 `store.py` 模式的輸出截圖（全部六行）+ 回答：哪一個模式在**新行程**裡讀得到資料？
