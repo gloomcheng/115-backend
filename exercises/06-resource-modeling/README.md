@@ -72,6 +72,32 @@ identical result: True
 
 `latency` 那一段要特別注意：`ms local` 是本機真的量到的那個很小的數字，**它證明不了任何事**；`if each cost 1 ms` 是明確標示出來的模擬。
 
+## 六、一個程式 vs 兩個程式
+
+```bash
+python split_demo.py inprocess   # 直接函式呼叫
+python split_demo.py overhttp    # 跨到第二個行程
+python split_demo.py trigger     # 什麼時候該拆
+```
+
+兩個版本回傳的資料**完全一樣**：
+
+```
+     142 ns per call        # 直接呼叫
+     295,438 ns per call    # HTTP
+   identical : True
+```
+
+慢兩千倍，但答案一樣。**所以這不是效能問題，是部署與擁有權的問題。**
+
+`overhttp` 最後會讓另一個行程變慢，然後印出：
+
+```
+   outcome   : client gave up after 1s (1.0s)
+```
+
+對方的行程沒有死，只是太慢。這種狀況在同一個行程裡**不存在** —— 因為你不可能放棄一個還在同一個行程裡的函式呼叫。
+
 ## 繳交
 
 1. 四組截圖，每組都要看得到指令本身與 `<` 開頭的 Response。
