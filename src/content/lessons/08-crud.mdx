@@ -353,7 +353,10 @@ $ python injection.py value
 
 ```sql
 SELECT name, role FROM users WHERE name = '' OR '1'='1'
-                   ↑ 這個閉合引號，把字串結束掉了
+                                          ↑ ↑
+                                          └ └ 兩個引號中間什麼都沒有，
+                                            所以 `name` 被比對成空字串，
+                                            `OR '1'='1'` 變成了句子的新條件
 ```
 
 從 `WHERE` 開始，條件變成了 `name 等於空字串，**或者** 1 等於 1`。後面那半句恆為真，所以每一列都通過。

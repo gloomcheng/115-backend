@@ -303,7 +303,7 @@ TypeError: object of type 'int' has no len()
 
 ## 07. XSS：形狀對了，規則也過了，然後呢
 
-第 06 節留了一個問題：有一種東西，**形狀驗證和規則驗證都不會擋**。它是一個完全合法的字串，而且長度剛好符合限制。
+第 06 節留了一個問題：有一種東西，**形狀驗證和規則驗證都不會擋**。它是一個完全合法的字串，而且只有 25 個字，離那個欄位的 40 字上限還很遠。
 
 <Terminal title="bash — the payload unit 10 already accepts" flavor="output">{`
 > curl -s -X POST http://127.0.0.1:8003/strict \\

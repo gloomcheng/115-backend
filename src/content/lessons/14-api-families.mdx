@@ -487,7 +487,7 @@ opcode 0x81, length 5, payload b'hello'
 
 ## 08. 終端實戰驗證
 
-上面那張表是這一課唯一要背的東西。剩下五組指令是它的證據來源，Terminal 1 跑著 `fastapi dev main.py --port 8007`，Terminal 2 照順序跑：
+上面那張表是這一課唯一要背的東西。剩下七組指令是它的證據來源。Terminal 1 跑著 `fastapi dev main.py --port 8007`，Terminal 2 跑前五步；Terminal 3、4 留給第六、七步。
 
 1. 先 `curl -s http://127.0.0.1:8007/notes`，截圖必須包含 `tags`。用一句話回答：這個欄位是誰決定要給的？
 2. 接著送 GraphQL 的 `{ notes { name title } }`，截圖必須**沒有** `tags`。回答：回應形狀現在由誰決定？
@@ -501,7 +501,7 @@ opcode 0x81, length 5, payload b'hello'
 
 ## 單元實作作業
 
-在本地環境完成以下八項操作，每一項的截圖與簡答都記錄下來。
+在本地環境完成以下十三項操作，每一項的截圖與簡答都記錄下來。
 
 1. `GET /notes` 的完整回應截圖（必須含 `tags`）+ GraphQL 只要 `name title` 的截圖。回答：兩個回應的形狀分別由誰決定？
 2. 三個 `wc -c` 數字的截圖 + 回答：42 個位元組的差別在實務上什麼時候才會變成幾百 KB？

@@ -868,7 +868,9 @@ $ git diff origin/main...HEAD
 ---
 ## 單元實作作業
 
-部署一個 FastAPI 服務，交付這六組證據：
+這一單元的作業分成三塊，**第一塊是把 FastAPI 部署到 VPS**，證據全部來自真實的 VPS。
+
+### 第一塊：部署一個 FastAPI 服務到 VPS（作業 1 到 6）
 
 1. `npm run test:api` 顯示 `4 passed`，`npm run security:scan` 通過。
 2. DNS `A` record 回傳 VPS public IP。
@@ -876,10 +878,16 @@ $ git diff origin/main...HEAD
 4. `sudo nginx -t` 與 `sudo certbot renew --dry-run` 通過。
 5. 從另一台電腦執行 `curl -v https://你的網域/health`，同時看得到 Request Line、`200` Status Line 與 `{"ok":true}`。
 6. Live deployment harness 回傳 exit status `0`。
+
+### 第二塊：pipeline（第 10 節，作業 7 到 10）
+
 7. 在你自己的 repository（期末專題）加一個 GitHub Actions workflow，只做兩件事：跑 `npm run test:api`，然後在失敗時讓 `build` 不能執行。截圖必須包含一次**綠燈**的 run 和一次**紅燈**的 run。**紅燈那一次要真的改壞一個測試去產生，不能假造。**
-8. 執行 `env -u SIGNING_KEY python pipeline_demo.py env` 與 `SIGNING_KEY=demo python pipeline_demo.py env`，兩張截圖並排。回答：同一段程式碼，差別只有一個環境變數，為什麼結果不同？這跟你第 12 課寫的那個 `RuntimeError` 有什麼關係？
+8. 執行 `env -u SIGNING_KEY python pipeline_demo.py env` 與 `SIGNING_KEY=demo python pipeline_demo.py env`，兩張截圖並排。回答：同一段程式碼，差別只有一個環境變數，為什麼結果不同？這跟單元 12 那個 `RuntimeError` 有什麼關係？
 9. 打開你的 workflow 檔，回答：`fetch-depth` 沒寫（預設淺層）的話，secret 掃描會漏掉什麼？`needs:` 那一行如果刪掉，pipeline 會變成什麼？
 10. 回答：你的專題要不要自動部署到 VPS？**用第 10.5 節的順序（先手動、後自動化、再回滾、最後才全自動）寫出你現在在哪一步**，以及你憑什麼判斷。
+
+### 第三塊：code review（第 11 節，作業 11 到 14）
+
 11. 執行 `python review_demo.py sizes`，截圖必須包含 `median lines changed` 那一行。**回答：你的專題最近十個 commit 的中位數是多少行？用第 11.1 節的標準判斷，那個數字可不可以被好好 review？**
 12. 執行 `python review_demo.py mechanical`，截圖必須包含四個檢查的 hit 數字。**回答：`printed instead of logged` 有那麼多 hit，你會把這條規則打開還是把 linter 關掉？寫出你的判斷和理由。**
 13. 用 `git diff --stat origin/main...HEAD` 看你的專題目前的完整改動，然後只讀 `-` 開頭的那一半（刪掉的程式碼），截圖或筆記列出**至少兩個你原本會漏掉的刪除**。回答：刪掉一行程式碼，可能改變什麼行為而沒有任何錯誤？
