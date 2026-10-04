@@ -714,6 +714,158 @@ security  Scan Git history with Gitleaks  WRN  leaks found: 5
 </Callout>
 
 ---
+## 11. Code review：唯一沒有人教過的那件事
+
+第 10 節講完 CI 之後，還有一個沒有被處理的問題。前面那些單元教了你寫程式、測試它、把它部署到公開網址，**沒有任何一課教你要怎麼讓別人讀你的程式碼**，而那件事恰好也**沒辦法自己驗證**。
+
+第 10 節是整門課最後一個可以自己驗證的機制。這一節是最後一個沒辦法的。
+
+而且這件事有個比其他所有主題都難的地方：**它不是一個可以驗證的技術。**你可以跑測試證明契約沒壞，但沒有辦法跑測試證明有人真的讀過你的 diff。
+
+所以這一節盡量用 grep 一下就有答案的東西說話，而且量的是這份教材自己。
+
+### 11.1 先量這份教材自己的 commit
+
+<Terminal title="bash — the size of the diffs this repo asks you to review" flavor="output">{`
+$ python review_demo.py sizes
+1. How large are the diffs this repository asks someone to review?
+
+   commits measured      : 43
+   median lines changed  : 938
+   75th percentile       : 1295
+   90th percentile       : 2100
+   largest single commit : 9208
+`}</Terminal>
+
+<Callout type="warning" title="這不是稱讚，這是問題">
+  **中位數 938 行。**這是這份教材過去每一個 commit 的規模，而它是我一個人寫的、沒有別人 review。
+
+  人的工作記憶不會隨著 diff 長大。超過幾百行之後，讀的人就開始用「這個改動看起來該長什麼樣」去判斷，而不是真的讀。
+
+  所以正確的結論是：**中位數 938 行的 commit 是不該被 review 的**，而這正是第 10.5 節說「大改動要拆成幾塊送」的原因。
+
+  這支程式是在拿這份教材量它自己。**如果你在自己的專題上跑它而數字很好看，那多半表示你最近沒有真的在送東西上去。**
+</Callout>
+
+### 11.2 機器能查的，和只有人能查的
+
+<Terminal title="bash — four greps against this repository" flavor="output">{`
+$ python review_demo.py mechanical
+2. What a script can check
+
+   scanning 24 exercise files, excluding this one
+
+   bare except
+     0 hit(s): nothing
+   todo left behind
+     0 hit(s): nothing
+   printed instead of logged
+     443 hit(s): exercises/02-url/multipart_demo.py:35, ...
+   hardcoded host and port
+     28 hit(s): exercises/02-url/multipart_demo.py:15, ...
+`}</Terminal>
+
+**四條全部都是 grep 加正規表示式。**沒有模型、沒有判斷、不需要理解任何事——這是它們的優點，也是它們的極限。**而這份清單有反方向。**
+
+<Callout type="important" title="那個 443 是這一節的重點，不是雜訊">
+  「不要用 print，用 log」這條規則**沒有錯**，但是在這 24 個檔案裡有 443 個 `print(`。
+
+  因為它們是**命令列教材程式，stdout 就是它們的介面**。每一個 `print` 都是正確的。那條規則是針對網頁服務的，而那裡的 stdout 有別的用途。
+
+  <Callout type="warning" title="443 個誤報，比沒有這條規則更糟">
+    一個在一個禮拜內就會被關掉的規則，等於沒有規則。
+
+    **關掉的檢查不會抓到任何東西**，而且更貴的是：它讓人不再習慣讀輸出。半年後你重新打開它，還是會忽略。
+
+    所以「開啟這個 linter」本身是一個需要判斷的決定，而那個判斷只有人能做。
+  </Callout>
+
+  而且反方向也一樣真實：單元 05 的併發練習**故意**包含一個會丟資料的 race。一個把它標成錯誤的檢查，那個檔案上就是錯的。
+
+  **所以重點不是「規則有沒有道理」，是「它在這個檔案上講不講道理」。**而那個判斷需要知道檔案在做什麼。
+</Callout>
+
+<Terminal title="bash — the other list" flavor="output">{`
+$ python review_demo.py human
+3. What only a person can check
+
+     Intent      Does this change what we said it changes? A diff shows
+                 what happened, never why it was wanted.
+
+     Duplication Three places that know the role is admin is fine.
+                 Three places that know how to parse a date is a
+                 decision that was never made deliberately.
+
+     Naming      Nothing fails when a function is called handle().
+                 The cost is paid by whoever reads it in six months.
+
+     Scope       This commit changed the rate limit and the colour of a
+                 log line. One of those is a security control. Both are
+                 now unreviewable as separate things.
+
+     Consequences A test proves the contract holds. It cannot tell you
+                 the contract is the right one.
+`}</Terminal>
+
+<Callout type="important" title="左邊那份清單是免費的，右邊那份是你被付費做的">
+  linter 查的是左邊。
+
+  **右邊每一項都無法寫成正規表示式，而且每一項都真實發生過。**改錯了方向、測試全綠、CI 全綠，然後半年後沒有人知道為什麼會這樣。
+
+  這就是 review 的價值所在：**不是抓 bug，是抓那些沒有壞、但走錯了路的東西。**
+</Callout>
+
+### 11.3 Review 最常見的三種失效
+
+<Callout type="warning" title="一、蓋章式批准">
+  「看起來沒問題，approve。」
+
+  這是最貴的一句話，因為它**讓一整個 commit 沒有被讀過**，而且還留下「有人看過」的紀錄。下一個人會相信那個紀錄。
+
+  誠實的版本是：「我讀了，但沒有足夠時間看懂 X。」那會產生一個 action item，而不是一個假象。
+
+  **可驗證的問題**：你能不能在_review 裡說出**這次改動可能做壞什麼**？說不出來，就是沒讀。
+</Callout>
+
+<Callout type="warning" title="二、把 review 當成尋找完美風格的地方">
+  「這裡可以用 `dict.get`。」如果那不是錯的，這個 comment 的成本是真實的：作者要停下來、解釋、決定、可能改。
+
+  Review 的成本會互相競爭。**在 diff 裡追格式，會擠掉真正重要的那三行。**
+
+  格式應該交給工具——這就是第 11.2 節那份清單存在的原因。
+</Callout>
+
+<Callout type="warning" title="三、只讀新增的那一半">
+  diff 有兩邊。`+` 的那邊是新程式碼，`-` 的那邊是被刪的。
+
+  **刪掉的那一半最少被看，也最容易藏問題。**刪掉一個看起來多餘的檢查，其實那個檢查擋著某條路徑。
+
+  讀 diff 的時候先看 `-`，再看 `+`。這一個習慣就能擋住一類很難查的 bug。
+</Callout>
+
+### 11.4 最便宜的 review 是自己先看
+
+<Terminal title="bash — read your own diff before anyone else does">{`
+$ git diff
+$ git diff --stat
+$ git diff origin/main...HEAD
+`}</Terminal>
+
+<Callout type="important" title="為什麼自己的 review 有效">
+  因為**你手上有動機**。別人 review 你的程式碼是在花他的時間，你 review 自己的是在救自己的時間。
+
+  而「自己先看」最實際的一個用途是：**它會讓你發現自己解釋不清楚的那個地方。**你寫 commit message 的時候卡住，就代表那個 commit 太大、或者動機不明顯——兩個都是別人會退回來的原因。
+
+  所以正確的順序是：**先自己讀一次 diff，再送出。**不是禮貌，是把你會被問的問題先自己問一遍。
+</Callout>
+
+<Callout type="note" title="一句話把這節收掉">
+  機器查「這段程式碼有沒有犯錯」，人查「這段程式碼是不是我們要的」。
+
+  **前者已經有工具了，後者還沒有。**所以 review 這個技能在 AI 能寫程式之後沒有變得不重要，它只是**從「抓 typo」移到了「抓方向」**。
+</Callout>
+
+---
 ## 單元實作作業
 
 部署一個 FastAPI 服務，交付這六組證據：
@@ -728,6 +880,10 @@ security  Scan Git history with Gitleaks  WRN  leaks found: 5
 8. 執行 `env -u SIGNING_KEY python pipeline_demo.py env` 與 `SIGNING_KEY=demo python pipeline_demo.py env`，兩張截圖並排。回答：同一段程式碼，差別只有一個環境變數，為什麼結果不同？這跟你第 12 課寫的那個 `RuntimeError` 有什麼關係？
 9. 打開你的 workflow 檔，回答：`fetch-depth` 沒寫（預設淺層）的話，secret 掃描會漏掉什麼？`needs:` 那一行如果刪掉，pipeline 會變成什麼？
 10. 回答：你的專題要不要自動部署到 VPS？**用第 10.5 節的順序（先手動、後自動化、再回滾、最後才全自動）寫出你現在在哪一步**，以及你憑什麼判斷。
+11. 執行 `python review_demo.py sizes`，截圖必須包含 `median lines changed` 那一行。**回答：你的專題最近十個 commit 的中位數是多少行？用第 11.1 節的標準判斷，那個數字可不可以被好好 review？**
+12. 執行 `python review_demo.py mechanical`，截圖必須包含四個檢查的 hit 數字。**回答：`printed instead of logged` 有那麼多 hit，你會把這條規則打開還是把 linter 關掉？寫出你的判斷和理由。**
+13. 用 `git diff --stat origin/main...HEAD` 看你的專題目前的完整改動，然後只讀 `-` 開頭的那一半（刪掉的程式碼），截圖或筆記列出**至少兩個你原本會漏掉的刪除**。回答：刪掉一行程式碼，可能改變什麼行為而沒有任何錯誤？
+14. 找一個你最近寫過的函式，寫出它在六個月後被讀到時，你希望它叫什麼。**回答：它現在叫什麼？兩個名字差多少？**
 
 截圖前遮住公司 IP、SSH 使用者名稱、email、Token 與密鑰。對外公開的服務網域可以保留。
 
@@ -744,6 +900,8 @@ security  Scan Git history with Gitleaks  WRN  leaks found: 5
 - [FastAPI — Testing with TestClient and pytest](https://fastapi.tiangolo.com/tutorial/testing/)
 - [Gitleaks — Detect hardcoded secrets](https://github.com/gitleaks/gitleaks)
 - [GitHub — Push protection](https://docs.github.com/en/code-security/concepts/secret-security/push-protection)
+- [Google Engineering Practices — What to look for in a code review](https://google.github.io/eng-practices/review/reviewer/looking-for.html)
+- [Google Engineering Practices — The CL author should self-review](https://google.github.io/eng-practices/review/developer/small-cls.html)
 - [GitHub Actions — Workflow syntax（`needs`、`fetch-depth` 等）](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions)
 - [GitHub Actions — Events that trigger workflows](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows)
 - [GitHub — Security hardening for GitHub Actions（第三方 action 要釘 commit SHA）](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions)

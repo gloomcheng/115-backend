@@ -21,6 +21,28 @@ SIGNING_KEY=demo python pipeline_demo.py env     # App started
 
 **你的電腦有這個變數，所以你看不見這個錯誤。**CI 是一台沒有你的 shell 設定的機器，那才是它存在的理由。
 
+## Review 是什麼（也不需要 VPS）
+
+```bash
+python review_demo.py sizes       # 這份教材自己的 commit 有多大
+python review_demo.py mechanical  # 機器查得到什麼
+python review_demo.py human       # 只有人查得到什麼
+```
+
+`sizes` 量的是這個 repository 的真實歷史：
+
+```
+commits measured      : 43
+median lines changed  : 938
+largest single commit : 9208
+```
+
+**中位數 938 行是不該被 review 的規模。**這支程式是在拿教材量它自己。
+
+`mechanical` 那個 `printed instead of logged` 有 443 個 hit，而且**每一個都是對的**——因為那些是命令列教材程式，stdout 就是它們的介面。
+
+一條在一個禮拜內被關掉的規則，等於沒有規則。
+
 ## 驗收環境
 
 - Ubuntu 24.04 或 26.04 LTS VPS
