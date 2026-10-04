@@ -226,9 +226,182 @@ def create_item(payload: ItemCreate):
 
 注意上面兩個函式的差別只有一個字：`item_id: int` 是 `int`（宣告型別，單元 07 會說明宣告型別如何決定 Client 拿到 `422` 還是 `500`），`category: str` 也是。而 `limit: int = 10` 多了一個 `= 10`，那是**有預設值**，省略時 Server 直接用它。
 
+## 06. 檔案上傳：Body 的第四種形狀
+
+第 04 節把 Header 和 Body 分開看了，那一節的 Body 裡面放的是 JSON，而 Client 送來的就是那一段。**但 Body 不只那一種形狀。**
+
+檔案上傳用的 Body 叫 `multipart/form-data`，它的結構跟 JSON 完全無關。先看它在線上到底是什麼：
+
+<Terminal title="bash — every byte the server received" flavor="output">{`
+$ curl -s -F "note=hello" -F "file=@a.txt" http://127.0.0.1:8011/raw
+{"bytes":317,"boundary":"------------------------qsdGfN3QkHUZiOkfobrXUX","parts":2}
+
+--- raw body as received ---
+--------------------------HI1hbqi37krL3waUapIorr
+Content-Disposition: form-data; name="note"
+
+hello
+--------------------------HI1hbqi37krL3waUapIorr
+Content-Disposition: form-data; name="file"; filename="a.txt"
+Content-Type: text/plain
+
+line one
+line two
+
+--------------------------HI1hbqi37krL3waUapIorr--
+
+--- end ---
+`}</Terminal>
+
+<Callout type="important" title="四個地方跟 JSON 不一樣">
+  1. **Header 裡多了一個 `boundary=`。**它出現在 `Content-Type` 的最後，是一個分隔字串。
+  2. **每一段都有自己的 Header**，然後空一行，再來才是資料。JSON 沒有「每一段各自的 Header」這回事。
+  3. **分隔字串在兩種長度。**中間用 `------abc` 分開，最後一段用 `------abc--`，**多兩個破折號**，那是「結束了」的標記。
+  4. **資料可以是二進位。**換行、引號、大括號、看起來像 Header 的行，全都不能拿來當分隔。
+
+  然後 `Content-Disposition` 裡的 `name="note"` 和 `name="file"`，就是 JSON 裡的 key。**只不過在這裡，key 是用文字標出來的，不是用文法推導的。**
+</Callout>
+
+### 06.1 為什麼需要 boundary：JSON 不需要
+
+這是這一段唯一真正需要理解的地方，也是檔案上傳和 JSON 上傳唯一實質的差別，也是為什麼非要有 boundary 不可。
+
+<Terminal title="bash — why the delimiter exists" flavor="output">{`
+$ python multipart_demo.py boundary
+2. Why a boundary exists at all
+
+   JSON needs no delimiter. This is well defined:
+     {"note": "hello", "count": 3}
+        ^     ^        ^
+   The parser knows a string starts at a quote and ends at the next
+   quote, so it can tell where one value ends and the next begins.
+
+   A file has no such rule. It can be any bytes at all, including:
+     newlines, quotes, braces, a line that looks like a header,
+     and 200 MB of a JPEG with no particular structure.
+
+   So the sender invents a string that does not occur in the data, and
+   writes it between the parts. That is the entire job of a boundary.
+`}</Terminal>
+
+<Callout type="important" title="JSON 的文法自帶邊界，檔案不會">
+  JSON 的文法是**自定界的**：字串從引號開始、到下一個引號結束，所以解析器永遠知道現在在第幾個值。
+
+  **檔案沒有文法。**它就是一堆位元組，可能剛好包含換行、包含看起來像 `boundary=------` 的那一行。
+
+  所以發送端自己挑一個**不會出現在資料裡**的字串，把它寫在中間當分隔。**boundary 的全部工作就是這一句。**
+
+  而且實務上是隨機產生的，因為猜得到等於可以偽造：
+
+  <Terminal title="bash — two requests, two boundaries" flavor="output">{`
+  $ curl -s -o /dev/null -v -F "note=x" -F "file=@a.txt" http://127.0.0.1:8011/upload
+  > Content-Type: multipart/form-data; boundary=------------------------xcC7iQbGk8RzHtSTfIFioX
+
+  $ curl -s -o /dev/null -v -F "note=x" -F "file=@a.txt" http://127.0.0.1:8011/upload
+  > Content-Type: multipart/form-data; boundary=------------------------r1rLqWLpb5ttcI8dYHQ6MW
+  `}</Terminal>
+</Callout>
+
+### 06.2 自己解析一次，就不用框架了
+
+<Terminal title="bash — splitting the body by hand" flavor="output">{`
+$ python multipart_demo.py parse
+3. Reading it back, without any framework
+
+   body is 209 bytes
+   delimiter is b'------abc123'
+   split gives 4 pieces, and the first and last are empty:
+     [0] b''
+     [-1] b'--\r\n'
+
+   part:
+     Content-Disposition: form-data; name="note"
+     data: b'hello'
+
+   part:
+     Content-Disposition: form-data; name="file"; filename="a.txt"
+     Content-Type: text/plain
+     data: b'line one\r\nline two'
+`}</Terminal>
+
+<Callout type="important" title="`data: b'line one\r\nline two'` 那一行才是重點">
+  資料**裡面有換行**，而且沒有被切開。
+
+  因為規則是：**分隔字串必須自己站在一行開頭。**中間那些換行不會讓解析器困惑，因為它認的是「整行等於 boundary」而不是「某處出現 boundary 這幾個字」。
+
+  如果資料裡剛好有一行的開頭就是 boundary，那格式就毀了。**這就是為什麼那個字串要隨機產生。**
+</Callout>
+
+### 06.3 一個你會先撞到的框架行為
+
+boundary 懂了，接下來是很實務的一個問題：**你想自己印出原始 bytes**。你會先寫成這樣：
+
+```python
+@app.post("/upload")
+async def upload(request: Request, note: str = Form(...), file: UploadFile = File(...)):
+    raw = await request.body()      # RuntimeError: Stream consumed
+```
+
+<Terminal title="Terminal — what actually happens" flavor="output">{`
+RuntimeError: Stream consumed
+`}</Terminal>
+
+<Callout type="warning" title="宣告了 Form，就等於宣告「body 給我，不要了」">
+  你一旦宣告 `note: str = Form(...)`，框架就會**自己把 body 讀走並解析**，之後 `request.body()` 拿不到東西了——它不是回傳空值，是直接拋錯。
+
+  Request 的 body 是一道**一次性的流**，不是可以重讀好幾次的屬性。
+
+  所以要看原始 bytes，必須走一條**什麼都不宣告**的路徑：
+
+  <Terminal title="multipart_demo.py — two routes on purpose" flavor="output">{`
+  @api.post("/raw")
+  async def raw_body(request: Request):
+      body = await request.body()          # nothing declared, so nothing consumed
+      ...
+
+  @api.post("/upload")
+  async def upload(note: str = Form(...), file: UploadFile = File(...)):
+      ...
+  `}</Terminal>
+
+  **這是本節最實用的一段。**之後你要除錯任何 multipart 的問題，都需要這條「不解析、看原始」的路徑。
+</Callout>
+
+### 06.4 唯一絕對不能相信的欄位
+
+<Terminal title="bash — the field the client chose" flavor="output">{`
+$ python multipart_demo.py filename
+4. The one field you must never trust
+   filename="a.txt"          <- fine
+   filename="../../../etc/passwd"   <- the header said so
+
+   Content-Disposition comes from the Client. It is text the Client
+   chose, not a fact about a file on your disk.
+
+   So this is wrong:
+     path = UPLOAD_DIR / upload.filename      # traversal, straight up
+
+   And this is right:
+     path = UPLOAD_DIR / (uuid4().hex + suffix)
+`}</Terminal>
+
+<Callout type="important" title="`filename` 是 Client 寫的一段文字">
+  它跟 `{"name": "iris"}` 裡的 `name` 性質**完全一樣**：都是外面進來的資料。
+
+  差別只在於 `name` 放在 Body 的 JSON 裡你還會想一想，`filename` 放在一個看起來「像檔案資訊」的 Header 裡，就容易當成事實。**它不是事實，它是對方給你的一個字串。**
+
+  這正好接上單元 08 第 07 節那個 `role = 'admin', name`：值可以安全地被綁進 SQL，欄位名不行，因為欄位名沒有地方可以綁。**檔名也是同一類問題——它決定檔案落在哪裡，所以它是指令，不是資料。**
+</Callout>
+
+<Callout type="note" title="還沒講、但你會遇到的">
+  - **大小限制。**沒有設上限的話，一個 10 GB 的檔案會把磁碟塞滿。`Content-Length` 可以被說謊，所以要在讀的時候累加計數。
+  - **檔案型別。**副檔名和 `Content-Type` 都是 Client 給的。真的要看內容，就讀開頭幾個位元組判斷 magic number。
+  - **不要放在可被執行的目錄。**上傳目錄不該跟程式碼同一層。
+</Callout>
+
 ---
 
-## 06. 終端實戰驗證：用 curl 觀察傳輸界線
+## 07. 終端實戰驗證：用 curl 觀察傳輸界線
 
 現在打開終端機，執行以下四組具代表性的指令，逐一驗證網址與封包在傳輸線路上的真實面貌：
 
@@ -274,6 +447,33 @@ curl -v 'https://httpbin.org/get?query=%E5%8F%B0%E7%81%A3'
 
 這時伺服器回傳的 JSON 會顯示接收到的 `args` 為 `query: "台灣"`，證明了線路上雖然只傳遞 ASCII 百分比碼，伺服器接收後能精準還原為原始中文。
 
+### 第五步：看一個不是 JSON 的 Body
+
+前四步的 Body 都是 JSON。第五步換成檔案，而且要看原始 bytes，所以先把 Server 起來。
+
+先開一個 Terminal 起 Server：
+
+```bash
+cd exercises/02-url
+printf 'line one\nline two\n' > /tmp/a.txt
+python multipart_demo.py serve
+```
+
+Terminal 2 送兩次**內容相同**的表單，但打的是**不同兩條路由**：
+
+<Terminal title="bash — step 5, two routes, same form">{`
+$ curl -s -F "note=hello" -F "file=@/tmp/a.txt" http://127.0.0.1:8011/raw
+{"bytes":317,"boundary":"------------------------qsdGfN3QkHUZiOkfobrXUX","parts":2}
+
+$ curl -s -F "note=hello" -F "file=@/tmp/a.txt" http://127.0.0.1:8011/upload
+{"note":"hello","filename":"a.txt","content_type":"text/plain","file_bytes":18}
+`}</Terminal>
+
+兩點要親眼看到：
+
+- **`/raw` 的回應裡有 `boundary`，而且每次都不一樣。**再送一次 `/raw`，比對 `boundary` 兩個字串。
+- **Terminal 1 印出了原始 body。**截圖必須包含 `------` 開頭的分隔行和最後那個多兩個破折號的 `------`。
+
 ---
 
 ## 單元實作作業
@@ -283,5 +483,18 @@ curl -v 'https://httpbin.org/get?query=%E5%8F%B0%E7%81%A3'
 1. 在 Terminal 執行帶有 query 與 fragment 的 curl 指令：`curl -v 'https://httpbin.org/get?student_id=YOUR_ID#my-anchor'`。截圖必須完整包含指令、`>` 開頭的 Request Line 以及 Server 回傳的 JSON 內容。
 2. 執行帶有 JSON Body 的 POST 指令：`curl -i -X POST 'https://httpbin.org/anything/submit' -H 'Content-Type: application/json' -d '{"student_id":"YOUR_ID","status":"done"}'`。截圖必須包含送出的 Header、空白行與回傳的狀態碼。
 3. 在繳交筆記中用文字說明：為什麼 `#my-anchor` 沒有出現在終端機的 `> GET` 請求行中？
+4. 執行 `python multipart_demo.py show` 與 `python multipart_demo.py boundary`，截圖兩段輸出。**回答：JSON 的 Body 為什麼不需要一個分隔字串？檔案需要，這是因為什麼差別？**
+5. 執行 `python multipart_demo.py parse`，截圖必須包含 `data: b'line one\r\nline two'`。**回答：資料裡面有換行，為什麼沒有被切開？規則是什麼？**
+6. 送兩次 `curl -s -F "note=hello" -F "file=@/tmp/a.txt" http://127.0.0.1:8011/raw`，把兩次回應的 `boundary` 並排截圖。回答：那個字串是誰決定的？為什麼要每次都不一樣？
+7. 把 `/upload` 改成在宣告 `note` 和 `file` 之後呼叫 `await request.body()`，重啟 Server 再送一次。截圖必須包含 `RuntimeError: Stream consumed`。**回答：為什麼宣告了 `Form` 之後就拿不到原始 bytes？你的專題要除錯上傳問題時，該走哪一條路徑？**
+8. 執行 `python multipart_demo.py filename`，截圖必須包含 `path traversal, straight up`。回答：`filename` 這個值是誰提供的？為什麼它跟 `{"name": "iris"}` 的 `name` 性質一樣？
 
 把作業截圖與簡答筆記存入 `exercises/02-url/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案，保持工作目錄乾淨。
+
+
+### 本單元使用的正本
+
+- [RFC 7578 §4.1 — multipart/form-data 的格式（boundary 與每段的 Header）](https://www.rfc-editor.org/rfc/rfc7578.html#section-4.1)
+- [RFC 2046 §5.1 — multipart 的邊界語法（分隔字串必須自己站在行首）](https://www.rfc-editor.org/rfc/rfc2046.html#section-5.1)
+- [FastAPI — Request Files](https://fastapi.tiangolo.com/tutorial/request-files/)
+- [MDN — Content-Disposition（含 filename 為何不可信）](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Disposition)
