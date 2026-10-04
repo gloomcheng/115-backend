@@ -298,11 +298,187 @@ for name in dan erin frank; do
 done
 `}</Terminal>
 
+## 06. N+1：回傳一模一樣的資料，問了 501 次
+
+前五節都在講一個資源怎麼被建立和取回。這一節換一個角度：**同一份資料，用兩種方式取回，程式會問資料庫幾次。**
+
+`n_plus_one.py` 有一張 `authors` 和一張 `notes`。目標很單純：用最少的語句，把每個作者和他的筆記一起取回來。
+
+<Terminal title="bash — 20 個作者，21 條語句" flavor="output">{`
+$ python n_plus_one.py small
+1. Twenty authors, and every statement
+    SELECT id, name FROM authors ORDER BY id
+    SELECT title FROM notes WHERE author_id = 0 ORDER BY id
+    SELECT title FROM notes WHERE author_id = 1 ORDER BY id
+    SELECT title FROM notes WHERE author_id = 2 ORDER BY id
+    SELECT title FROM notes WHERE author_id = 3 ORDER BY id
+    SELECT title FROM notes WHERE author_id = 4 ORDER BY id
+    ... and 15 more
+    total: 21 statements for 20 authors
+  n_plus_one, 20 authors
+    statements: 21
+    authors returned: 20
+    total titles: 500
+  join,       20 authors
+    statements: 1
+    authors returned: 20
+    total titles: 500
+    identical result: True
+`}</Terminal>
+
+<Callout type="important" title="`identical result: True` 是這一段的重點">
+  **兩種寫法回傳完全相同的資料。**一種問了 21 次，另一種問了 1 次。
+
+  而且注意那個數字怎麼來的：`21 = 1 + 20`。先查一次拿到 20 個作者，然後**每個作者再查一次**。作者有幾個，就多幾次。
+
+  這就是 N+1 的名字：**一條列表查詢，加上一條一條的查詢。**
+</Callout>
+
+### 06.1 先講清楚：這是量出來的，不是數出來的
+
+`n_plus_one.py` 用 `set_trace_callback` 記錄 sqlite3 **實際執行**的每一條語句。所以輸出裡的 `21` 和 `1` 都是數來的。
+
+<Terminal title="bash — 20 個作者和 500 個作者，程式碼完全一樣" flavor="output">{`
+$ python n_plus_one.py scale
+2. The same code, at 20 authors and at 500 authors
+  n_plus_one, 20 authors
+    statements: 21
+  n_plus_one, 500 authors
+    statements: 501
+  join,       20 authors
+    statements: 1
+  join,       500 authors
+    statements: 1
+    the gap grew from 20x to 500x
+`}</Terminal>
+
+<Callout type="warning" title="本機的時間數字證明不了任何事，這裡要說清楚">
+  你在自己機器上跑，500 次查詢大概只花 10 毫秒左右，因為 SQLite 是一個檔案，就在你同一顆磁碟上。
+
+  **那 10 毫秒不是這個問題的證據。**本機的量測只證明一件事：**語句數是 501。**
+
+  真正會出事的地方是每條語句都要多花一次網路來回。用 `python n_plus_one.py latency` 可以看到差別，那一段明確標示了「成本是模擬的，語句數是真的」：
+
+  <Terminal title="bash — the same work, with a cost per statement" flavor="output">{`
+    n_plus_one, 20 authors:  21 statements,      1 ms local,     21 ms if each cost 1 ms
+    n_plus_one, 500 authors: 501 statements,     10 ms local,    501 ms if each cost 1 ms
+    join,       20 authors:   1 statements,      1 ms local,      1 ms if each cost 1 ms
+    join,       500 authors:   1 statements,      1 ms local,      1 ms if each cost 1 ms
+  `}</Terminal>
+
+  **500 條語句、每條 1 毫秒，就是半秒。**而且是每一個 Request 都要等半秒，只為了顯示一模一樣的資料。
+</Callout>
+
+### 06.2 為什麼它活過 code review
+
+<Callout type="important" title="因為開發時資料只有三列">
+  你在本地開發，資料庫裡可能有 3 個作者。那就是 4 條語句，跑起來 1 毫秒，**你看不出任何問題。**
+
+  上線之後變成 500 個作者，你也不會立刻發現——**它沒有錯誤**，只是某個頁面比別的慢，而那個頁面通常不熱門。
+
+  N+1 是一種**不會自己浮出水面的 bug**：沒有例外、沒有錯誤訊息、沒有 log。它只有在流量和資料量同時長大之後才開始 costing 你，而且已經上線很久了。
+</Callout>
+
+<Callout type="note" title="所以怎麼在 review 時抓到它">
+  **看迴圈裡有沒有查資料庫。**這是唯一可靠的規則，因為它不依賴資料量。
+
+  ```python
+  for author in authors:
+      notes = query("SELECT ... WHERE author_id = ?", author)   # ← 這就是 N+1
+  ```
+
+  只要查詢寫在迴圈裡面，而且查的是「跟迴圈元素有關的東西」，預設就當成 N+1 看待，除非你量過。
+</Callout>
+
+### 06.3 加索引救不了它
+
+這是最值得講的一段，因為單元 05 剛教完索引，**很容易以為「加了索引就沒問題了」**——可是索引不會把你的 N+1 變成一條 `JOIN`。
+
+<Terminal title="bash — with an index on notes(author_id)" flavor="output">{`
+$ python n_plus_one.py indexed
+3. Adding an index makes each query faster, and does not help
+    with an index on notes(author_id): 501 statements
+    the plan for the per-author query:
+      SEARCH notes USING INDEX idx_notes_author (author_id=?)
+
+   Every one of those statements is fast now. There are just 501 of them.
+   An index makes a query cheap. It does not make 501 queries into one.
+`}</Terminal>
+
+<Callout type="warning" title="索引讓每一條變快，語句數沒有變">
+  單元 05 第 07 節的索引讓查詢從 `SCAN` 變成 `SEARCH`，那條語句本身確實快了很多。
+
+  **但還是 501 條。**而每一條都要送出、等待、解析——不管它自己有多快。
+
+  這兩件事要分開：
+  - 索引解決「**一條**語句太慢」
+  - N+1 解決「**太多**條語句」
+
+  **有了索引，N+1 反而更難發現**，因為每一條都很快，你量不出那個總數。
+</Callout>
+
+### 06.4 修法：把 N 條變成 1 條
+
+那要怎麼把它變成一條？`fetch_join` 用一個 `LEFT JOIN` 拿全部，然後在 Python 裡分組：
+
+<Terminal title="the two queries, side by side" flavor="output">{`
+# 21 or 501 statements
+authors = connection.execute("SELECT id, name FROM authors ORDER BY id").fetchall()
+for author_id, name in authors:
+    notes = connection.execute(
+        "SELECT title FROM notes WHERE author_id = ? ORDER BY id", (author_id,)
+    ).fetchall()
+
+# 1 statement
+rows = connection.execute(
+    "SELECT a.name, n.title FROM authors a "
+    "LEFT JOIN notes n ON n.author_id = a.id "
+    "ORDER BY a.id, n.id"
+).fetchall()
+`}</Terminal>
+
+<Callout type="important" title="兩個容易出錯的地方">
+  **一、要用 `LEFT JOIN`，不是 `JOIN`。**
+
+  沒有筆記的作者，用 `JOIN` 會整個人消失。用 `INNER JOIN` 的話，作者數量會比預期少，而且少多少取決於資料——這種 bug 在測試資料齊全的時候看不出來。
+
+  **二、分組要在 Python 裡做，不要再查第二次。**
+
+  常見的錯誤寫法是：先 `JOIN` 拿到全部，再對每個作者**又**查一次確認細節。那是「1 + N 變成 1 + 1 + N」，更糟。
+</Callout>
+
+<Callout type="note" title="另一個選項：用 `IN`">
+  ```sql
+  SELECT * FROM notes WHERE author_id IN (1, 2, 3, ...)
+  ```
+
+  一條語句，效果跟 `JOIN` 一樣。差別是 `JOIN` 會把兩個表合成一個結果集，`IN` 讓你拿到兩份資料、自己在程式裡對應。
+
+  **哪個比較好取決於你最後要回傳什麼形狀**，而那是單元 06 前五節在講的事。
+</Callout>
+
+### 06.5 這跟單元 05 的索引是同一課的兩半
+
+<Callout type="important" title="一個關語句有多快，一個關語句有幾條">
+  | | 問題 | 診斷 | 修法 |
+  | --- | --- | --- | --- |
+  | 索引 | 一條語句太慢 | `EXPLAIN QUERY PLAN` 顯示 `SCAN` | 加索引 |
+  | N+1 | 語句太多 | **數語句數**，不是看時間 | 改成 `JOIN` 或 `IN` |
+
+  兩個都會讓頁面變慢，症狀一模一樣，但原因和修法完全不同。
+
+  **所以診斷順序是：先數語句數。**如果一條，就去看有沒有 `SCAN`；如果是 N+1，先改結構，改完之後才輪到索引。
+
+  反過來做——先看到慢就一路加索引——很可能會加到一條本來就很快的語句上，然後什麼都沒改善。
+</Callout>
+
 ---
 
-## 06. 終端實戰驗證：四組對照
+## 07. 終端實戰驗證：四組對照
 
-三次讀取與兩次建立的差別看過了。接著把這一課的四個結論各跑一次，全部結果都在 `curl` 的輸出裡。
+`LEFT JOIN` 那一組和 N+1 那一組，回傳的資料逐字相同，差別只有語句數。**這是本課最後一個結論的證據，第五步會用 curl 之外的方式再量一次。**
+
+三次讀取與兩次建立的差別看過了，N+1 的差別也看過了。接著把這一課的結論各跑一次：前四步的結果都在 `curl` 的輸出裡，第五步開始換成數語句。
 
 ### 第一步：讀取不會改動狀態
 
@@ -324,6 +500,20 @@ curl -i http://127.0.0.1:8000/users/iris
 `}</Terminal>
 
 第一個 `201`、第二個 `200`。這是 `POST` 改動了 Server 狀態最直接的證據。
+
+### 第五步：數語句，不是數時間
+
+<Terminal title="bash — step 5, the count that matters" flavor="output">{`
+$ python n_plus_one.py scale
+  n_plus_one, 20 authors
+    statements: 21
+  n_plus_one, 500 authors
+    statements: 501
+  join,       500 authors
+    statements: 1
+`}</Terminal>
+
+**看 `statements` 那一行，不要看 `time`。**本機的時間證明不了任何事，語句數才是證據。
 
 ### 第三步：撞到 method 的牆
 
@@ -360,6 +550,11 @@ curl -i http://127.0.0.1:8000/users/iris
 4. 送出 `POST /users/delete`（把動作當成路徑送出去），截圖必須包含 `404` 與 Body，證明 `delete` 被當成 username 而不是動作。**回答：這跟第 2 步那個 `405` 差在哪？**同樣是「想要的效果做不到」，為什麼一個是 `404`、一個是 `405`？
 5. 用一句話回答：為什麼 `GET /users` 現在回 `405`，而不是回一個空的 users 清單？
 6. 在繳交筆記中指出，上面五個結果分別是 `4xx` 還是 `5xx`，以及它們的責任落在 Client 還是 Server。
+7. 執行 `python n_plus_one.py small`，截圖必須包含 `total: 21 statements for 20 authors` 與 `identical result: True`。**回答：那個 `21` 是怎麼算出來的？為什麼 `identical result: True` 是這一段最重要的那一行？**
+8. 執行 `python n_plus_one.py scale`，截圖必須包含 `n_plus_one, 500 authors` 的 `statements: 501` 與 `join, 500 authors` 的 `statements: 1`。**回答：兩種寫法回傳的資料有分別嗎？語句數差多少倍？**
+9. 執行 `python n_plus_one.py indexed`，截圖必須包含 `501 statements` 與 `SEARCH notes USING INDEX`。**回答：加了索引之後每一條語句都變快了，語句數有變少嗎？為什麼索引救不了 N+1？**
+10. 執行 `python n_plus_one.py latency`，截圖必須包含 `501 statements` 與 `501 ms if each cost 1 ms`。**回答：這一行的 `ms local` 是不是真實的量測？`if each cost 1 ms` 是量出來的還是你加上去的？寫出你會怎麼取得真實的網路往返時間。**
+11. 在你自己的專題資料模型上找一個 N+1：`grep -n "for .* in " *.py`，找出迴圈裡有沒有查資料庫。回答：**你找到的迴圈裡有查詢嗎？如果有，那是第幾層的迴圈？**（兩層迴圈各自再查一次，會是幾條語句？）
 
 把作業截圖與簡答筆記存入 `exercises/06-resource-modeling/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
 
@@ -369,6 +564,9 @@ curl -i http://127.0.0.1:8000/users/iris
 - [RFC 9110 §9.1 — Overview of Methods](https://www.rfc-editor.org/rfc/rfc9110.html#name-overview)
 - [RFC 9110 §9.2.1 — GET](https://www.rfc-editor.org/rfc/rfc9110.html#name-get)
 - [RFC 9110 §9.2.2 — Safe Methods](https://www.rfc-editor.org/rfc/rfc9110.html#name-safe-methods)
+- [SQLite — EXPLAIN QUERY PLAN（單元 05 用同一個工具）](https://www.sqlite.org/eqp.html)
+- [SQLite — 查詢規劃如何選索引](https://www.sqlite.org/queryplanner.html)
+- [OWASP — 慢查詢與資源消耗](https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html)
 - [RFC 9110 §9.3.3 — POST](https://www.rfc-editor.org/rfc/rfc9110.html#name-post)
 - [RFC 9110 §15.3.2 — 201 Created](https://www.rfc-editor.org/rfc/rfc9110.html#name-201-created)
 - [RFC 9110 §15.5.5 — 404 Not Found](https://www.rfc-editor.org/rfc/rfc9110.html#name-404-not-found)

@@ -53,6 +53,25 @@ curl -s http://127.0.0.1:8000/users/carol
 
 讀三次要三行完全相同。POST 兩次都是 `201`，但最後只剩一份 `carol`，而且是第二次那份。
 
+## 五、N+1：數語句，不要數時間
+
+```bash
+python n_plus_one.py small     # 20 個作者，21 條語句，結果完全相同
+python n_plus_one.py scale     # 500 個作者 → 501 條
+python n_plus_one.py indexed   # 加了索引，還是 501 條
+python n_plus_one.py latency   # 本機時間為什麼不算數
+```
+
+`small` 最後那行是重點：
+
+```
+identical result: True
+```
+
+**同一份資料，一種問 21 次，一種問 1 次。**
+
+`latency` 那一段要特別注意：`ms local` 是本機真的量到的那個很小的數字，**它證明不了任何事**；`if each cost 1 ms` 是明確標示出來的模擬。
+
 ## 繳交
 
 1. 四組截圖，每組都要看得到指令本身與 `<` 開頭的 Response。
