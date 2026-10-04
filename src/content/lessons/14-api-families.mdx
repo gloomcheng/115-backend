@@ -385,7 +385,7 @@ $ python websocket_demo.py key
 
 ### 07.2 訊息長什麼樣：先讀長度
 
-握手之後就不是 HTTP 了。`101` 只保證了「換成功了」，訊息本身怎麼編，是另一件事。`websocket_demo.py frame` 會把 Server 的一則訊息在線上的樣子印出來：
+握手之後就不是 HTTP 了。`101` 只保證「換成功了」，訊息本身怎麼編是另一件事。看看 Server 的一則訊息在線上是什麼樣子：
 
 <Terminal title="bash — one message, annotated" flavor="output">{`
 $ python websocket_demo.py frame

@@ -87,7 +87,12 @@ def run_stale() -> None:
     print()
     print("   The caller got 100 from a database that says 200.")
     print("   queries is still 1, so nothing in the log shows the write happened.")
-    print("   This is the bug a cache introduces, and nothing else in this course does.")
+    print()
+    print("   Unit 06 already showed a silent wrong answer: json_race.py returns a")
+    print("   200 with data missing. A cache is the second source, and the two are")
+    print("   worth telling apart:")
+    print("     a race loses writes that were meant to happen")
+    print("     a cache returns a value that was correct, and then stopped being so")
     connection.close()
 
 

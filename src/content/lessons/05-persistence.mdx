@@ -573,19 +573,20 @@ $ python cache.py stale
 
    The caller got 100 from a database that says 200.
    queries is still 1, so nothing in the log shows the write happened.
-   This is the bug a cache introduces, and nothing else in this course does.
+
+   Unit 06 already showed a silent wrong answer: json_race.py returns a
+   200 with data missing. A cache is the second source, and the two are
+   worth telling apart:
+     a race loses writes that were meant to happen
+     a cache returns a value that was correct, and then stopped being so
 `}</Terminal>
 
 <Callout type="important" title="盯著 `value` 和 `queries` 這兩欄看">
-  第三次讀取，回傳 `value=100`，而括號裡的 `database says 200` 是我直接去資料庫查到的真相。
+  第三次讀取，回傳 `value=100`，而括號裡的 `database says 200` 是程式直接去資料庫查到的真相。
 
-  **同一個程式裡，兩個數字不一樣。**這就是快取引入的問題，而這門課其他所有內容都不會產生這種矛盾——資料庫的讀寫、併發的加鎖、索引的選用，都不會讓你同時持有兩個互相矛盾的答案。
-</Callout>
+  **同一個程式裡，兩個數字不一樣。**而且 `queries` 還是 1 —— 沒有錯誤、沒有警告、沒有例外，**連 log 都不會記錄到那個 write**。讀取成功、回應 200、數字是舊的。
 
-<Callout type="warning" title="而且它安靜">
-  注意 `queries` 還是 1。**你的 log 裡不會出現任何東西記錄那個 write。**
-
-  沒有錯誤、沒有警告、沒有異常。讀取成功、回應 200、數字是舊的。這是快取最難查的一類 bug：它不會告訴你，只會告訴你一個錯的答案。
+  這是快取最難查的一類問題：**它不告訴你，只給你一個錯的答案。**
 </Callout>
 
 ### 08.1 TTL 限制的是「錯多久」，不是「會不會錯」

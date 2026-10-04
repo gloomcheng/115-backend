@@ -264,7 +264,7 @@ line two
 
 ### 06.1 為什麼需要 boundary：JSON 不需要
 
-這是這一段唯一真正需要理解的地方，也是檔案上傳和 JSON 上傳唯一實質的差別，也是為什麼非要有 boundary 不可。
+這是這一段唯一需要想清楚的地方：**JSON 不需要分隔字串，檔案需要，差別只在一件事。**
 
 <Terminal title="bash — why the delimiter exists" flavor="output">{`
 $ python multipart_demo.py boundary
@@ -334,7 +334,7 @@ $ python multipart_demo.py parse
 
 ### 06.3 一個你會先撞到的框架行為
 
-boundary 懂了，接下來是很實務的一個問題：**你想自己印出原始 bytes**。你會先寫成這樣：
+分隔字串講完了，接下來是一個很實務的問題：**你想自己印出原始 bytes**。你會先寫成這樣：
 
 ```python
 @app.post("/upload")
