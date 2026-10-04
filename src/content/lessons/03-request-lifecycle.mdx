@@ -365,11 +365,161 @@ $ python queue_demo.py idempotent
   那些都是同一個問題的變體：**沒有人在等，所以每一件事都要你自己定規則。**
 </Callout>
 
+## 08. 有 Client 在等，就要有期限
+
+第 07 節的背景工作沒有 Client 在等，所以沒有地方回報成功或失敗。那 Client **在等**的情況呢？
+
+<Callout type="important" title="等待是有代價的，而且代價不在 Client 那邊">
+  第 07 節講「沒有人在等」的麻煩。這一節講相反的麻煩：**有人一直在等，而 Server 讓他等。**
+
+  等待期間，那個處理請求的 worker 是**被你佔住**的。它不是空的、不是在思考，它是在等一個已經遲到的答案。
+</Callout>
+
+### 08.1 沒有期限的請求
+
+<Terminal title="bash — the request that never ends" flavor="output">{`
+$ python timeout_demo.py all
+1. No timeout anywhere
+   elapsed: 3.0s   client saw: HTTP 200
+
+   The client waited. Nothing was wrong with the client.
+   The server spent that whole time sleeping on a dependency that
+   was never going to answer in time.
+
+   That is not a slow response. That is an occupied worker.
+`}</Terminal>
+
+<Callout type="warning" title="`HTTP 200` 讓這一段特別危險">
+  Client 拿到的是**成功**。Server 忠實地完成了它被要求做的事。
+
+  但在那 3 秒裡，能處理其他請求的資源少了一個。**這個成本不會出現在任何一行 log 或任何一個狀態碼裡**，它只表現在「同時能服務幾個人」。
+</Callout>
+
+### 08.2 期限要往下傳，不是事後檢查
+
+<Terminal title="bash — the same call, with the client's deadline" flavor="output">{`
+2. The same call, with a deadline the client sent
+   elapsed: 2.0s   client saw: HTTP 504
+
+   Same server, same slow dependency, same 3 second wait in the
+   dependency. The only difference is that the client said how long
+   it is willing to wait.
+`}</Terminal>
+
+<Callout type="important" title="`504` 不是重點，2.0 秒才是">
+  重點是**同樣那個 3 秒的依賴，這次只佔了 2 秒**。
+
+  差別在於期限是**交給依賴去執行**的，而不是等依賴回來之後才檢查：
+
+  ```python
+  # 錯的：做完才檢查
+  result = call_dependency()
+  if took_too_long:
+      return 504
+
+  # 對的：期限先交下去
+  result = call_dependency(timeout=deadline)
+  if timed_out:
+      return 504
+  ```
+
+  **事後檢查不是 timeout，是一個加在已經浪費掉的工作上面的狀態碼。**worker 還是佔用了同樣的時間，只是不再假裝一切正常。
+</Callout>
+
+### 08.3 三個依賴，一份預算
+
+這是實務上最常錯的地方，而且錯得很自然，因為每一層單獨看都沒問題。
+
+<Terminal title="bash — the budget is spent once and spent three times" flavor="output">{`
+3. Three dependencies, one client budget
+
+   A request that calls A, then B, then C. Each takes 1 second.
+   The client will wait 2 seconds in total.
+
+   after 1 call(s): 1s spent, fits
+   after 2 call(s): 2s spent, fits
+   after 3 call(s): 3s spent, already too late
+
+   Each individual call is well inside the budget. The chain is not,
+   because the budget is spent three times and only available once.
+`}</Terminal>
+
+<Callout type="warning" title="把每一層的 timeout 都設成 Client 的 timeout，是最常見的錯法">
+  因為那樣看起來很安全——每一層都不會比 Client 更早放棄。
+
+  **但整條鏈會超過 Client 的期限**，而最外層是最後才知道自己已經太慢的那一層。Client 早就走了，Server 還在把第三個查詢跑完。
+
+  **正確的算法是遞減的**：最外層拿到 Client 給的期限，**往下傳的時候要減掉自己已經花掉的時間，並且留下一點給後面的步驟。**
+
+  三層的話，每一層實際上只能用到三分之一左右。**而且這個值要寫在程式碼裡當預設值，不要留給部署時臨時決定**——因為設定的人通常不知道呼叫鏈有幾層。
+</Callout>
+
+### 08.4 為什麼這會變成整站掛掉
+
+前面三段講的都是「一個請求變慢」。這一段換成**全部**請求都出問題，因為這才是會讓你半夜醒來的那一種。
+
+<Terminal title="bash — four workers, one slow dependency" flavor="output">{`
+4. Why that becomes a site outage
+
+   The server has 4 workers. Each one is busy while it sleeps.
+
+   One slow dependency, six requests:
+     request 1: worker 1 occupied
+     request 2: worker 2 occupied
+     request 3: worker 3 occupied
+     request 4: worker 4 occupied
+     request 5: worker 1 queued, nobody free
+     request 6: worker 2 queued, nobody free
+
+   After 4 requests every worker is asleep. Request 5 waits,
+   and so does every request after it, including the ones that would
+   have been instant against a healthy dependency.
+`}</Terminal>
+
+<Callout type="warning" title="這叫連鎖故障，重點在最後那句">
+  注意「including the ones that would have been instant against a healthy dependency」。
+
+  **一個慢的依賴不只是讓慢的東西變慢，它把快東西需要的容量也吃掉了。**`/health` 這種零查詢的端點，本來應該永遠回應，但它排在同一條隊伍裡。
+
+  這是為什麼 timeout 不是「效能優化」，是**可用性設計**：
+
+  - 沒有 timeout：worker 被無限期佔用，直到數量用完為止。
+  - 有 timeout：worker 在期限內被釋放，下一個請求拿到真正的答案而不是一個隊伍位置。
+
+  **把 worker 還回去，就是全部。**
+</Callout>
+
+<Callout type="note" title="504 和 503 差在哪，這裡剛好用得上">
+  單元 12 教過 `503` 是「我現在壞掉了」。而 `504` 是「**我等不到我相依的東西**」——它是因為**下游**慢，不是自己壞。
+
+  這個區別在負載平衡器面前很重要：看到大量 `504` 的時候，要處理的是那個變慢的依賴，不是把 Server 開大。
+</Callout>
+
+### 08.5 這門課還沒教、但你會遇到的
+
+<Callout type="important" title="連線池是同一個題目的另一半">
+  timeout 管的是「**這次呼叫最多花多久**」，連線池管的是「**同時最多開幾條連線**」。
+
+  兩者互相衝突：一個 30 秒的 timeout 搭配一個只有 10 條連線的池，意味著只要 10 個慢請求就能讓所有人在排隊。**timeout 開越大，池就越需要放大。**
+
+  真實的設定通常是：timeout 設短一點（2 到 5 秒），池設大一點。**反過來做會得到一個「偶爾卡住而且沒有人知道為什麼」的系統。**
+
+  SQLite 沒有這個問題——第 05 節提過，`BEGIN EXCLUSIVE` 會拒絕而不是排隊。**這個簡單是本機練習的優點，一旦換成網路資料庫就沒有了。**
+</Callout>
+
+<Callout type="note" title="一句話把這節收掉">
+  第 07 節：**沒有人在等**，所以成功與失敗要自己記錄。
+
+  這一節：**有人在等**，所以要告訴他你要等多久，而且要真的在那一刻停下來。
+
+  兩個方向都指向同一件事——**你的 Server 只有有限的資源，而每一個請求都在佔用其中一份。**
+</Callout>
+
 ---
 
-## 08. 終端實戰驗證：五個階段各留一次證據
+## 09. 終端實戰驗證：五個階段各留一次證據
 
-第 07 節那個 job 已經送出去了，現在把五個階段也親眼看一次。接著兩個 Terminal 都開著，逐條跑。
+背景工作與請求期限都談完了，現在回到最初那條路徑：五個階段，每一個都要親眼看一次。接著兩個 Terminal 都開著，逐條跑。
 
 ### 第一步：連線
 
@@ -458,6 +608,20 @@ $ python queue_demo.py idempotent
 
 **第一段是 `effects: 2`，第二段是 `effects: 1`。**同一個重試，唯一差別是那個副作用有沒有記錄自己做過。
 
+### 第八步：給等待設一個期限
+
+第七步的工作沒有 Client 在等。第八步反過來，有人在等。
+
+<Terminal title="bash — step 8, with and without a deadline" flavor="output">{`
+$ python timeout_demo.py all
+1. No timeout anywhere
+   elapsed: 3.0s   client saw: HTTP 200
+2. The same call, with a deadline the client sent
+   elapsed: 2.0s   client saw: HTTP 504
+`}</Terminal>
+
+**第一次回 `200`，第二次回 `504`。**看 `elapsed` 那一行：同樣那個 3 秒的依賴，第二次只佔了 2 秒，因為 Client 這次有說自己只等 2 秒，那個期限往下傳了。
+
 ---
 
 ## 單元實作作業
@@ -474,6 +638,10 @@ $ python queue_demo.py idempotent
 8. 執行 `python queue_demo.py crash`，截圖必須包含 `jobs: 1 (running=1)   effects: 1`。回答：這個狀態下**沒有例外、沒有 log、沒有 Client**——三個在前五課用來發現問題的機制為什麼都沒作用？
 9. 執行 `python queue_demo.py retry` 與 `python queue_demo.py idempotent`，兩張截圖並排，必須分別看到 `effects: 2` 與 `effects: 1`。**回答：這兩次的差別只有哪一個地方？為什麼那個地方必須跟副作用寫在同一個 transaction？**
 10. 回答：如果把你期末專題裡的一件事丟到背景執行，那件事的「成功」由誰確認？在第 01 到 06 課學到的機制裡，有哪一個可以沿用？**如果答案是「沒有」，那你要自己加什麼？**
+11. 執行 `python timeout_demo.py all`，截圖必須包含第 1 段的 `elapsed: 3.0s   client saw: HTTP 200` 和第 2 段的 `elapsed: 2.0s   client saw: HTTP 504`。**回答：兩次的狀態碼不同，這代表第一種情況「成功」了嗎？第一種情況真正的成本是什麼、它會出現在哪裡？**
+12. 讀第 08.2 節那兩段程式碼。**回答：為什麼「做完才檢查」不是 timeout？**如果你把 deadline 傳給依賴，你的程式碼裡誰負責決定依賴要不要放棄？
+13. 算第 08.3 節那個題目：你的專題裡一個請求會呼叫幾個依賴（資料庫、第三方 API、內部服務都算）？**最外層 Client 給你 3 秒，每一層各能用到多少？寫出你的數字。**
+14. 回答第 08.4 節最後那題：假設你的專題有 4 個 worker，某個資料庫查詢變慢到要 10 秒。**回答：`/health` 還會立刻回應嗎？**這是什麼現象的名字，然後哪一個設定是它的解藥？
 
 把作業截圖與簡答筆記存入 `exercises/03-request-lifecycle/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
 
@@ -485,3 +653,5 @@ $ python queue_demo.py idempotent
 - [FastAPI — Bigger Applications and path routing](https://fastapi.tiangolo.com/tutorial/bigger-applications/)
 - [RFC 9110 §15.3.3 — 202 Accepted](https://www.rfc-editor.org/rfc/rfc9110.html#name-202-accepted)
 - [RFC 9110 §15.5.22 — 500 Internal Server Error](https://www.rfc-editor.org/rfc/rfc9110.html#name-500-internal-server-error)
+- [RFC 9110 §15.6.7 — 504 Gateway Timeout](https://www.rfc-editor.org/rfc/rfc9110.html#name-504-gateway-timeout)
+- [RFC 9110 §15.6.4 — 503 Service Unavailable（與 504 的差別）](https://www.rfc-editor.org/rfc/rfc9110.html#name-503-service-unavailable)

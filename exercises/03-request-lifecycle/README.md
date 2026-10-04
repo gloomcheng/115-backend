@@ -48,6 +48,25 @@ curl -i -X DELETE http://127.0.0.1:8000/health
 
 ## 四、沒有 Request 的工作
 
+## 五、有人在等的時候
+
+```bash
+python timeout_demo.py all
+```
+
+不需要任何外部服務——那個「慢的依賴」是一個 `sleep`。輸出只有兩個數字要看：
+
+```
+1. No timeout anywhere
+   elapsed: 3.0s   client saw: HTTP 200
+2. The same call, with a deadline the client sent
+   elapsed: 2.0s   client saw: HTTP 504
+```
+
+第一次回 **200**，但 worker 被佔了 3 秒。第二次回 **504**，而且同樣那個 3 秒的依賴只佔了 2 秒。
+
+**差別不在狀態碼，在期限有沒有往下傳。**事後才檢查不是 timeout，是加在已經浪費掉的工作上面的狀態碼。
+
 ```bash
 python queue_demo.py inline     # 在 Request 裡做
 python queue_demo.py queued     # 丟到佇列，回 202
