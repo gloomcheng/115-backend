@@ -352,19 +352,23 @@ $ python n_plus_one.py scale
     the gap grew from 20x to 500x
 `}</Terminal>
 
+這裡我把程式印的 `time:` 那一行略掉了，因為它跟下面那個警告是同一件事：**每次跑都不一樣的數字，不該出現在你可能會截圖的地方。**語句數留下來，因為那才是這一段的證據。
+
 <Callout type="warning" title="本機的時間數字證明不了任何事，這裡要說清楚">
-  你在自己機器上跑，500 次查詢大概只花 10 毫秒左右，因為 SQLite 是一個檔案，就在你同一顆磁碟上。
+  你在自己機器上跑，500 次查詢確實很快，因為 SQLite 是一個檔案，就在你同一顆磁碟上。**但那個數字每次跑都不一樣** —— 這個檔案連跑四次，同一份工作是 28、66、175、218 毫秒。**6 倍的差距。**
 
-  **那 10 毫秒不是這個問題的證據。**本機的量測只證明一件事：**語句數是 501。**
+  **本機的量測只證明一件事：語句數是 501。**
 
-  真正會出事的地方是每條語句都要多花一次網路來回。用 `python n_plus_one.py latency` 可以看到差別，那一段明確標示了「成本是模擬的，語句數是真的」：
+  所以 `n_plus_one.py latency` 的摘要行**刻意不放本地時間**，只放語句數和模擬成本：
 
   <Terminal title="bash — the same work, with a cost per statement" flavor="output">{`
-    n_plus_one, 20 authors:  21 statements,      1 ms local,     21 ms if each cost 1 ms
-    n_plus_one, 500 authors: 501 statements,     10 ms local,    501 ms if each cost 1 ms
-    join,       20 authors:   1 statements,      1 ms local,      1 ms if each cost 1 ms
-    join,       500 authors:   1 statements,      1 ms local,      1 ms if each cost 1 ms
+    n_plus_one, 20 authors:  21 statements,     21 ms if each statement cost 1 ms
+    n_plus_one, 500 authors: 501 statements,    501 ms if each statement cost 1 ms
+    join,       20 authors:   1 statements,      1 ms if each statement cost 1 ms
+    join,       500 authors:   1 statements,      1 ms if each statement cost 1 ms
   `}</Terminal>
+
+  本地時間還在程式印出來的那幾個區塊裡，只是不在你可能會截圖的那一行。**一個會漂的數字不該放在那裡。**
 
   **500 條語句、每條 1 毫秒，就是半秒。**而且是每一個 Request 都要等半秒，只為了顯示一模一樣的資料。
 </Callout>
@@ -517,7 +521,31 @@ $ python split_demo.py overhttp
 <Callout type="warning" title="先看最後一行，再看中間那兩個數字">
   **答案完全一樣。**這很重要：拆分不會讓你的程式算錯任何東西。
 
-  改變的是**每次呼叫的成本**：從 142 奈秒變成大約 300,000 奈秒，**慢了两千倍以上**。而且這還是兩台都在同一台機器、用 loopback 的最佳情況。真的跨機器再加上網路來回，數字只會更大。
+  改變的是**每次呼叫的成本**。上面那兩個絕對值每次跑都會動，所以倍率不要用手指算 —— `python split_demo.py both` 會把兩條路都跑一次然後自己算：
+
+  <Terminal title="bash — the ratio, computed by the program" flavor="output">{`
+  $ python split_demo.py both
+     in-process function call
+       300 calls in 0.0 ms
+       128 ns per call
+     HTTP call to the other process
+       300 calls in 131.2 ms
+       437,193 ns per call
+
+     ratio: 3,410x more expensive per call
+
+     Do not quote that ratio. Across six runs with pauses it moved
+     between about 1,500x and about 7,900x, because the HTTP side
+     carries whatever else this machine is doing. What holds every
+     time is the order of magnitude: hundreds of nanoseconds against
+     hundreds of microseconds. Three orders, at least a thousandfold.
+  `}</Terminal>
+
+  **那個倍率不要引用。**我第一次量它時連跑四次，落在 2,300 到 3,400，看起來很穩；**加上間隔再跑六次，它變成 1,476 到 7,851。**同樣是那個 `both`，同一台機器，差距 5.3 倍 —— 因為 HTTP 那邊的成本裡面包含了這台機器當下在做什麼。
+
+  **每次都成立的是數量級：幾百奈秒對上幾百微秒，三個數量級，至少千倍以上。**這才是結論；具體幾千倍是這台機器、這個負載的性質，不是這堂課的。
+
+  而且這還是兩台都在同一台機器、用 loopback 的最佳情況。真的跨機器再加上網路來回，數字只會更大。
 
   **所以「要不要拆」從來不是效能問題，是部署與擁有權的問題。**想清楚那一點，就不會為了「跑得快」去拆。
 </Callout>
@@ -649,9 +677,14 @@ $ python split_demo.py overhttp
      295,438 ns per call
 
    identical : True
+
+$ python split_demo.py both
+   ratio: 3,410x more expensive per call
 `}</Terminal>
 
-**答案一樣，慢了兩千倍。**這就是呼叫跨過行程的價格，而這還只是同一台機器上的 loopback，還沒真的上網路。
+**答案一樣，慢了幾千倍。**具體幾千倍每次跑都不一樣（我量到的區間是 1,476 到 7,851），所以看 `both` 印的那個 `ratio:` 知道量級就好，不要自己用兩個絕對值去算，也不要把某一次的數字寫進報告。
+
+這就是呼叫跨過行程的價格，而這還只是同一台機器上的 loopback，還沒真的上網路。
 
 ### 第三步：撞到 method 的牆
 
@@ -691,9 +724,9 @@ $ python split_demo.py overhttp
 7. 執行 `python n_plus_one.py small`，截圖必須包含 `total: 21 statements for 20 authors` 與 `identical result: True`。**回答：那個 `21` 是怎麼算出來的？為什麼 `identical result: True` 是這一段最重要的那一行？**
 8. 執行 `python n_plus_one.py scale`，截圖必須包含 `n_plus_one, 500 authors` 的 `statements: 501` 與 `join, 500 authors` 的 `statements: 1`。**回答：兩種寫法回傳的資料有分別嗎？語句數差多少倍？**
 9. 執行 `python n_plus_one.py indexed`，截圖必須包含 `501 statements` 與 `SEARCH notes USING INDEX`。**回答：加了索引之後每一條語句都變快了，語句數有變少嗎？為什麼索引救不了 N+1？**
-10. 執行 `python n_plus_one.py latency`，截圖必須包含 `501 statements` 與 `501 ms if each cost 1 ms`。**回答：這一行的 `ms local` 是不是真實的量測？`if each cost 1 ms` 是量出來的還是你加上去的？寫出你會怎麼取得真實的網路往返時間。**
+10. 執行 `python n_plus_one.py latency`，截圖必須包含 `501 statements` 與 `501 ms if each statement cost 1 ms`。**回答：這一行裡哪個數字是真實的量測、哪個是加上去的？程式把本地時間放在摘要行裡嗎？為什麼不放在？寫出你會怎麼取得真實的網路往返時間。**
 11. 在你自己的專題資料模型上找一個 N+1：`grep -n "for .* in " *.py`，找出迴圈裡有沒有查資料庫。回答：**你找到的迴圈裡有查詢嗎？如果有，那是第幾層的迴圈？**（兩層迴圈各自再查一次，會是幾條語句？）
-12. 執行 `python split_demo.py inprocess` 與 `python split_demo.py overhttp`，兩張截圖都要包含 `ns per call`。**回答：慢了多少倍？回傳的資料有沒有不同？用第 07.1 節的結論回答：這是效能問題還是部署問題？**
+12. 執行 `python split_demo.py both`，截圖必須包含 `ratio:` 那一行。**然後再執行一次，兩張截圖的 `ratio:` 差多少？回傳的資料有沒有不同？用第 07.1 節的結論回答：這是效能問題還是部署問題？**
 13. 執行 `python split_demo.py overhttp`，截圖必須包含 `client gave up after 1s`。**回答：對方的行程有死掉嗎？這種狀況在同一個行程裡存在嗎？為什麼？**
 14. 回答第 07.3 節的三個問題，用你自己的專題回答：
     - 如果你把「訂單」和「使用者」拆成兩個服務，`create_order` 和扣庫存之間的 rollback 還做得到嗎？你會用什麼取代它？

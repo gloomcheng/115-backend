@@ -2,6 +2,7 @@
 
     python split_demo.py inprocess   # two modules, one process, direct call
     python split_demo.py overhttp    # two processes, HTTP between them
+    python split_demo.py both        # both paths, and the ratio between them
     python split_demo.py trigger     # when to split, and when not to
     python split_demo.py all
 
@@ -97,6 +98,32 @@ def bench(callable_, label: str) -> float:
     return elapsed_ns / CALLS
 
 
+def run_both() -> None:
+    """Run the two paths and print the ratio, so the multiplier has a source.
+
+    The lesson argues from the ratio. If the ratio only exists in prose, it
+    drifts the moment either timing moves, which both of them do.
+    """
+    direct_ns = bench(total_for_user, "in-process function call")
+    server = ThreadingHTTPServer(("127.0.0.1", PORT_B), Handler)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    time.sleep(0.3)
+    try:
+        over_ns = bench(user_total_overhttp, "HTTP call to the other process")
+    finally:
+        server.shutdown()
+
+    print()
+    print(f"   ratio: {over_ns / direct_ns:,.0f}x more expensive per call")
+    print()
+    print("   Do not quote that ratio. Across six runs with pauses it moved")
+    print("   between about 1,500x and about 7,900x, because the HTTP side")
+    print("   carries whatever else this machine is doing. What holds every")
+    print("   time is the order of magnitude: hundreds of nanoseconds against")
+    print("   hundreds of microseconds. Three orders, at least a thousandfold.")
+
+
 def run_inprocess() -> None:
     print("1. Two modules, one process")
     print()
@@ -179,7 +206,12 @@ def run_trigger() -> None:
 
 def main() -> None:
     mode = sys.argv[1] if len(sys.argv) > 1 else "all"
-    runners = {"inprocess": run_inprocess, "overhttp": run_overhttp, "trigger": run_trigger}
+    runners = {
+        "inprocess": run_inprocess,
+        "overhttp": run_overhttp,
+        "both": run_both,
+        "trigger": run_trigger,
+    }
     if mode == "all":
         for runner in runners.values():
             runner()

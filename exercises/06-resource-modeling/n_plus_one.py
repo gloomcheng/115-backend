@@ -172,8 +172,9 @@ def run_indexed() -> None:
 def run_latency() -> None:
     print("4. Why the local numbers look harmless, and where they stop being so")
     print()
-    print("   Above: 501 statements cost about 10 ms, because SQLite is a file on")
-    print("   this same disk. That number proves nothing about a real deployment.")
+    print("   The local timings below come out of this machine and move between")
+    print("   runs, because SQLite is a file on the same disk and the work is")
+    print("   measured in microseconds. They prove nothing about a deployment.")
     print()
     print("   Here is the same work with a fixed cost per statement, which is what a")
     print("   network round trip to PostgreSQL or MySQL actually adds. The cost is")
@@ -186,15 +187,19 @@ def run_latency() -> None:
     for count in (20, 500):
         run(f"join,       {count} authors", fetch_join, count)
     print()
-    for label, statements, elapsed, _ in _REPORTS:
+    for label, statements, _elapsed, _ in _REPORTS:
         added = statements * latency_ms
         print(
             f"    {label}: {statements:>3} statements, "
-            f"{elapsed:>6.0f} ms local, {added:>6.0f} ms if each cost {latency_ms:g} ms"
+            f"{added:>6.0f} ms if each statement cost {latency_ms:g} ms"
         )
     print()
     print("   500 statements at 1 ms each is half a second of waiting, on every")
     print("   single request, for a page that shows the same rows either way.")
+    print()
+    print("   The local timings are in the blocks above, not in that summary,")
+    print("   on purpose. They moved by 6x across four runs of this file, so a")
+    print("   line you might screenshot is the wrong place for one.")
 
 
 _REPORTS: list = []
