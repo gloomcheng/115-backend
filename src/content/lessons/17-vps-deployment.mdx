@@ -730,19 +730,25 @@ security  Scan Git history with Gitleaks  WRN  leaks found: 5
 $ python review_demo.py sizes
 1. How large are the diffs this repository asks someone to review?
 
-   commits measured      : 43
-   median lines changed  : 938
-   75th percentile       : 1295
+   commits measured      : 50
+   median lines changed  : 886
+   75th percentile       : 1268
    90th percentile       : 2100
    largest single commit : 9208
 `}</Terminal>
 
+<Callout type="note" title="這個數字每次 commit 都會變">
+  `review_demo.py sizes` 量的是**這個 repository 到今天為止的 git 歷史**，所以每多一個 commit 它就重算一次。上面是寫這段文字當時的值，你現在跑會看到不同的數字。
+
+  **要看的不是那個數字，是「中位數是不是大到離譜」。**它是三位數，那結論就成立；它掉到兩位數，那是我後來把 commit 切細了，同樣是好事。
+</Callout>
+
 <Callout type="warning" title="這不是稱讚，這是問題">
-  **中位數 938 行。**這是這份教材過去每一個 commit 的規模，而它是我一個人寫的、沒有別人 review。
+  **中位數 886 行。**這是這份教材過去每一個 commit 的規模，而它是我一個人寫的、沒有別人 review。
 
   人的工作記憶不會隨著 diff 長大。超過幾百行之後，讀的人就開始用「這個改動看起來該長什麼樣」去判斷，而不是真的讀。
 
-  所以正確的結論是：**中位數 938 行的 commit 是不該被 review 的**，而這正是第 10.5 節說「大改動要拆成幾塊送」的原因。
+  所以正確的結論是：**中位數將近九百行的 commit 是不該被 review 的**，而這正是第 10.5 節說「大改動要拆成幾塊送」的原因。
 
   這支程式是在拿這份教材量它自己。**如果你在自己的專題上跑它而數字很好看，那多半表示你最近沒有真的在送東西上去。**
 </Callout>
@@ -753,22 +759,28 @@ $ python review_demo.py sizes
 $ python review_demo.py mechanical
 2. What a script can check
 
-   scanning 24 exercise files, excluding this one
+   scanning 26 exercise files, excluding this one
 
    bare except
      0 hit(s): nothing
    todo left behind
      0 hit(s): nothing
    printed instead of logged
-     443 hit(s): exercises/02-url/multipart_demo.py:35, ...
+     554 hit(s): exercises/02-url/multipart_demo.py:35, ...
    hardcoded host and port
      28 hit(s): exercises/02-url/multipart_demo.py:15, ...
 `}</Terminal>
 
+<Callout type="note" title="你那邊的數字會不一樣，而且那才是重點">
+  這四條量的是**這份教材練習目錄裡的檔案**，所以它會隨著教材增減而變動。寫下來是 554，換一個 repo 可能完全不同。
+
+  **要看的不是那個數字，是「它是零還是不是零」。**零代表這份程式碼裡沒有那個問題；數百代表規則跟這個目錄的寫法不相容。
+</Callout>
+
 **四條全部都是 grep 加正規表示式。**沒有模型、沒有判斷、不需要理解任何事——這是它們的優點，也是它們的極限。**而這份清單有反方向。**
 
-<Callout type="important" title="那個 443 是這一節的重點，不是雜訊">
-  「不要用 print，用 log」這條規則**沒有錯**，但是在這 24 個檔案裡有 443 個 `print(`。
+<Callout type="important" title="那個五百多次是這一節的重點，不是雜訊">
+  「不要用 print，用 log」這條規則**沒有錯**，但是在這 26 個檔案裡有五百多個 `print(`。
 
   因為它們是**命令列教材程式，stdout 就是它們的介面**。每一個 `print` 都是正確的。那條規則是針對網頁服務的，而那裡的 stdout 有別的用途。
 

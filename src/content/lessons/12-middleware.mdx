@@ -380,7 +380,7 @@ x-ratelimit-remaining: 27
 `}</Terminal>
 
 <Callout type="note" title="為什麼是 30 不是 5">
-  `RATE_LIMIT = 30`。這支程式同時還要跑本單元其他八步的練習，限流太緊的話學生會在做毫不相干的作業時收到 `429`。
+  `RATE_LIMIT = 30`。這支程式同時還要跑本單元第 1 到 8 步的練習，限流太緊的話學生會在做毫不相干的作業時收到 `429`。
 
   想提早看到拒絕，就把 `main.py` 裡那個數字改小。**限流值是政策，不是常數。**
 </Callout>
@@ -696,7 +696,9 @@ bad csrf token [403]
 
 ## 09. 終端實戰驗證
 
-第 08 節的限流與 CSRF 都做完了，下面回到 `main.py`。Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`，Terminal 2 已經把 `$STUDENT` 和 `$ADMIN` 放出來了。這支 API 的下面十步照順序做，每一步都先看指令再看截圖要求。**第 9 步會重啟 Terminal 1，重啟之後就不要再打其他請求**，否則第 10 步拿到的不是 `429`。
+第 08 節的限流與 CSRF 都做完了，下面回到 `main.py`。Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`，Terminal 2 已經把 `$STUDENT` 和 `$ADMIN` 放出來了。這支 API 的下面十四步照順序做，每一步都先看指令再看截圖要求。
+
+**第 1 到 10 步打的是 8005，第 11 到 14 步換成 8006、8007、8008、8010，所以兩組互不干擾。**第 9 步會重啟 Terminal 1，重啟之後在做完第 10 步之前不要再打 8005，否則第 10 步拿到的不是 `429`。
 
 1. 先打一個這支 API 沒有定義的路徑：`curl -i http://127.0.0.1:8005/nope`。截圖必須同時包含 `404`、`x-request-id` 與 `x-trace`，因為中介軟體有沒有執行，證據就在那兩個 Header 上。
 2. 接著看巢狀順序：`curl -i http://127.0.0.1:8005/open | rg -i '^x-trace'`。把 `outer:in > inner:in > inner:out > outer:out` 整串抄下來，這是第 02 節的證據。
