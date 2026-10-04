@@ -267,21 +267,21 @@ def read_token(token: str) -> dict:
 {"detail":"Token expired"}
 `}</Terminal>
 
-還是 `401`。`payload` 裡有兩個時間欄位：
+還是 `401`。把這枚 token 解開看：
 
-<Terminal title="the two timestamps in the payload" flavor="output">{`
+<Terminal title="the one timestamp in the payload" flavor="output">{`
 {
   "sub": "iris",
   "role": "student",
-  "iat": 1790950261,
-  "exp": 1790953861
+  "exp": 1791134039
 }
 
-iat = issued at   簽發時間
 exp = expiration  到期時間
 `}</Terminal>
 
-**Server 必須自己檢查 `exp`。** 簽名有效只證明「這段 payload 沒被改過」，不證明「這段 payload 現在還成立」。這兩件事都是 Server 的責任，而 Client 完全查不出來 —— Client 只是把字串轉交出去。
+**這枚 payload 只有一個時間欄位，而且 Server 只認它。**對照第 03 節那枚正常的 token —— 那裡有 `iat` 和 `exp` 兩個，這裡只有 `exp`，因為 `main.py` 的 `login-expired` 沒有簽發時間可填。
+
+差別在於兩件事：`iat` 只是**資訊**（「這是什麼時候發的」），`exp` 是**契約**（「超過這個時刻就不算數」）。Server 必須自己檢查 `exp`，因為簽名有效只證明「這段 payload 沒被改過」，不證明「這段 payload 現在還成立」。這兩件事都是 Server 的責任，而 Client 完全查不出來 —— Client 只是把字串轉交出去。
 
 <Callout type="note" title="這是無狀態的代價">
   因為 Server 不保存狀態，它無法「把你的登入清掉」。Token 到期或被竊取，唯一能做的就是讓它在時間上失效，或把密鑰換掉讓所有 token 一起失效。單元 12 會處理「怎麼讓已發出的 token 提前失效」這個問題。
@@ -368,7 +368,7 @@ curl -i http://127.0.0.1:8004/admin -H "Authorization: Bearer $(cat /tmp/tampere
 5. 用正確的學生 token 打 `/admin`，截圖必須包含 `403`。**對照第 3 步，寫出這兩個回應的 Header 差異。**
 6. 用過期的 token 打 `/private`，截圖必須包含 `401` 與 `Token expired`。回答：簽名有效和 token 還能用，是同一件事嗎？
 7. 用一句話回答：`401` 與 `403` 各自在問什麼問題？把答案寫成「誰該去修什麼」。
-8. 回答：如果你把 `{"user_id": 7, "is_admin": true}` 放進 payload，Server 會怎麼處理 `is_admin`？這和單元 10 最後那個未宣告欄位是同一個問題嗎？
+8. 回答：如果你把 `{"user_id": 7, "is_admin": true}` 放進 payload，Server 會怎麼處理 `is_admin`？這和單元 10 第 06 節「一個沒被擋下來的問題」那個未宣告欄位是同一個問題嗎？
 
 把作業截圖與簡答筆記存入 `exercises/11-auth/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
 
