@@ -76,6 +76,28 @@ curl -s -X POST http://127.0.0.1:8007/graphql -H 'Content-Type: application/json
 
 省下 42 個位元組，毫無意義。重點是**誰決定回應形狀**。
 
+## 七、WebSocket：不用任何函式庫
+
+```bash
+python websocket_demo.py key      # 握手裡那一行數學
+python websocket_demo.py frame    # 一則訊息在線上長什麼樣
+python websocket_demo.py serve    # 純 socket 的 Server，8014
+python websocket_demo.py client   # 手動講協定的 Client
+```
+
+前兩個模式直接印，不需要開任何東西。`serve` 和 `client` 要分兩個 Terminal。
+
+握手會回：
+
+```
+HTTP/1.1 101 Switching Protocols
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+```
+
+**這個值裡沒有密碼。**它證明的是「對方看得懂 HTTP」，不是「對方是誰」。權限要自己在第一則訊息裡帶。
+
+最值得看的是 frame：Server 送 `81 05 68 65 6c 6c 6f`，Client 送 `81 82 01 02 03 04 69 6b`。**payload 都可以是文字，但第二個位元組差了一個 mask bit。**
+
 ## 契約檔（讀，不跑）
 
 - `notes.proto` — gRPC 的契約

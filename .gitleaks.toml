@@ -1,0 +1,23 @@
+# gitleaks configuration
+#
+# The default ruleset is used unchanged. The single exception below is a
+# published specification example, not a credential.
+
+title = "115-backend gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+RFC 6455 section 1.3 uses the nonce dGhlIHNhbXBsZSBub25jZQ== in its worked
+handshake example; it base64-decodes to the string "the sample nonce" and is
+quoted verbatim from the RFC. Unit 14 uses that exact value so students can
+reproduce the specification's own expected Sec-WebSocket-Accept, which is
+s3pPLMBiTxaQ9kYGzzhZRbK+xOo=. It is a documentation constant, published in
+the RFC itself, and grants nothing.
+"""
+regexes = [
+  '''dGhlIHNhbXBsZSBub25jZQ==''',
+  '''s3pPLMBiTxaQ9kYGzzhZRbK\+xOo=''',
+]

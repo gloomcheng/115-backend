@@ -332,9 +332,160 @@ service NoteService {
   你在職場上讀到一份 API 契約時，真正要問的是：**這份契約的作者把什麼換掉了？**因為那個取捨決定了它會在哪裡壞掉。
 </Callout>
 
+## 07. WebSocket：HTTP 換掉自己
+
+前六節在比較五種 API 風格，它們的共同點是**都是 Request／Response**：Client 問一次，Server 答一次，然後結束。
+
+有一類需求這個形狀做不了：聊天室、通知、協作編輯、股票報價、遊戲。共同點是**只有 Server 知道的東西發生了變化**，而 Client 沒有問。
+
+<Terminal title="bash — the whole handshake, in one exchange" flavor="output">{`
+$ python websocket_demo.py client
+--- response ---
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+--- end ---
+`}</Terminal>
+
+<Callout type="important" title="`101` 是 HTTP 裡唯一一個「換掉規則」的狀態碼">
+  其他所有狀態碼都在說「這次請求的結果是什麼」，`101` 說的是「**接下來的對話不再照 HTTP 的規則走**」。
+
+  連線**沒有變成新的連線**。是同一個 TCP 連線、同一個 port，交換完握手之後，兩邊開始講另一種語言。
+</Callout>
+
+### 07.1 握手上只有一行數學
+
+<Terminal title="bash — reproduce the spec's own example" flavor="output">{`
+$ python websocket_demo.py key
+1. The handshake, and the one piece of maths in it
+
+   The Client sends a random key and asks to switch protocol:
+
+     Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+     Sec-WebSocket-Version: 13
+
+   The Server answers 101 and returns a value derived from that key:
+
+     sha1(dGhlIHNhbXBsZSBub25jZQ== + GUID) -> base64 = s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+
+   That value is RFC 6455's own worked example, and this program
+   reproduces it without a library.
+`}</Terminal>
+
+<Callout type="warning" title="注意：整個握手沒有密碼">
+  握手的全部意義是：**證明對方真的懂 HTTP。**
+
+  一個只會轉發位元組的中繼裝置看不到 Header 裡的 key，也就算不出那個 `accept`。所以這個值能證明「這個人會解析 HTTP」，但**它跟身分驗證毫無關係**。
+
+  誰都可以送出任何 key 然後算出對應的 accept。**它防的是中間人，不是攻擊者。**
+
+  換句話說：連上了不等於登入了。權限還是要在第一個訊息裡自己帶。
+</Callout>
+
+### 07.2 訊息長什麼樣：先讀長度
+
+握手之後就不是 HTTP 了。`101` 只保證了「換成功了」，訊息本身怎麼編，是另一件事。`websocket_demo.py frame` 會把 Server 的一則訊息在線上的樣子印出來：
+
+<Terminal title="bash — one message, annotated" flavor="output">{`
+$ python websocket_demo.py frame
+2. A message, and why you cannot just read until EOF
+
+   An HTTP body says how long it is. This is that header:
+
+     Content-Length: 317
+     317 bytes follow, then the body is over.
+
+   A WebSocket message carries its length in the first two bytes of
+   the frame instead. Here is the frame for the text 'hi':
+
+     81 82                <- 0x81 FIN+text, 0x82 length
+     01 02 03 04          <- masking key, chosen by the Client
+     69 6b                <- payload, XORed with the key
+
+   Undo the XOR and the message comes back:
+     69 6b XOR 01 02 03 04 = b'hi'
+`}</Terminal>
+
+<Callout type="important" title="這一段是整個 WebSocket 最會讓人卡住的地方">
+  **HTTP 會結束。**`Content-Length: 317` 說了「接下來 317 個位元組，然後 Body 結束」，所以讀完就結束，連線可以關。
+
+  **WebSocket 不會結束。**沒有 `Content-Length`，也沒有「讀到 EOF」——連線就是一直開著，等下一則訊息。
+
+  所以原本那句 `data = connection.recv(4096)` **在這裡會直接把你卡死**：它會一直等下一則訊息，而下一則可能十分鐘後才來。
+
+  正確的讀法是：**先讀前兩個位元組，看出這一 frame 有多長，再讀那麼多。**第 08 節那個 `serve` 就是這樣寫的。
+</Callout>
+
+<Callout type="note" title="為什麼要 mask">
+  規格要求 **Client 送出時必須 mask，Server 送出時必須不 mask。**
+
+  理由是防止「快取污染攻擊」：假設你連到的是某個中間快取，它只認得 `GET /x.png` 開頭的位元組。一個壞掉的 Server 如果發出看起來像某個已知 URL 的位元組，中間快取就可能把攻擊者的回應存成那個資源的內容，害到下一個人。
+
+  Masking 讓「Client 送出的位元組」不可能剛好等於任何有意義的位元組串。**它是一個很冷門但真實的攻擊，規格裡就寫著。**
+</Callout>
+
+### 07.3 真的跑一次
+
+上面那些位元組是印出來的，還沒有真的走過一條連線。`websocket_demo.py` 是一支**不用任何函式庫**的 Server，只有 `socket`。兩個 Terminal：
+
+```bash
+python websocket_demo.py serve     # Terminal 1
+python websocket_demo.py client    # Terminal 2
+```
+
+<Terminal title="Terminal 1 — the server, raw bytes" flavor="output">{`
+raw WebSocket server on 127.0.0.1:8014
+--- request as received ---
+GET /chat HTTP/1.1
+Host: 127.0.0.1:8014
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Version: 13
+--- end ---
+--- server computed accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo= ---
+--- frame from client: 81 82 01 02 03 04 69 6b ---
+--- unmasked payload: b'hi' ---
+`}</Terminal>
+
+<Terminal title="Terminal 2 — the client" flavor="output">{`
+server frame bytes: 81 05 68 65 6c 6c 6f
+opcode 0x81, length 5, payload b'hello'
+`}</Terminal>
+
+<Callout type="important" title="比對兩個 frame 的差別，那個差別就是規格">
+  Server 送出的是 `81 05 68 65 6c 6c 6f`——第二個位元組是 `0x05`，沒有 mask bit。
+
+  Client 送出的是 `81 82 01 02 03 04 69 6b`——第二個位元組是 `0x82`，`0x80` 就是 mask bit，後面多四個位元組的 key。
+
+  **`0x05` 對 `0x82`，其他一模一樣。**整個 WebSocket 的方向不對稱性就在這一個 bit 上。
+</Callout>
+
+### 07.4 什麼時候不該用 WebSocket
+
+<Callout type="important" title="如果 Client 每 30 秒問一次「有沒有新的」，HTTP 就夠了">
+  WebSocket 的成本是真的：一條常開的 TCP 連線、Server 端每個 Client 都有記憶體、Nginx 之類的代理要另外設定才能轉發。
+
+  判斷標準只有一個：**變化是不是由 Client 觸發的。**
+
+  - Client 問、Server 答（讀資料、下單）→ **HTTP。**
+  - Server 有事要說，Client 沒問（有人留言、價格變了）→ **才需要 WebSocket。**
+
+  「有更新的時候通知我」聽起來像 WebSocket，但**長輪詢（long polling）也能做**，而且不需要改基礎設施。**先用最簡單的能用的那個。**
+</Callout>
+
+<Callout type="warning" title="三個 WebSocket 特有的、HTTP 沒有的問題">
+  1. **重新連線。**手機切網路、Proxy 逾時，連線會斷，而且斷的時候 Server 那邊不一定知道。**你要自己寫重連邏輯，而每一次重連都要考慮「我漏掉了什麼」。**
+  2. **沒有狀態碼。**握手之後就沒有 `200`／`404` 了。一則訊息處理失敗，Client 只能從你自訂的內容判斷。
+  3. **連線數量。**一萬個 Client 就是一萬條連線。單元 12 講過的限流和單元 16 的多個行程，在這裡都要重新考慮。
+
+  這三個都不是「學會協定」就會解決的，它們是架構問題。
+</Callout>
+
 ---
 
-## 07. 終端實戰驗證
+## 08. 終端實戰驗證
 
 上面那張表是這一課唯一要背的東西。剩下五組指令是它的證據來源，Terminal 1 跑著 `fastapi dev main.py --port 8007`，Terminal 2 照順序跑：
 
@@ -343,6 +494,8 @@ service NoteService {
 3. 然後送 `{ notes { name nickname } }`，截圖必須包含 `200 OK`、`"data":null`、`Did you mean 'name'?`。回答：為什麼這裡不是 `422`？
 4. 再送 `POST /notes` 帶 `{"name":"t1","title":"T","is_admin":true,"colour":"red"}`，截圖必須包含 `200` 並且 Body **沒有** `is_admin`。和第 3 步並排，寫出這兩次的差異。
 5. 最後 `curl -s http://127.0.0.1:8007/notes | wc -c`、`{ notes { name title } } | wc -c`、`{ notes { name title tags } } | wc -c` 三個數字都要截圖。
+6. 開 Terminal 3 跑 `python websocket_demo.py serve`，Terminal 4 跑 `python websocket_demo.py client`。截圖必須包含 `HTTP/1.1 101 Switching Protocols` 和 Server 端印出的 `-- server computed accept`。**回答：那個 `101` 是在說什麼？它跟前面五步用過的所有狀態碼有什麼不同？**
+7. 同一組連線，截圖兩邊的 frame：Server 的 `81 05 68 65 6c 6c 6f` 和 Client 的 `81 82 01 02 03 04 69 6b`。**回答：兩個 frame 的 payload 都是文字，長度也不一樣。第二個位元組的差別代表什麼？為什麼規格只要求一邊 mask？**
 
 ---
 
@@ -358,6 +511,11 @@ service NoteService {
 6. `GET /nothing-here` 的截圖（必須含 `404` 與 `Not Found`）。和第 5 步的第一張並排，寫出這兩個 `404` 在語意上的差別，以及 Client 該如何分辨。
 7. 打開 `exercises/14-api-families/notes.proto` 與 `trpc-contract.ts`，各寫一句話說明它們**沒有**被這一堂課執行是為什麼。回答：`.proto` 與 TypeScript router，哪一個是「原始碼」、哪一個是「從原始碼產生的東西」？
 8. 回答：SOAP 的 WSDL 和 gRPC 的 `.proto` 都是「讓 Client stub 自動產生」的東西，這兩件事差別在哪？回答之後，用自己的話說明 tRPC 放棄了什麼、換來了什麼。
+9. 執行 `python websocket_demo.py key`，截圖必須包含 `s3pPLMBiTxaQ9kYGzzhZRbK+xOo=`。**回答：那個值是誰算出來的？它能證明什麼、又不能證明什麼？為什麼整個握手裡沒有密碼？**
+10. 執行 `python websocket_demo.py frame`，截圖必須包含 `81 82`、`69 6b` 和 `XOR 01 02 03 04 = b'hi'`。**回答：HTTP 的 Body 靠什麼知道結束？WebSocket 靠什麼？為什麼「讀到 socket 關閉為止」在這裡會卡住？**
+11. 開兩個 Terminal 跑 `python websocket_demo.py serve` 與 `python websocket_demo.py client`，截圖必須包含 Server 端的 `--- server computed accept` 和兩邊的 frame。**回答：Server 送的是 `81 05 68 65 6c 6c 6f`，Client 送的是 `81 82 01 02 03 04 69 6b`。第二個位元組差在哪？那一個位元組代表什麼？**
+12. 把 Client 的 mask 改成 `00 00 00 00`，重送一次。**回答：`Sec-WebSocket-Accept` 會變嗎？payload 會變嗎？這兩件事為什麼是獨立的？**
+13. 回答：你的期末專題如果有「有人留言時即時通知」這個需求，你會用 WebSocket 嗎？**先用第 07.4 節的判斷標準寫下結論和理由**，如果你選長輪詢，寫出你要多久問一次以及那個間隔怎麼選。
 
 把作業截圖與簡答筆記存入 `exercises/14-api-families/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。`main.py`、`notes.proto` 與 `trpc-contract.ts` 都是課堂教材，**不要**修改。
 
@@ -371,3 +529,6 @@ service NoteService {
 - [gRPC — Core Concepts（`.proto` 與 stub 產生）](https://grpc.io/docs/what-is-grpc/core-concepts/)
 - [tRPC — Server routers](https://trpc.io/docs/server/routers)
 - [RFC 9110 — HTTP Semantics（`404` 與狀態碼定義）](https://datatracker.ietf.org/doc/html/rfc9110)
+- [RFC 6455 §1.3 — Opening Handshake（`Sec-WebSocket-Key` 與那個 GUID）](https://www.rfc-editor.org/rfc/rfc6455.html#section-1.3)
+- [RFC 6455 §5.2 — Base Framing Protocol（frame 的長度與 mask）](https://www.rfc-editor.org/rfc/rfc6455.html#section-5.2)
+- [MDN — WebSocket API（瀏覽器端怎麼用）](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
