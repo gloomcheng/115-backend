@@ -33,3 +33,6 @@ node scripts/a11y-check.mjs
 
 echo "8. Running CJK spacing check on staged files..."
 node scripts/cjk-spacing-check.mjs --staged
+
+echo "9. Running render integrity guard on staged files..."
+node scripts/render-integrity-harness.mjs --staged

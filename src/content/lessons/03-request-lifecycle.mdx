@@ -523,7 +523,7 @@ $ python timeout_demo.py all
 
   真實的設定通常是：timeout 設短一點（2 到 5 秒），池設大一點。**反過來做會得到一個「偶爾卡住而且沒有人知道為什麼」的系統。**
 
-  SQLite 沒有這個問題——第 05 節提過，`BEGIN EXCLUSIVE` 會拒絕而不是排隊。**這個簡單是本機練習的優點，一旦換成網路資料庫就沒有了。**
+  SQLite 沒有這個問題——單元 05 第 05 節做過同一個實驗，那裡的 writer B 收到 `database is locked`，是拒絕而不是排隊。**這個簡單是本機練習的優點，一旦換成網路資料庫就沒有了。**
 </Callout>
 
 <Callout type="note" title="一句話把這節收掉">

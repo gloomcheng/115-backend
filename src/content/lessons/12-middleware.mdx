@@ -548,7 +548,7 @@ $ python rate_limit.py bucket
 <Callout type="warning" title="但這是結構上的幸運，不是有人想過">
   這個設計擋住 CSRF，是因為 token 放在 Header 裡。**它沒有做任何 CSRF 防護**——沒有 token 比對、沒有 Origin 檢查。
 
-  所以第 06 節的結論要說完整：JWT 是無狀態的，但「無狀態」不等於「自動安全」。這個安全性來自你選的傳輸方式，不是來自 JWT。
+  所以第 07 節的結論要說完整：JWT 是無狀態的，但「無狀態」不等於「自動安全」。這個安全性來自你選的傳輸方式，不是來自 JWT。
 </Callout>
 
 ### 08.7 把 Cookie 放回去，漏洞就回來了

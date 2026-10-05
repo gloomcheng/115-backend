@@ -164,7 +164,7 @@ curl -i -X DELETE http://127.0.0.1:8000/users/bob
   </soapenv:Envelope>'
   `}</Terminal>
 
-  同一個「建立一個使用者」，REST 的 Body 是 `{"name":"bob"}` 共 14 個位元組，這個 SOAP envelope 是 267 個位元組，約 19 倍。回應的 `json` 欄位會是 `null`，因為它確實不是 JSON。
+  同一個「建立一個使用者」，REST 的 Body 是 `{"name":"bob"}` 共 14 個位元組，這個 SOAP envelope 是 281 個位元組，約 20 倍。回應的 `json` 欄位會是 `null`，因為它確實不是 JSON。
 
   SOAP 的設計比 REST 早了十年就有 contract-first：介面由 WSDL 定義，再產生各語言的 stub，所以型別錯誤在建置期就被抓到。代價是 XML 肥大、瀏覽器不會用、很多防火牆擋掉。它現在活在金融、醫療與政府的系統整合裡。你會在文件、log 與工程師對話中遇到它；`[SOAP 1.1 規格](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/)` 定義了 `Envelope` 與 `Fault` 的結構。
 

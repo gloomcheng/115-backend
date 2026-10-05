@@ -67,6 +67,16 @@ const STAGES = [
     args: ['scripts/reading-window-harness.mjs'],
   },
   {
+    name: 'Render Integrity Guard',
+    cmd: 'node',
+    args: ['scripts/render-integrity-harness.mjs'],
+  },
+  {
+    name: 'Render Integrity Guard Tests',
+    cmd: 'node',
+    args: ['scripts/tests/render-integrity-harness.test.mjs'],
+  },
+  {
     name: 'Image Legal & Quality Audit Guard',
     cmd: 'node',
     args: ['scripts/image-audit-harness.mjs'],

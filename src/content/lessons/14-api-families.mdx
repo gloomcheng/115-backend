@@ -236,7 +236,7 @@ SOAP 1.1 讓伺服器端先產出一份 WSDL（Web Services Description Language
 
   REST 完全沒有這個機制——`{"titel": "..."}` 送到 Server，Server 若沒宣告就丟掉（單元 10），你會到 production 才知道。
 
-  代價是 XML 肥大、瀏覽器不會用、很多防火牆擋掉。同一個「建立一個使用者」，`{"name":"bob"}` 是 14 個位元組，那個 SOAP envelope 是 267 個，約 19 倍。
+  代價是 XML 肥大、瀏覽器不會用、很多防火牆擋掉。同一個「建立一個使用者」，`{"name":"bob"}` 是 14 個位元組，單元 06 那個 SOAP envelope 是 281 個，約 20 倍。
 
   它現在活在金融、醫療與政府的系統整合裡。**你會在文件、log 與工程師對話中遇到它，而且會需要讀 WSDL。**
 </Callout>

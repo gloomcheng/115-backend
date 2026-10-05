@@ -341,7 +341,7 @@ cd exercises/13-testing
 1. `pytest -q` 的綠燈截圖（必須含 `7 passed`）+ `pytest -v` 的詳細截圖（必須含七行測試名稱）。
 2. 把 `{"ok": True}` 改成 `{"ok": "yes"}` 之後的 `pytest -q` 截圖，必須含 `.F.....` 與 `AssertionError`。
 3. `pytest -v` 在壞掉的程式碼上的截圖，必須同時含 `test_health_returns_200 PASSED` 與 `test_health_body_is_exactly_ok_true FAILED`。用一句話回答：為什麼同一個壞掉的 API，一條說好一條說壞？
-4. 只跑狀態碼那條測試的截圖（必須含 `1 passed`）+ 刪掉 Body 斷言後全套件的截圖（必須含 `6 passed`）。回答：第 04 節說「綠色代表行為沒變」，那這兩張截圖分別證明了什麼？
+4. 只跑狀態碼那條測試的截圖（必須含 `1 passed`）+ 刪掉 Body 斷言後全套件的截圖（必須含 `6 passed`）。回答：第 03 節說「綠色代表的是『這個程式碼的行為和上次跑測試時一樣』」，那這兩張截圖分別證明了什麼？
 5. 自己寫一條**新的**測試，斷言 `GET /notes` 回的 `count` 必須是整數且不小於 `items` 的長度。截圖必須包含 `1 passed`，然後把 `count` 改成字串 `"1"`，截圖必須包含 `1 failed`。
 6. 寫一條測試，斷言 `POST /notes` 送出缺少 `name` 的 Body 時，**狀態碼是 `422`**，而且 `content-type` 是 `application/json`——**兩條都要寫**。截圖必須包含通過，然後把 `raise HTTPException(status_code=422, ...)` 改成 `return {"detail": "name is required"}`，截圖必須包含失敗。回答：狀態碼從 `422` 變成 `200`，是哪一條斷言發現的？`content-type` 有沒有跟著變？
 7. 回答：為什麼 `test_list_reports_a_count_that_matches_the_items` 斷言的是 `count == len(items)`，而不是 `count == 1`？各自在什麼情況下會誤報？
