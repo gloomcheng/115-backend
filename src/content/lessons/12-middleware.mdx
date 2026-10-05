@@ -176,7 +176,7 @@ print(json.loads(base64.urlsafe_b64decode(p + '=' * (-len(p) % 4))))
 {'sub': 'root', 'role': 'intern', 'exp': 1790956815}
 `}</Terminal>
 
-**這個欄位是故意寫錯的。** 現在拿它去打只有管理員能用的路徑：
+**這個欄位是故意寫錯的。** `exp` 那一樣是簽發當下的時鐘，你重跑會拿到別的數字；要看的不是那個值，是 `role` 那一欄寫著 `intern`。現在拿它去打只有管理員能用的路徑：
 
 <Terminal title="bash — the wrong claim does not matter" flavor="output">{`
 > curl -i http://127.0.0.1:8005/admin -H "Authorization: Bearer $ADMIN"

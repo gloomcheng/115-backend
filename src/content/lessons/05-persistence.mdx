@@ -258,6 +258,8 @@ $ cat race.json
 
 **兩個行程都讀到空物件，兩個都說寫成功了，檔案裡只有一個。** 沒有任何一行輸出提到出錯。
 
+那個 `"at": 1790996440.988849` 是 `time.time()` 寫進去的，你的會是另一個數字。**要看的不是那個值，是 `at` 這個欄位存在，而裡面只有一個作者。**
+
 把同一組指令再跑一次，這次遺失的可能是 `B`：
 
 <Terminal title="bash — and again, a different one is lost" flavor="output">{`

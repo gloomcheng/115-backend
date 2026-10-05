@@ -263,6 +263,29 @@ function checkCrossRefs(text, path, own, byUnit, findings) {
   }
 }
 
+// ── check 5: values a rerun can never reproduce ──────────────────────────
+// A transcript that quotes time.time() is quoting a number the reader can
+// never see. It is not wrong, but it invites the reader to hunt for a
+// mismatch that is the only correct outcome. Advisory, because the fix is a
+// sentence of explanation rather than a code change.
+const WALL_CLOCK = /\b1[6-9]\d{8}\.\d+\b|\b1[6-9]\d{8}\b(?=\s*[,:}])/g
+
+function checkIrreproducible(text, path, findings) {
+  const lines = text.split('\n')
+  lines.forEach((raw, i) => {
+    if (!raw.includes('`') && !raw.includes('{')) return
+    for (const m of raw.matchAll(WALL_CLOCK)) {
+      findings.push({
+        path,
+        line: i + 1,
+        rule: 'transcript-wall-clock/advisory',
+        match: `"${m[0]}" is a wall-clock value and will differ on every run`,
+        fix: 'say so next to the transcript, so the reader does not hunt for it',
+      })
+    }
+  })
+}
+
 // ── check 4: every diagram states its claim ──────────────────────────────
 // The lesson diagrams are the visual argument, and each one carries that
 // argument in a <title> and a <desc> pair rather than only in pixels. A
@@ -338,6 +361,7 @@ for (const [rel, text] of texts) {
   checkEmphasis(lines, rel, findings)
   checkCallouts(lines, rel, findings)
   checkDiagramClaims(text, rel, findings)
+  checkIrreproducible(text, rel, findings)
   // Any file with at least two numbered sections can carry cross-references,
   // not only files under lessons/.
   if (sectionIndex(text).size >= 2) {

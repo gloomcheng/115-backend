@@ -89,6 +89,20 @@ const CASES = [
     ].join('\n'),
     expect: 'diagram-thin-claim',
   },
+  {
+    // Advisory by design: the fix is a sentence, not a code change, so it must
+    // be reported without failing the run.
+    name: 'wall-clock value quoted in a transcript (advisory, does not fail)',
+    source: ['$ cat race.json', '{"A": {"at": 1790996440.988849}}'].join('\n'),
+    expect: 'transcript-wall-clock',
+    fails: false,
+  },
+  {
+    name: 'an ordinary count in a transcript is not flagged',
+    source: ['$ python cache.py stale', '    queries=2'].join('\n'),
+    expect: null,
+    fails: false,
+  },
 ]
 
 const dir = mkdtempSync(join(tmpdir(), 'render-integrity-'))
@@ -106,13 +120,13 @@ try {
       out = (e.stdout ?? '') + (e.stderr ?? '')
       code = e.status ?? 1
     }
-    const fired = out.includes(c.expect)
-    const ok = fired && code !== 0
+    const fired = c.expect === null ? !/transcript-wall-clock/.test(out) : out.includes(c.expect)
+    const ok = fired && (code !== 0) === (c.fails !== false)
     if (!ok) failed++
     console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${c.name}`)
     if (!ok) {
-      console.log(`        expected rule: ${c.expect}`)
-      console.log(`        exit: ${code}`)
+      if (c.expect) console.log(`        expected rule: ${c.expect}`)
+      console.log(`        exit: ${code}, expected ${c.fails === false ? 0 : 'non-zero'}`)
       console.log(`        output: ${out.trim().split('\n').slice(0, 4).join(' | ')}`)
     }
   }
