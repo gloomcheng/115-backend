@@ -285,23 +285,23 @@ service NoteService {
 
 <Terminal title="Terminal 2 — bash — put all five side by side" flavor="output">{`
 > curl -s http://127.0.0.1:8007/notes | wc -c
-161
+125
 
 > curl -s -X POST http://127.0.0.1:8007/graphql \\
 >   -H 'Content-Type: application/json' \\
 >   -d '{"query":"{ notes { name title } }"}' | wc -c
-119
+93
 
 > curl -s -X POST http://127.0.0.1:8007/graphql \\
 >   -H 'Content-Type: application/json' \\
 >   -d '{"query":"{ notes { name title tags } }"}' | wc -c
-170
+134
 `}</Terminal>
 
-這三個數字是同一份資料的三種回應大小：REST 161、GraphQL 只要 name 和 title 給 119、GraphQL 加上 tags 給 170。
+這三個數字是同一份資料的三種回應大小：REST 125、GraphQL 只要 name 和 title 給 93、GraphQL 加上 tags 給 134。
 
 <Callout type="important" title="數字很小，所以重點不是大小">
-  這裡省下 42 個位元組，毫無意義。真正的差別在**誰決定回應形狀**：
+  這裡省下 32 個位元組，毫無意義。真正的差別在**誰決定回應形狀**：
 
   REST 的回應形狀寫死在 Server 裡，Client 拿到的永遠是全部欄位。
   GraphQL 的回應形狀寫在查詢字串裡，Client 拿到的正好是它寫的。
@@ -399,9 +399,9 @@ $ python websocket_demo.py frame
    A WebSocket message carries its length in the first two bytes of
    the frame instead. Here is the frame for the text 'hi':
 
-     81 82                <- 0x81 FIN+text, 0x82 length
-     01 02 03 04          <- masking key, chosen by the Client
-     69 6b                <- payload, XORed with the key
+     81 82          <- 0x81 FIN+text, 0x82 length
+     01 02 03 04    <- masking key, chosen by the Client
+     69 6b          <- payload, XORed with the key
 
    Undo the XOR and the message comes back:
      69 6b XOR 01 02 03 04 = b'hi'
@@ -450,16 +450,26 @@ Sec-WebSocket-Version: 13
 `}</Terminal>
 
 <Terminal title="Terminal 2 — the client" flavor="output">{`
+--- response ---
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+--- end ---
 server frame bytes: 81 05 68 65 6c 6c 6f
 opcode 0x81, length 5, payload b'hello'
 `}</Terminal>
+
+兩個 Terminal 看到的正好互補：Terminal 1 印出 Server **收到**的 Request，Terminal 2 印出 Client **收到**的回應。那個 `Sec-WebSocket-Accept` 就是第 07.1 節算出來的值，而它在這裡是真的走過一次連線，不是印出來的。
 
 <Callout type="important" title="比對兩個 frame 的差別，那個差別就是規格">
   Server 送出的是 `81 05 68 65 6c 6c 6f`——第二個位元組是 `0x05`，沒有 mask bit。
 
   Client 送出的是 `81 82 01 02 03 04 69 6b`——第二個位元組是 `0x82`，`0x80` 就是 mask bit，後面多四個位元組的 key。
 
-  **`0x05` 對 `0x82`，其他一模一樣。**整個 WebSocket 的方向不對稱性就在這一個 bit 上。
+  **第一個位元組兩邊都是 `0x81`，一模一樣。**差別全在第二個位元組：Server 的 `0x05` 是純長度，Client 的 `0x82` 是「有 mask」加上長度。
+
+  而 Client 那四個 key 位元組是 Server 完全沒有的 —— 它不是規格選項，是 mask 開著就必須附帶的東西。**整個 WebSocket 的方向不對稱性就在 `0x80` 那一個 bit 上。**
 </Callout>
 
 ### 07.4 什麼時候不該用 WebSocket
@@ -504,7 +514,7 @@ opcode 0x81, length 5, payload b'hello'
 在本地環境完成以下十三項操作，每一項的截圖與簡答都記錄下來。
 
 1. `GET /notes` 的完整回應截圖（必須含 `tags`）+ GraphQL 只要 `name title` 的截圖。回答：兩個回應的形狀分別由誰決定？
-2. 三個 `wc -c` 數字的截圖 + 回答：42 個位元組的差別在實務上什麼時候才會變成幾百 KB？
+2. 三個 `wc -c` 數字的截圖 + 回答：32 個位元組的差別在實務上什麼時候才會變成幾百 KB？
 3. GraphQL 查 `nickname` 的完整截圖（必須含 `200 OK`、`data` 為 `null`、`Did you mean`）+ 回答：為什麼 GraphQL 用 `200` 而不是 `4xx` 表達「查錯欄位」？
 4. REST 送多餘欄位的截圖（必須含 `200` 與 Body 沒有 `is_admin`）+ 和第 3 步並排對照 + 回答：單元 10 的 `extra="forbid"` 在這裡會發生什麼事？
 5. `GET /notes/ghost`（必須含 `404` 與 `Note not found`）與 GraphQL `{ note(name:"ghost") { name } }`（必須含 `null` 且**沒有** `errors`）兩張截圖。回答：把 schema 裡的 `note(...): Note` 改成 `Note!` 之後，第 5 步的 GraphQL 結果會變成什麼？

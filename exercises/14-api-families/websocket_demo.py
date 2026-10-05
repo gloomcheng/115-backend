@@ -68,9 +68,16 @@ def show_frame() -> None:
     mask = b"\x01\x02\x03\x04"
     header = bytes([0x81, 0x80 | len(payload)])
     masked = bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
-    print(f"     {header.hex(' ')}                <- 0x81 FIN+text, 0x82 length")
-    print(f"     {mask.hex(' ')}                       <- masking key, chosen by the Client")
-    print(f"     {masked.hex(' ')}                      <- payload, XORed with the key")
+    # Pad to a fixed column so the three arrows line up. The lesson quotes this
+    # output verbatim, and hand-counted spaces do not survive a length change.
+    rows = [
+        (header, "0x81 FIN+text, 0x82 length"),
+        (mask, "masking key, chosen by the Client"),
+        (masked, "payload, XORed with the key"),
+    ]
+    width = max(len(raw.hex(" ")) for raw, _ in rows)
+    for raw, label in rows:
+        print(f"     {raw.hex(' '):<{width}}    <- {label}")
     print()
     print("   Undo the XOR and the message comes back:")
     print(f"     {masked.hex(' ')} XOR {mask.hex(' ')} = {payload!r}")
@@ -166,12 +173,20 @@ def client() -> None:
 
     data = b""
     while b"\r\n\r\n" not in data:
-        data += connection.recv(4096)
+        chunk = connection.recv(4096)
+        if not chunk:
+            break
+        data += chunk
+
+    # One recv can return the response headers and the first frame in the same
+    # read. Decoding the whole buffer as text dies on the frame's 0x81 byte, so
+    # split at the header terminator and keep whatever followed it.
+    head, _, leftover = data.partition(b"\r\n\r\n")
     print("--- response ---")
-    print(data.decode().strip())
+    print(head.decode().strip())
     print("--- end ---")
 
-    frame = connection.recv(4096)
+    frame = leftover if leftover else connection.recv(4096)
     print(f"server frame bytes: {frame.hex(' ')}")
     if frame:
         length = frame[1] & 0x7F
