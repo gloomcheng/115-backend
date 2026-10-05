@@ -263,6 +263,45 @@ function checkCrossRefs(text, path, own, byUnit, findings) {
   }
 }
 
+// ── check 4: every diagram states its claim ──────────────────────────────
+// The lesson diagrams are the visual argument, and each one carries that
+// argument in a <title> and a <desc> pair rather than only in pixels. A
+// diagram that lost its desc still renders, still passes the a11y guard on
+// <img> alt text, and silently stops saying anything.
+function checkDiagramClaims(text, path, findings) {
+  const lines = text.split('\n')
+  for (const m of text.matchAll(/<svg\b/g)) {
+    const upto = text.slice(0, m.index)
+    const line = upto.split('\n').length
+    const block = text.slice(m.index, m.index + 4000)
+    if (!block.includes('</svg>')) continue
+    for (const [tag, rule] of [
+      ['title', 'diagram-missing-title'],
+      ['desc', 'diagram-missing-desc'],
+    ]) {
+      const found = new RegExp(`<${tag}\\b[^>]*>([^<]+)</${tag}>`).exec(block)
+      if (!found) {
+        findings.push({
+          path,
+          line,
+          rule,
+          match: `<svg> without a non-empty <${tag}>`,
+          fix: `add a <${tag}> stating the one claim this diagram makes`,
+        })
+      } else if (found[1].trim().length < 8) {
+        findings.push({
+          path,
+          line,
+          rule: 'diagram-thin-claim',
+          match: `<${tag}> is only "${found[1].trim()}"`,
+          fix: 'state the claim, not a label',
+        })
+      }
+    }
+  }
+  // <img> is covered by the a11y guard's alt check, so it is not repeated here.
+}
+
 // ── run ───────────────────────────────────────────────────────────────────
 const files = collectFiles()
 const findings = []
@@ -298,6 +337,7 @@ for (const [rel, text] of texts) {
   const lines = text.split('\n')
   checkEmphasis(lines, rel, findings)
   checkCallouts(lines, rel, findings)
+  checkDiagramClaims(text, rel, findings)
   // Any file with at least two numbered sections can carry cross-references,
   // not only files under lessons/.
   if (sectionIndex(text).size >= 2) {

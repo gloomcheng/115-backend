@@ -509,9 +509,10 @@ $ python injection.py identifier
   - **接進去**（f-string、`%`、`+` 組字串）→ 看有沒有白名單擋著。沒有就是漏洞。
 </Callout>
 
-拿本課的 `main.py` 對照，那十幾個 `execute` 呼叫裡：
+拿本課的 `main.py` 對照，那八個 `execute` 呼叫裡：
 
 - 值全部用 `?` 綁（`name`、`payload.name`、`payload.role`）——安全。
+- 有一處完全沒有 Client 的文字，排序欄位寫死（`ORDER BY name`）——安全。
 - 只有一處用 f-string（`f"UPDATE users SET {assignments} ..."`）——靠白名單活著。
 
 <Callout type="note" title="為什麼 ORM 之後這件事還是會出現">

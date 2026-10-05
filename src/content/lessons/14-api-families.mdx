@@ -9,7 +9,7 @@ import Callout from '../../components/Callout.astro';
 
 <svg viewBox="0 0 940 520" role="img" aria-labelledby="fam-claim-title fam-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
   <title id="fam-claim-title">五個 API 家族把契約放在不同位置，所以同一個錯誤會得到不同答案</title>
-  <desc id="fam-claim-description">一個 Client 多要一個不存在的欄位。REST 把多餘欄位安靜丟掉並回 200。SOAP 由 WSDL 在建置期產生 stub，型別錯誤在建置期就被抓到。GraphQL 在查詢字串裡指名不存在的欄位並附上建議。gRPC 由 proto 檔產生 stub，型別錯誤在建置期被抓。tRPC 由 TypeScript 型別推導，錯誤在型別檢查期被抓。三個家族把這個錯誤提前到寫程式時攔下，兩個留到執行期才發現，而 REST 完全沉默。</desc>
+  <desc id="fam-claim-description">一個 Client 多要一個不存在的欄位。REST 把多餘欄位安靜丟掉並回 200，沒有任何人知道。SOAP 由 WSDL 在建置期產生 stub，型別錯誤在建置期就被抓到。GraphQL 在查詢字串裡指名不存在的欄位並附上建議，但狀態碼仍是 200。gRPC 由 proto 檔產生 stub，型別錯誤在建置期被抓。tRPC 由 TypeScript 型別推導，錯誤在型別檢查期被抓。分成兩組：REST 與 GraphQL 讓這個錯誤安靜發生，三個家族在寫程式時就攔下來。</desc>
   <defs>
     <marker id="fam-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
       <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />

@@ -68,6 +68,27 @@ const CASES = [
     ].join('\n'),
     expect: 'crossref-claim-missing',
   },
+  {
+    name: 'svg without a desc',
+    source: [
+      '<svg viewBox="0 0 10 10" role="img">',
+      '  <title id="a">一個足夠長的圖說標題</title>',
+      '  <rect width="10" height="10" />',
+      '</svg>',
+    ].join('\n'),
+    expect: 'diagram-missing-desc',
+  },
+  {
+    name: 'svg whose title is a label rather than a claim',
+    source: [
+      '<svg viewBox="0 0 10 10" role="img">',
+      '  <title id="a">圖</title>',
+      '  <desc id="b">一段足夠長的圖說內容，說明這張圖在論證什麼。</desc>',
+      '  <rect width="10" height="10" />',
+      '</svg>',
+    ].join('\n'),
+    expect: 'diagram-thin-claim',
+  },
 ]
 
 const dir = mkdtempSync(join(tmpdir(), 'render-integrity-'))
