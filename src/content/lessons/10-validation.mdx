@@ -339,7 +339,7 @@ TypeError: object of type 'int' has no len()
   | CSRF       | 憑證被瀏覽器自動附上（Cookie）         | 沒有，用 Bearer    |
   | **XSS**    | 使用者文字進到 **HTML 解析器**          | **沒有，回 JSON** |
 
-  **兩者都是「攻擊者控制的文字」被送進「會執行它的東西」。**JSON 回應裡沒有 HTML 解析器，所以 `<script>` 就是一個長度 25 的普通字串。
+  **兩者都是「攻擊者控制的文字」被送進「會執行它的東西」。** JSON 回應裡沒有 HTML 解析器，所以 `<script>` 就是一個長度 25 的普通字串。
 
   所以接下來要看的不是「怎麼在 JSON API 裡防 XSS」，而是**在哪一步它會變成真的**。
 </Callout>
@@ -371,7 +371,7 @@ $ python xss_server.py --check
   瀏覽器會跳出 alert。同一個網址換成 `/escaped`，畫面上會出現字面的 `<script>alert(1)</script>` 這幾個字。
 </Callout>
 
-攻擊者能拿到什麼？**他讓受害者的瀏覽器，用受害者自己的權限，執行他寫的程式。**包括讀取頁面上看得到的資料、代替使用者送出表單、竊取別的 cookie（`HttpOnly` 擋得住 session cookie，但擋不住頁面上的東西）。
+攻擊者能拿到什麼？**他讓受害者的瀏覽器，用受害者自己的權限，執行他寫的程式。** 包括讀取頁面上看得到的資料、代替使用者送出表單、竊取別的 cookie（`HttpOnly` 擋得住 session cookie，但擋不住頁面上的東西）。
 
 這跟 CSRF 的結構一模一樣：一個是「攻擊者讓瀏覽器帶著憑證送請求」，一個是「攻擊者讓瀏覽器執行程式」。**後者更嚴重，因為程式是在受害者頁面的環境裡跑的。**
 
@@ -391,7 +391,7 @@ $ python xss_server.py --check
 
   但送出來的 HTML 是：`<input value="" onfocus=alert(1) x="">`
 
-  **`value` 的內容在第一個引號就結束了，`onfocus=alert(1)` 變成了一個真的屬性。**游標移進輸入框就會觸發。
+  **`value` 的內容在第一個引號就結束了，`onfocus=alert(1)` 變成了一個真的屬性。** 游標移進輸入框就會觸發。
 
   這個函式沒有做錯任何它宣稱做的事，它是**不完整**：它假設值會落在頁面本文，而這次落在屬性裡。
 </Callout>
@@ -432,7 +432,7 @@ $ python xss_server.py --check
 <Callout type="important" title="危險的只有一種情況：明確關掉跳脫">
   各家模板引擎都有「不跳脫」寫法，長得都像：Jinja 的 `{{ name | safe }}`、Twig 的 `| raw`、Handlebars 的 `{{{ name }}}`。
 
-  **三重括號的意思是「這段已經是安全的 HTML，直接插進來」。**所以 `{{ triple_braces(user_input) }}` 就是一個漏洞，而 `{{ double_braces(user_input) }}` 不是。
+  **三重括號的意思是「這段已經是安全的 HTML，直接插進來」。** 所以 `{{ triple_braces(user_input) }}` 就是一個漏洞，而 `{{ double_braces(user_input) }}` 不是。
 
   寫法上的差別只有三個字元，安全上差一整個類別的漏洞。
 </Callout>
@@ -440,7 +440,7 @@ $ python xss_server.py --check
 <Callout type="note" title="為什麼模板引擎預設跳脫，而這不是壞事">
   因為「跳脫」是安全的那個選擇。預設不跳脫的話，每一個模板都會是危險的，而且要靠每個寫模板的人記得加上跳脫。
 
-  **預設值決定了犯錯的成本。**這一點和單元 08 課的 `extra="forbid"`、單元 12 課的白名單是同一個道理：把允許的列舉出來，比擋掉危險的容易維護。
+  **預設值決定了犯錯的成本。** 這一點和單元 08 課的 `extra="forbid"`、單元 12 課的白名單是同一個道理：把允許的列舉出來，比擋掉危險的容易維護。
 </Callout>
 
 ### 07.5 回頭看第 06 節
@@ -533,7 +533,7 @@ python xss_server.py --check
 
 `/raw` 的輸出裡有一個真的 `<script>` 標籤，`/escaped` 只有 `&lt;script&gt;`。**同一個字串，兩種結果。**
 
-要親眼確認 `<script>` 標籤真的會執行，curl 做不到，因為它只會把字串印出來。**用瀏覽器：**先跑 `python xss_server.py`，再開 `http://127.0.0.1:8009/raw?name=<script>alert(1)</script>`，截圖必須包含跳出的 alert 視窗。接著打 `http://127.0.0.1:8009/escaped?name=<script>alert(1)</script>`，截圖必須顯示畫面上出現的是字面的 `<script>alert(1)</script>` 幾個字、沒有 alert。**兩張截圖並排放，這是本課的證據。**
+要親眼確認 `<script>` 標籤真的會執行，curl 做不到，因為它只會把字串印出來。**用瀏覽器：** 先跑 `python xss_server.py`，再開 `http://127.0.0.1:8009/raw?name=<script>alert(1)</script>`，截圖必須包含跳出的 alert 視窗。接著打 `http://127.0.0.1:8009/escaped?name=<script>alert(1)</script>`，截圖必須顯示畫面上出現的是字面的 `<script>alert(1)</script>` 幾個字、沒有 alert。**兩張截圖並排放，這是本課的證據。**
 
 ---
 

@@ -254,10 +254,10 @@ line two
 `}</Terminal>
 
 <Callout type="important" title="四個地方跟 JSON 不一樣">
-  1. **Header 裡多了一個 `boundary=`。**它出現在 `Content-Type` 的最後，是一個分隔字串。
+  1. **Header 裡多了一個 `boundary=`。** 它出現在 `Content-Type` 的最後，是一個分隔字串。
   2. **每一段都有自己的 Header**，然後空一行，再來才是資料。JSON 沒有「每一段各自的 Header」這回事。
-  3. **分隔字串在兩種長度。**中間用 `------abc` 分開，最後一段用 `------abc--`，**多兩個破折號**，那是「結束了」的標記。
-  4. **資料可以是二進位。**換行、引號、大括號、看起來像 Header 的行，全都不能拿來當分隔。
+  3. **分隔字串在兩種長度。** 中間用 `------abc` 分開，最後一段用 `------abc--`，**多兩個破折號**，那是「結束了」的標記。
+  4. **資料可以是二進位。** 換行、引號、大括號、看起來像 Header 的行，全都不能拿來當分隔。
 
   然後 `Content-Disposition` 裡的 `name="note"` 和 `name="file"`，就是 JSON 裡的 key。**只不過在這裡，key 是用文字標出來的，不是用文法推導的。**
 </Callout>
@@ -287,7 +287,7 @@ $ python multipart_demo.py boundary
 <Callout type="important" title="JSON 的文法自帶邊界，檔案不會">
   JSON 的文法是**自定界的**：字串從引號開始、到下一個引號結束，所以解析器永遠知道現在在第幾個值。
 
-  **檔案沒有文法。**它就是一堆位元組，可能剛好包含換行、包含看起來像 `boundary=------` 的那一行。
+  **檔案沒有文法。** 它就是一堆位元組，可能剛好包含換行、包含看起來像 `boundary=------` 的那一行。
 
   所以發送端自己挑一個**不會出現在資料裡**的字串，把它寫在中間當分隔。**boundary 的全部工作就是這一句。**
 
@@ -327,7 +327,7 @@ $ python multipart_demo.py parse
 <Callout type="important" title="`data: b'line one\r\nline two'` 那一行才是重點">
   資料**裡面有換行**，而且沒有被切開。
 
-  因為規則是：**分隔字串必須自己站在一行開頭。**中間那些換行不會讓解析器困惑，因為它認的是「整行等於 boundary」而不是「某處出現 boundary 這幾個字」。
+  因為規則是：**分隔字串必須自己站在一行開頭。** 中間那些換行不會讓解析器困惑，因為它認的是「整行等於 boundary」而不是「某處出現 boundary 這幾個字」。
 
   如果資料裡剛好有一行的開頭就是 boundary，那格式就毀了。**這就是為什麼那個字串要隨機產生。**
 </Callout>
@@ -364,7 +364,7 @@ RuntimeError: Stream consumed
       ...
   `}</Terminal>
 
-  **這是本節最實用的一段。**之後你要除錯任何 multipart 的問題，都需要這條「不解析、看原始」的路徑。
+  **這是本節最實用的一段。** 之後你要除錯任何 multipart 的問題，都需要這條「不解析、看原始」的路徑。
 </Callout>
 
 ### 06.4 唯一絕對不能相信的欄位
@@ -394,9 +394,9 @@ $ python multipart_demo.py filename
 </Callout>
 
 <Callout type="note" title="還沒講、但你會遇到的">
-  - **大小限制。**沒有設上限的話，一個 10 GB 的檔案會把磁碟塞滿。`Content-Length` 可以被說謊，所以要在讀的時候累加計數。
-  - **檔案型別。**副檔名和 `Content-Type` 都是 Client 給的。真的要看內容，就讀開頭幾個位元組判斷 magic number。
-  - **不要放在可被執行的目錄。**上傳目錄不該跟程式碼同一層。
+  - **大小限制。** 沒有設上限的話，一個 10 GB 的檔案會把磁碟塞滿。`Content-Length` 可以被說謊，所以要在讀的時候累加計數。
+  - **檔案型別。** 副檔名和 `Content-Type` 都是 Client 給的。真的要看內容，就讀開頭幾個位元組判斷 magic number。
+  - **不要放在可被執行的目錄。** 上傳目錄不該跟程式碼同一層。
 </Callout>
 
 ---
@@ -471,8 +471,8 @@ $ curl -s -F "note=hello" -F "file=@/tmp/a.txt" http://127.0.0.1:8011/upload
 
 兩點要親眼看到：
 
-- **`/raw` 的回應裡有 `boundary`，而且每次都不一樣。**再送一次 `/raw`，比對 `boundary` 兩個字串。
-- **Terminal 1 印出了原始 body。**截圖必須包含 `------` 開頭的分隔行和最後那個多兩個破折號的 `------`。
+- **`/raw` 的回應裡有 `boundary`，而且每次都不一樣。** 再送一次 `/raw`，比對 `boundary` 兩個字串。
+- **Terminal 1 印出了原始 body。** 截圖必須包含 `------` 開頭的分隔行和最後那個多兩個破折號的 `------`。
 
 ---
 

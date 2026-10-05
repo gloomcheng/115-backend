@@ -462,7 +462,7 @@ curl -i http://127.0.0.1:8000/users
 **第三部分：把 `/health` 改壞一次**
 
 9. 把 `main.py` 的 `health()` 暫時改成 `return {"ok": "yes"}`，執行 `curl -i http://127.0.0.1:8000/health` 截圖，再執行一支會讀 Body 的探測程式截圖。兩張都要有，且探測程式那張必須顯示 `status ok: True` 與 `body ok: False`。**截完立刻改回 `{"ok": True}` 並再次截圖。**
-10. 執行 `cd examples/http-api && pytest tests/test_main.py -q`，截圖必須顯示全部通過。**看著輸出回答：那個 `passed` 是誰決定的？**你只要看得出「這條指令自己對照了某個東西，發現跟你預期的一樣，就印出綠色」，這一題就夠了。單元 13 會拆開那個「對照的東西」是怎麼寫出來的。
+10. 執行 `cd examples/http-api && pytest tests/test_main.py -q`，截圖必須顯示全部通過。**看著輸出回答：那個 `passed` 是誰決定的？** 你只要看得出「這條指令自己對照了某個東西，發現跟你預期的一樣，就印出綠色」，這一題就夠了。單元 13 會拆開那個「對照的東西」是怎麼寫出來的。
 11. 執行 `curl -f http://127.0.0.1:8000/health; echo $?` 與 `curl -f http://127.0.0.1:8000/healthz; echo $?`，截圖兩次的 exit status。
 12. 用一句話回答：`/health` 為什麼不應該檢查資料庫連線？把答案寫成「重啟之後會發生什麼」。
 

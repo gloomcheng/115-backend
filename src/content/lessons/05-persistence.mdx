@@ -256,7 +256,7 @@ $ cat race.json
 {"A": {"at": 1790996440.988849}}
 `}</Terminal>
 
-**兩個行程都讀到空物件，兩個都說寫成功了，檔案裡只有一個。**沒有任何一行輸出提到出錯。
+**兩個行程都讀到空物件，兩個都說寫成功了，檔案裡只有一個。** 沒有任何一行輸出提到出錯。
 
 把同一組指令再跑一次，這次遺失的可能是 `B`：
 
@@ -267,7 +267,7 @@ $ cat race.json
 {"B": {"at": 1790996439.915694}}
 `}</Terminal>
 
-**誰消失是不確定的。**這就是第 05 節說的 lost update：沒有任何一行輸出告訴你出了事。
+**誰消失是不確定的。** 這就是第 05 節說的 lost update：沒有任何一行輸出告訴你出了事。
 
 <Callout type="warning" title="「讀→改→寫」這三步之間，任何東西都可以插進來">
   `read()` 返回之後、`write()` 之前，是一段真空。另一個行程完全可以在這段裡面讀到同樣的舊資料、算出自己的版本、寫回去，把你的改動蓋掉。
@@ -317,7 +317,7 @@ $ cat race.json
 {"A": {"at": 1790996459.28441}, "B": {"at": 1790996460.289021}}
 `}</Terminal>
 
-**兩個都在。**而且注意第二行程讀到的是 `{'A': ...}`——它讀得到 A 剛剛寫進去的東西，代表 A 確實已經寫完並釋放鎖，B 才進來。
+**兩個都在。** 而且注意第二行程讀到的是 `{'A': ...}`——它讀得到 A 剛剛寫進去的東西，代表 A 確實已經寫完並釋放鎖，B 才進來。
 
 跑三次，三次都是 `["A", "B"]`，而 `naive` 跑三次遺失的是不同的一個。**這不是運氣好，是機制。**
 
@@ -344,7 +344,7 @@ os.close(lock)
 
   原因是 `flock` 綁在「開啟檔案的那個敘述」上，不是綁在那個檔案路徑上。你一 close，鎖就立刻被釋放——所以它從來沒有生效過，只是一段看起來很專業的程式碼。
 
-  **這是併發最典型的失敗模式：防禦看起來在那裡，實際上不在。**你在測試時幾乎不會發現，因為測試通常一次只跑一件事。只有當兩個行程真的同時進來，你才會知道那把鎖是假的。
+  **這是併發最典型的失敗模式：防禦看起來在那裡，實際上不在。** 你在測試時幾乎不會發現，因為測試通常一次只跑一件事。只有當兩個行程真的同時進來，你才會知道那把鎖是假的。
 </Callout>
 
 ### 06.3 三個詞分清楚
@@ -360,7 +360,7 @@ os.close(lock)
 <Callout type="important" title="為什麼上一節 SQLite 直接就解決了">
   `hold_the_lock.py` 沒有手寫任何鎖，它靠 `BEGIN EXCLUSIVE` 就擋住第二個 writer。那個 `BEGIN` 同時做了兩件事：畫出臨界區段，並且替你取得鎖。
 
-  **這就是優先用資料庫的理由。**你手寫 `flock` 時要自己決定鎖哪裡、鎖多久、忘了釋放會怎樣；資料庫已經把這些規則收進去了。
+  **這就是優先用資料庫的理由。** 你手寫 `flock` 時要自己決定鎖哪裡、鎖多久、忘了釋放會怎樣；資料庫已經把這些規則收進去了。
 
   所以實務上的順序是：**先問「資料庫能不能幫我擋」，可以就用資料庫；只有在它擋不住的時候（例如兩個行程各自快取了一份資料）才自己加鎖。**
 </Callout>
@@ -488,7 +488,7 @@ $ python indexes.py composite
 </Callout>
 
 <Callout type="important" title="所以「什麼時候該建 index」的答案不是背規則">
-  規則是：**`WHERE`、`JOIN`、`ORDER BY` 裡出現的欄位，考慮建 index。**其餘的都可以先不管。
+  規則是：**`WHERE`、`JOIN`、`ORDER BY` 裡出現的欄位，考慮建 index。** 其餘的都可以先不管。
 
   然後**每一條查詢都看一次 plan**，確認它真的被用了。資料庫有權不聽你的——第 02 節就是例子：沒有索引時，`tag = 'sql'` 符合 6 250 列，佔全表的八分之一，那時候整表掃描就是對的選擇。
 </Callout>
@@ -509,7 +509,7 @@ $ python indexes.py cost
 <Callout type="important" title="讀取變快，寫入變慢。這是同一個決定的一體兩面">
   你每次加一個 index，都讓某些查詢變快，同時讓所有寫入變慢。
 
-  所以 index 不是越多越好。它的判斷標準只有一句：**你已經量過這條查詢很慢，而且慢的那個 plan 不是 `SCAN notes`。**沒量過就別加。
+  所以 index 不是越多越好。它的判斷標準只有一句：**你已經量過這條查詢很慢，而且慢的那個 plan 不是 `SCAN notes`。** 沒量過就別加。
 </Callout>
 
 ### 07.4 沒人用的索引，是純粹的浪費
@@ -555,7 +555,7 @@ $ sqlite3 indexes.db "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index';"
 
   `50000 10` 讀作：這張表約 5 萬列，每個不同的 `author` 約對應 10 列。這就是資料庫決定「掃描還是搜尋」的依據——第 07.2 節 `tag = 'sql'` 符合 6 250 列，佔全表八分之一，那時它算完覺得整表掃描比較划算。
 
-  **注意 `sqlite_stat1` 記的是估計值，不是使用次數。**它不會告訴你「這個索引有沒有人用」。要看一條查詢實際怎麼跑，只有一個辦法：`EXPLAIN QUERY PLAN`。
+  **注意 `sqlite_stat1` 記的是估計值，不是使用次數。** 它不會告訴你「這個索引有沒有人用」。要看一條查詢實際怎麼跑，只有一個辦法：`EXPLAIN QUERY PLAN`。
 </Callout>
 
 ## 08. Cache：你手上開始有兩份資料
@@ -583,7 +583,7 @@ $ python cache.py stale
 <Callout type="important" title="盯著 `value` 和 `queries` 這兩欄看">
   第三次讀取，回傳 `value=100`，而括號裡的 `database says 200` 是程式直接去資料庫查到的真相。
 
-  **同一個程式裡，兩個數字不一樣。**而且 `queries` 還是 1 —— 沒有錯誤、沒有警告、沒有例外，**連 log 都不會記錄到那個 write**。讀取成功、回應 200、數字是舊的。
+  **同一個程式裡，兩個數字不一樣。** 而且 `queries` 還是 1 —— 沒有錯誤、沒有警告、沒有例外，**連 log 都不會記錄到那個 write**。讀取成功、回應 200、數字是舊的。
 
   這是快取最難查的一類問題：**它不告訴你，只給你一個錯的答案。**
 </Callout>
@@ -663,7 +663,7 @@ $ python cache.py workers
 
   部署之後會用多個 worker（第 16、17 單元）。**那時一份行程內的快取變成 N 份**，而「寫入時清掉」只清得到剛才那一份。
 
-  所以正確的順序是：**先假設你有多個行程來設計。**要嘛把快取放在行程外面（Redis 這類，所有行程共用一份），要嘛接受它不一致，並且明確決定哪些資料可以不一致。
+  所以正確的順序是：**先假設你有多個行程來設計。** 要嘛把快取放在行程外面（Redis 這類，所有行程共用一份），要嘛接受它不一致，並且明確決定哪些資料可以不一致。
 </Callout>
 
 <Callout type="note" title="那什麼時候不該用快取">
@@ -672,7 +672,7 @@ $ python cache.py workers
   - 會（價格、餘額、權限）→ 不要用行程內快取，或者 TTL 要短到可以接受。
   - 不會（商品說明、圖片路徑、幾乎不改的設定）→ 快取很好用，而且 TTL 可以給很長。
 
-  **先量過再說。**第 07 節那個 `218 ms 對 1 ms` 給了 217 倍的空間，值得那份複雜度。第 08.1 節第一次讀取 `queries=1`——如果本來就只要 1 次查詢，快取連賺都沒賺到。
+  **先量過再說。** 第 07 節那個 `218 ms 對 1 ms` 給了 217 倍的空間，值得那份複雜度。第 08.1 節第一次讀取 `queries=1`——如果本來就只要 1 次查詢，快取連賺都沒賺到。
 </Callout>
 
 ## 09. Migration：改資料庫的順序
@@ -711,7 +711,7 @@ $ python migrations.py runner
 
   `0005` 才把值補回去。
 
-  **為什麼要分兩次？**因為如果合併成一步「加一個 NOT NULL 欄位並且填好」，你就必須在同一個動作裡同時改結構和改資料——中途失敗會留下半完成的狀態。拆開之後，`0004` 失敗了資料還在，`0005` 失敗了也只是沒補完，兩種都可以重跑。
+  **為什麼要分兩次？** 因為如果合併成一步「加一個 NOT NULL 欄位並且填好」，你就必須在同一個動作裡同時改結構和改資料——中途失敗會留下半完成的狀態。拆開之後，`0004` 失敗了資料還在，`0005` 失敗了也只是沒補完，兩種都可以重跑。
 </Callout>
 
 這份帳本（ledger）就是 runner 真正在做的事：
@@ -729,7 +729,7 @@ $ python migrations.py runner
 <Callout type="important" title="帳本讓「重跑」變成安全的事">
   沒有帳本的話，你第二次執行 runner 會再做一次 `INSERT`，資料變兩倍。有了帳本，runner 就變成**冪等**的——跑幾次結果都一樣。
 
-  這也是為什麼 migration 的編號要進 Git：**它是程式碼，要跟著部署走。**記在某個人的筆記裡等於沒有記。
+  這也是為什麼 migration 的編號要進 Git：**它是程式碼，要跟著部署走。** 記在某個人的筆記裡等於沒有記。
 </Callout>
 
 ### 09.2 SQLite 拒絕幫你做三件事
@@ -761,7 +761,7 @@ $ python migrations.py limits
 <Callout type="note" title="它能做、你以為它不能做的事">
   SQLite 3.25 之後支援 `RENAME COLUMN`，3.35 之後支援 `DROP COLUMN`——這兩個在舊版本是做不到的。
 
-  **但它從頭到尾沒有 `ALTER COLUMN`。**所以除了改名字以外的每一件事——改欄位型別、幫既有欄位加約束——都要靠下一節那條路。
+  **但它從頭到尾沒有 `ALTER COLUMN`。** 所以除了改名字以外的每一件事——改欄位型別、幫既有欄位加約束——都要靠下一節那條路。
 </Callout>
 
 ### 09.3 換欄位型別，唯一不丟資料的做法
@@ -825,7 +825,7 @@ $ python migrations.py expand
 <Callout type="warning" title="第 3 步和第 4 步之間，必須真的隔一段時間">
   如果你把四個動作放在同一次部署裡，expand 的保護就等於不存在——舊表在你確認新程式運作正常之前就已經被刪了。
 
-  **「確認沒有人在讀」需要時間，而時間是唯一的證據。**這也是為什麼大型系統的 migration 有時會跨好幾個禮拜。
+  **「確認沒有人在讀」需要時間，而時間是唯一的證據。** 這也是為什麼大型系統的 migration 有時會跨好幾個禮拜。
 </Callout>
 
 ### 09.4 在你的機器上 0.1 秒，在正式環境可能是幾分鐘
@@ -833,7 +833,7 @@ $ python migrations.py expand
 <Callout type="important" title="這是本節唯一真正會造成 production 事故的規則">
   你在這台 Mac 上跑 `ALTER TABLE` 只需要幾毫秒，因為資料只有兩三列。
 
-  正式環境的資料表可能有幾千萬列。`ADD COLUMN` 在很多資料庫上是**便宜的**（只改結構描述），但**`CREATE INDEX` 要讀完整張表再排序**。這兩件事的差距是可以量的：
+  正式環境的資料表可能有幾千萬列。`ADD COLUMN` 在很多資料庫上是**便宜的**（只改結構描述），但 **`CREATE INDEX` 要讀完整張表再排序**。這兩件事的差距是可以量的：
 
   <Terminal title="bash — CREATE INDEX against ADD COLUMN, at three sizes" flavor="output">{`
   $ python indexes.py build
@@ -844,14 +844,14 @@ $ python migrations.py expand
         800,000          335 ms       0.5 ms    0.42 us    89.2 MB
   `}</Terminal>
 
-  **看那個比例，不要看絕對數字。**`ADD COLUMN` 在三個尺寸都停在零點幾毫秒，因為它只改結構描述；`CREATE INDEX` 跟著資料長，因為它必須讀完再排序。同一個動作在 800 000 列時是 335 ms——**而那個檔案只有 89 MB**，一台正式環境的機器上，一個 89 MB 的索引建置就已經不能放在尖峰時間做了。
+  **看那個比例，不要看絕對數字。** `ADD COLUMN` 在三個尺寸都停在零點幾毫秒，因為它只改結構描述；`CREATE INDEX` 跟著資料長，因為它必須讀完再排序。同一個動作在 800 000 列時是 335 ms——**而那個檔案只有 89 MB**，一台正式環境的機器上，一個 89 MB 的索引建置就已經不能放在尖峰時間做了。
 
   `per row` 那一欄存在的目的是讓你看見它不是固定的。但這個程式的執行間變動跟趨勢一樣寬，所以不要從裡面讀出法則；它在 200 000 列那一列每次跑都不一樣。
 </Callout>
 
 <Callout type="warning" title="所以有兩件事必須在寫 migration 之前想">
-  1. **這個動作在正式環境要跑多久？**如果答案需要估算，去找有幾百萬列的測試環境實測，不要用本機的時間推估——上面那個 `per row` 欄就是為什麼不能推估。
-  2. **跑的時候，那張表還能被讀寫嗎？**如果不能，你就是在讓整個服務停機。
+  1. **這個動作在正式環境要跑多久？** 如果答案需要估算，去找有幾百萬列的測試環境實測，不要用本機的時間推估——上面那個 `per row` 欄就是為什麼不能推估。
+  2. **跑的時候，那張表還能被讀寫嗎？** 如果不能，你就是在讓整個服務停機。
 
   這兩個問題的答案決定了你能不能在維護時段做，還是必須改用「在線新增索引」那種工具——而那些工具在 SQLite 上不存在，因為 SQLite 本身就是一個檔案。
 </Callout>
@@ -968,7 +968,7 @@ $ cat race.json
 {"A": {"at": 1790996459.28441}, "B": {"at": 1790996460.289021}}
 `}</Terminal>
 
-這三種寫法唯一的差別是有沒有保護，但結果完全不同：**第一次遺失一個 key、第二次加兩次只得到 1、第三次兩個都在。**這就是第 06 節的整個重點。
+這三種寫法唯一的差別是有沒有保護，但結果完全不同：**第一次遺失一個 key、第二次加兩次只得到 1、第三次兩個都在。** 這就是第 06 節的整個重點。
 
 ### 第六步：看資料庫怎麼讀
 
@@ -1002,7 +1002,7 @@ $ python cache.py stale
    after the database changed to 200              value=100  queries=1  (database says 200)
 `}</Terminal>
 
-**第三次那行的 `value` 和括號裡的數字不一樣。**這個問題就是快取的全部代價，而結構改錯的後果比它更重。
+**第三次那行的 `value` 和括號裡的數字不一樣。** 這個問題就是快取的全部代價，而結構改錯的後果比它更重。
 
 ### 第八步：改結構，而不是改資料
 
@@ -1033,7 +1033,7 @@ $ python migrations.py expand
     row: ('ada', 0)
 `}</Terminal>
 
-`users` 三列進、`users_new` 三列出。**資料沒有少，舊的結構也還沒被碰。**中間每一個狀態下那張舊表都在——這就是 expand 的全部意義。
+`users` 三列進、`users_new` 三列出。**資料沒有少，舊的結構也還沒被碰。** 中間每一個狀態下那張舊表都在——這就是 expand 的全部意義。
 
 ---
 
@@ -1049,7 +1049,7 @@ $ python migrations.py expand
 6. 在兩個 Terminal 分別執行 `python hold_the_lock.py hold` 與 `python hold_the_lock.py write`，截圖必須包含 `database is locked`。最後執行 `sqlite3 notes.db "SELECT id, text FROM notes;"`，截圖並確認沒有任何一筆是缺的。
 7. **連續跑三次** `rm -f race.json race.lock && python race_fix.py naive A & python race_fix.py naive B & wait && cat race.json`。截圖必須包含三次輸出。回答：三次消失的是同一個嗎？
 8. 執行 `python race_fix.py counting A & python race_fix.py counting B & wait` 再 `cat race.json`，截圖必須包含 `count=1`。回答：這比第 7 題更難發現，為什麼？
-9. 執行 `python race_fix.py locked A & python race_fix.py locked B & wait`，截圖必須包含 B 讀到 `{'A': ...}` 那一行。**回答：那一行證明什麼？**如果 B 讀到的是 `{}`，代表什麼？
+9. 執行 `python race_fix.py locked A & python race_fix.py locked B & wait`，截圖必須包含 B 讀到 `{'A': ...}` 那一行。**回答：那一行證明什麼？** 如果 B 讀到的是 `{}`，代表什麼？
 10. 把 `acquire_lock()` 裡的 `os.close(lock)` 移到 `fcntl.flock(lock, ...)` 的**正下方**，重跑第 9 題。截圖必須包含資料遺失的結果。回答：為什麼加鎖「看起來在那裡」卻沒有生效？
 11. 回答：你的期末專題會不會有兩個程式同時寫同一份資料？根據第 08 節那三個問題，你會選哪一種？
 12. 執行 `python indexes.py plan`，截圖必須包含 `plan : SCAN notes` 與 `rows : 10`。**回答：符合條件的只有 10 列，資料庫實際上看了幾列？**
@@ -1059,12 +1059,12 @@ $ python migrations.py expand
 16. 執行 `python indexes.py cost` 與 `python indexes.py unused`，截圖必須包含 `the writer got` 那一行與 `4.7 MB`／`8.1 MB`。回答：索引讓誰變慢？為什麼 `DROP INDEX` 之後還要 `VACUUM`？
 17. 執行 `python cache.py stale`，截圖必須包含第三行的 `value=100` 與 `(database says 200)`。**回答：那一行裡的 `queries` 是多少？為什麼你的 log 不會記錄到那個 write？**
 18. 執行 `python cache.py ttl`，截圖必須包含 `t=20 still inside the TTL` 那一行標著 `stale`。回答：TTL 是 30 秒，這個答案最晚可以錯多久？
-19. 執行 `python cache.py workers`，截圖必須包含 `worker A read again: value=100` 與 `database says 200`。回答：**worker B 已經清掉自己的快取了，為什麼 worker A 還是不對？**用一句話回答「一個行程內的快取」實際上是幾個快取。
+19. 執行 `python cache.py workers`，截圖必須包含 `worker A read again: value=100` 與 `database says 200`。回答：**worker B 已經清掉自己的快取了，為什麼 worker A 還是不對？** 用一句話回答「一個行程內的快取」實際上是幾個快取。
 20. 回答：你的期末專題會快取什麼？把「改了之後多久才發現不對」寫成一個具體秒數，並說明那個秒數是誰決定、為什麼可以接受。**如果你寫不出那個秒數，代表你還沒想清楚，不要只是寫「視情況」。**
 21. 執行 `python migrations.py runner`，截圖必須包含 `applied 0004`（`email` 是 `None`）與 `applied 0005`（`email` 有值），以及最後那行 `ledger:`。**回答：為什麼這要拆成兩步？如果合併成一步「加 NOT NULL 欄位並填值」，中途失敗會是什麼狀況？**
 22. 執行 `python migrations.py limits`，截圖必須包含 `near "TYPE": syntax error` 與 `Cannot add a NOT NULL column with default value NULL`。**回答：第二個錯誤為什麼是「正確的拒絕」而不是資料庫的缺陷？它要求你先決定什麼？**
-23. 執行 `python migrations.py expand`，截圖必須包含 `users: does not exist` 那一段，**而且後面還要有一整段 `users_new` 的三列。**回答：什麼時候才允許對舊表下 `DROP`？為什麼這個時機不能和前面的步驟放在同一次部署？
-24. 回答：你的期末專題如果有 100 萬列資料，`CREATE INDEX` 大概要跑多久？**你會用本機量到的時間推估嗎？**寫出你實際會怎麼取得那個數字。
+23. 執行 `python migrations.py expand`，截圖必須包含 `users: does not exist` 那一段，**而且後面還要有一整段 `users_new` 的三列。** 回答：什麼時候才允許對舊表下 `DROP`？為什麼這個時機不能和前面的步驟放在同一次部署？
+24. 回答：你的期末專題如果有 100 萬列資料，`CREATE INDEX` 大概要跑多久？**你會用本機量到的時間推估嗎？** 寫出你實際會怎麼取得那個數字。
 
 把作業截圖與簡答筆記存入 `exercises/05-persistence/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認沒有把 `users.json`、`notes.db`、`race.json`、`race.lock` 、`indexes.db`、`cache.db` 或 `migrations.db` 一起 commit 進去。
 

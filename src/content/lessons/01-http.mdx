@@ -117,7 +117,7 @@ Request 第一行的第一個單字是 Method。它描述 Client 想對指定資
 
 **safe method** 只要求讀取，不應改變伺服器上的資源狀態。`GET` 屬於 safe method。
 
-**idempotent（冪等性）**指的是：同一個 Request 執行一次或多次，對伺服器資源產生的最終效果相同。`GET`、`PUT`、`DELETE` 屬於 idempotent 操作；`POST` 通常不是。
+**idempotent（冪等性）** 指的是：同一個 Request 執行一次或多次，對伺服器資源產生的最終效果相同。`GET`、`PUT`、`DELETE` 屬於 idempotent 操作；`POST` 通常不是。
 
 例如刪除同一筆資料兩次：第一次刪除時，伺服器移除了該筆記錄；第二次再執行刪除時，伺服器可能回傳 404，但資料庫中「該筆資料不存在」的最終狀態完全相同。因此 `DELETE` 仍然是 idempotent 操作。
 

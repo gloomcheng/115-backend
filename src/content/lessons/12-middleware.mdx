@@ -82,7 +82,7 @@ FastAPI 官方文件對中介軟體的定義是：它處理「every request **be
 
 ## 02. 巢狀：進去照順序，回來照相反
 
-這條位置還決定了第二件事：**多個中介軟體怎麼串。**`x-trace` 這個 Header 是為了讓巢狀看得見而存在的，看它的順序：
+這條位置還決定了第二件事：**多個中介軟體怎麼串。** `x-trace` 這個 Header 是為了讓巢狀看得見而存在的，看它的順序：
 
 <Terminal title="bash — the nesting order in one header" flavor="output">{`
 > curl -i http://127.0.0.1:8005/open | rg -i '^x-trace'
@@ -176,7 +176,7 @@ print(json.loads(base64.urlsafe_b64decode(p + '=' * (-len(p) % 4))))
 {'sub': 'root', 'role': 'intern', 'exp': 1790956815}
 `}</Terminal>
 
-**這個欄位是故意寫錯的。**現在拿它去打只有管理員能用的路徑：
+**這個欄位是故意寫錯的。** 現在拿它去打只有管理員能用的路徑：
 
 <Terminal title="bash — the wrong claim does not matter" flavor="output">{`
 > curl -i http://127.0.0.1:8005/admin -H "Authorization: Bearer $ADMIN"
@@ -313,7 +313,7 @@ SIGNING_KEY=lesson-12-key-b fastapi dev main.py --port 8006
 
 第 07 節才剛換完金鑰，第 04 到 06 節都在拒絕不該進來的人。但那些判斷要花時間：要讀 Header、要驗簽章、要查表。**一個不帶任何憑證的 Client 照樣能把這些步驟全部走完。**
 
-**你的 Server 只有一顆 CPU。**一個不帶憑證的 Client 送出 10 000 個請求，不代表這支 API 很受歡迎，可能只代表有人正在打你。
+**你的 Server 只有一顆 CPU。** 一個不帶憑證的 Client 送出 10 000 個請求，不代表這支 API 很受歡迎，可能只代表有人正在打你。
 
 <Callout type="important" title="速率限制是唯一一個「沒登入也適用」的控制">
   `401`、`403` 都要先知道你是誰才能判斷。速率限制不用——它只需要知道「這個來源剛剛叫了幾次」。
@@ -419,7 +419,7 @@ $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/nope
   429
   `}</Terminal>
 
-  **是 429，不是 401。**因為 `rate_limit` 是最後註冊的，也就是最外層，它比認證先跑。
+  **是 429，不是 401。** 因為 `rate_limit` 是最後註冊的，也就是最外層，它比認證先跑。
 
   這是取捨，不是錯誤：如果你不想讓「沒登入的人」拿到 `429`（那會洩漏你每分鐘的上限），就要把限流註冊在認證**裡面**。**限流器的位置本身就是一個安全決策。**
 </Callout>
@@ -448,7 +448,7 @@ $ python rate_limit.py fixed
 <Callout type="warning" title="破口的名字叫 double rate burst">
   計數器在視窗起點歸零。攻擊者在 `t=59.9` 送 5 個，等兩秒到 `t=60` 計數器歸零，再送 5 個。
 
-  **他在任何連續 60 秒內都沒有超過 10 個，而你的規則寫的是 5。**攻擊成本直接翻倍，而且他不需要任何技巧，只要掐時間。
+  **他在任何連續 60 秒內都沒有超過 10 個，而你的規則寫的是 5。** 攻擊成本直接翻倍，而且他不需要任何技巧，只要掐時間。
 
   修法就是把「到點歸零」換成「往回看過去 60 秒」。
 </Callout>
@@ -463,7 +463,7 @@ $ python rate_limit.py sliding
    memory grows with what you allow, which is the price of exactness
 `}</Terminal>
 
-同樣 10 個請求，只准 5 個。差別在於：**它記住每一個請求發生的時間點，而不是記住「這一格有幾個」。**過期的丟掉，永遠只看「過去 60 秒有幾個」。
+同樣 10 個請求，只准 5 個。差別在於：**它記住每一個請求發生的時間點，而不是記住「這一格有幾個」。** 過期的丟掉，永遠只看「過去 60 秒有幾個」。
 
 <Callout type="important" title="滑動視窗的代價是記憶體，而且要記每一筆">
   上面那個 `log` 裡存的是 5 個時間戳。上限調到 10 000，它就存 10 000 個。
@@ -503,7 +503,7 @@ $ python rate_limit.py bucket
   - 同一間公司、同一個 NAT 後面的一整棟樓共用一個 IP。**一個人寫壞的迴圈，會讓整棟樓被擋。**
   - 反過來，攻擊者換一個 IP 就重置了計數器——**用 IP 擋不住真正的攻擊者。**
 
-  常見的折衷是：**未登入的請求用 IP 當 key，登入後改用帳號當 key。**已驗證的 Client 比較好辨識，攻擊者要換帳號的成本比換 IP 高。
+  常見的折衷是：**未登入的請求用 IP 當 key，登入後改用帳號當 key。** 已驗證的 Client 比較好辨識，攻擊者要換帳號的成本比換 IP 高。
 </Callout>
 
 <Callout type="warning" title="限流器裡的 dict 是一份沒有上限的記憶體">
@@ -511,7 +511,7 @@ $ python rate_limit.py bucket
 
   攻擊者不需要真的把你的 API 打慢——他只要讓幾百萬個不同 IP 各來一次，你的記憶體就被吃掉了，而當下幾乎沒有真實流量。
 
-  **任何「依照來源分組」的結構，都要問自己：這個 key 的數量有上限嗎？**沒有的話，那是另一種形式的阻斷服務。
+  **任何「依照來源分組」的結構，都要問自己：這個 key 的數量有上限嗎？** 沒有的話，那是另一種形式的阻斷服務。
 </Callout>
 
 ### 08.6 CSRF：這個漏洞，你的專題目前沒有
@@ -539,7 +539,7 @@ $ python rate_limit.py bucket
   三件事同時成立：
 
   1. 認證憑證放在 **Header**，不是 Cookie。
-  2. **瀏覽器不會自動幫你填 Header。**只有同一個 origin 的 JavaScript 可以設它，而攻擊者的頁面不是同一個 origin。
+  2. **瀏覽器不會自動幫你填 Header。** 只有同一個 origin 的 JavaScript 可以設它，而攻擊者的頁面不是同一個 origin。
   3. `login` 回應裡**沒有 `Set-Cookie`**，因為 token 根本不存進瀏覽器。
 
   攻擊者能控制的只有「你的瀏覽器自動附上的東西」。這三點讓那個集合是空的。
@@ -644,7 +644,7 @@ bad csrf token [403]
   - **CSRF token**：攻擊者讀不到的那個值。`csrf` Cookie 設在 `8010`，攻擊者的頁面在 `8007`，同源政策擋住讀取，所以表單只能送出空字串。
   - **`Origin` 檢查**：瀏覽器送的 `Origin` 無法被頁面內容覆寫，跨站 POST 會誠實地寫上攻擊者的 origin（`8007`）。
 
-  **三道都要有。**任何單獨一道被廢掉的時候——`SameSite` 的預設值改掉、token 在 XSS 裡外洩、某個舊客戶端不送 `Origin`——另外兩道還在。
+  **三道都要有。** 任何單獨一道被廢掉的時候——`SameSite` 的預設值改掉、token 在 XSS 裡外洩、某個舊客戶端不送 `Origin`——另外兩道還在。
 </Callout>
 
 <Callout type="warning" title="Origin 檢查有個洞，而且程式碼裡看得到">
@@ -666,11 +666,11 @@ bad csrf token [403]
   ok, moved 10000 from iris [200]
   `}</Terminal>
 
-  **通了。**因為這個請求沒有帶 `Origin`，檢查直接跳過，而 token 又剛好是對的。
+  **通了。** 因為這個請求沒有帶 `Origin`，檢查直接跳過，而 token 又剛好是對的。
 
   這不是漏洞，是這兩道防線的邊界。攻擊者能不能走到這一步，取決於他能不能同時拿到 token 並且讓瀏覽器不送 `Origin`——真實瀏覽器在跨站情境會送，所以純網頁攻擊走不到。
 
-  **但它說明了一件事：不要把「擋住大部分攻擊」當成「安全」。**你能說出它在哪裡失效，才算真的懂這三道防線。
+  **但它說明了一件事：不要把「擋住大部分攻擊」當成「安全」。** 你能說出它在哪裡失效，才算真的懂這三道防線。
 </Callout>
 
 ### 08.9 判斷題：你的專題要不要處理 CSRF
@@ -681,7 +681,7 @@ bad csrf token [403]
   - 會（存在 Cookie 裡）→ **需要** CSRF 防護。
   - 不會（放 Header、由呼叫端自己帶）→ 這個攻擊不成立。
 
-  然後記住第二件事：**改了傳輸方式，防護要跟著改。**從 Bearer 換到 Cookie session 的那一天，就是漏洞回來的那一天，而 git 不會提醒你。
+  然後記住第二件事：**改了傳輸方式，防護要跟著改。** 從 Bearer 換到 Cookie session 的那一天，就是漏洞回來的那一天，而 git 不會提醒你。
 </Callout>
 
 <Callout type="note" title="SameSite 預設值這件事">
@@ -698,7 +698,7 @@ bad csrf token [403]
 
 第 08 節的限流與 CSRF 都做完了，下面回到 `main.py`。Terminal 1 跑著 `SIGNING_KEY=lesson-12-key-a fastapi dev main.py --port 8005`，Terminal 2 已經把 `$STUDENT` 和 `$ADMIN` 放出來了。這支 API 的下面十四步照順序做，每一步都先看指令再看截圖要求。
 
-**第 1 到 10 步打的是 8005，第 11 到 14 步換成 8006、8007、8008、8010，所以兩組互不干擾。**第 9 步會重啟 Terminal 1，重啟之後在做完第 10 步之前不要再打 8005，否則第 10 步拿到的不是 `429`。
+**第 1 到 10 步打的是 8005，第 11 到 14 步換成 8006、8007、8008、8010，所以兩組互不干擾。** 第 9 步會重啟 Terminal 1，重啟之後在做完第 10 步之前不要再打 8005，否則第 10 步拿到的不是 `429`。
 
 1. 先打一個這支 API 沒有定義的路徑：`curl -i http://127.0.0.1:8005/nope`。截圖必須同時包含 `404`、`x-request-id` 與 `x-trace`，因為中介軟體有沒有執行，證據就在那兩個 Header 上。
 2. 接著看巢狀順序：`curl -i http://127.0.0.1:8005/open | rg -i '^x-trace'`。把 `outer:in > inner:in > inner:out > outer:out` 整串抄下來，這是第 02 節的證據。
@@ -732,7 +732,7 @@ bad csrf token [403]
 9. 重啟 Server 後跑 `for i in $(seq 1 31); do curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8005/open; done | sort | uniq -c`，截圖必須包含 `30 200` 與 `1 429`。再 `curl -i http://127.0.0.1:8005/open`，截圖必須包含 `retry-after`。回答：為什麼這個數字每次跑都不一樣？
 10. 接著跑 `python rate_limit.py fixed` 與 `python rate_limit.py sliding`，兩張截圖都要包含 `5 at t=56..59, then 5 at t=60..63`。**回答：同樣 10 個請求，為什麼固定視窗放行 10 個、滑動視窗只放行 5 個？`main.py` 現在用的是哪一種？**
 11. 用 `grep -n "_hits" main.py` 找到那個 dict。回答：`_hits` 的 key 是什麼？這個 key 的數量有上限嗎？如果沒有，是什麼問題？
-12. 最後回答：你在 Terminal 2 打 `/profile` 忘了帶 token，但因為剛剛超流而拿到 `429`。**你要怎麼分辨「我被限流了」跟「我忘記帶 token 了」？**這兩個狀況 Server 給的 Header 有什麼不同？
+12. 最後回答：你在 Terminal 2 打 `/profile` 忘了帶 token，但因為剛剛超流而拿到 `429`。**你要怎麼分辨「我被限流了」跟「我忘記帶 token 了」？** 這兩個狀況 Server 給的 Header 有什麼不同？
 13. 照第 11 到 14 步在瀏覽器裡跑一次完整的 CSRF 實驗，截圖必須包含 `victim` 的 `TRANSFER 10000 from iris`、`bearer` 的 `401`、以及 `guarded` 的兩次 `403`。回答：`victim` 和 `guarded` 的差別只有防護，而 `bearer` 連 cookie 都沒有——**三組分別對應到哪一種「憑證會不會被瀏覽器自動附上」？**
 14. 用一句話回答：假設你的期末專題現在把登入方式從 Bearer 改成 Cookie session，**你要多寫哪幾行**？那些行的作用分別是什麼？如果改成 Cookie 卻什麼都不加，**哪一個請求會成功、金額會是多少？**
 

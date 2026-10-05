@@ -86,7 +86,7 @@ REST 讀資料的方式是：拿一條路徑，決定要什麼。`GET /notes` �
 {"items":[{"name":"welcome","title":"Welcome","tags":["intro","start"]},{"name":"api","title":"API design","tags":["rest"]}]}
 `}</Terminal>
 
-`tags` 在這個畫面上完全沒有用途。**REST 的回應形狀由 Server 決定，不由 Client 決定。**這個現象叫 over-fetching，它不是 bug，是 REST 這個設計的直接後果。
+`tags` 在這個畫面上完全沒有用途。**REST 的回應形狀由 Server 決定，不由 Client 決定。** 這個現象叫 over-fetching，它不是 bug，是 REST 這個設計的直接後果。
 
 現在走 GraphQL 那一條路，同一個 API、同一份資料：
 
@@ -144,7 +144,7 @@ REST 讀資料的方式是：拿一條路徑，決定要什麼。`GET /notes` �
 
   那麼「GraphQL 都回 200」這個說法從哪來？它來自**另一種錯誤**：查詢本身合法、執行到一半才錯，此時 `data` 有值而且不是 `null`，只有部分欄位失敗。那一種情況才真的沒有狀態碼可用——規格因此建議一個專門的 `294`，理由寫在草案的「Partial success」一節。
 
-  **「三個欄位成功、一個欄位失敗沒有狀態碼可用」是對的，但那只適用於第二種錯誤，不適用於你剛剛送出的這個。**單元 10 講過 `422` 沒有跨實作一致性，這裡是同一個問題換了個家族。
+  **「三個欄位成功、一個欄位失敗沒有狀態碼可用」是對的，但那只適用於第二種錯誤，不適用於你剛剛送出的這個。** 單元 10 講過 `422` 沒有跨實作一致性，這裡是同一個問題換了個家族。
 
   實務結論不變，而且更重要：**串接別人的 GraphQL API 時，不要只看狀態碼**，一律檢查 Body 裡有沒有 `errors`。`curl -f` 在這裡是沒用的。
 </Callout>
@@ -171,7 +171,7 @@ REST 讀資料的方式是：拿一條路徑，決定要什麼。`GET /notes` �
   | 少給一個必要欄位 | `422`（單元 07） | `errors`，`data: null` |
   | 誰能提前發現 | 無 | Client 端型別檢查 |
 
-  **REST 對「多」的錯誤完全沉默，GraphQL 對「少」的錯誤也沉默。**沒有哪一個家族比較嚴謹，它們只是選擇了不同的沉默方式。
+  **REST 對「多」的錯誤完全沉默，GraphQL 對「少」的錯誤也沉默。** 沒有哪一個家族比較嚴謹，它們只是選擇了不同的沉默方式。
 
   這也是為什麼單元 10 要教 `extra="forbid"`：REST 的沉默是可以自己關掉的，預設不關。
 </Callout>
@@ -212,7 +212,7 @@ REST 讀資料的方式是：拿一條路徑，決定要什麼。`GET /notes` �
 
   所以 `{"note":null}` 完全符合 schema。如果改成 `Note!`，GraphQL 就會強制回 `errors` 並把整個 `data` 變成 `null`，連其他成功的欄位一起拖下水。
 
-  **換一個 `!`，失誤的爆炸半徑就從一個欄位變成整個查詢。**這是讀別人的 GraphQL schema 時最該先看的一件事。
+  **換一個 `!`，失誤的爆炸半徑就從一個欄位變成整個查詢。** 這是讀別人的 GraphQL schema 時最該先看的一件事。
 </Callout>
 
 ---
@@ -252,7 +252,7 @@ SOAP 1.1 讓伺服器端先產出一份 WSDL（Web Services Description Language
 - `notes.proto` — gRPC 的契約
 - `trpc-contract.ts` — tRPC 的契約
 
-**它們不在這一堂課執行，因為它們的價值在「讀」，不在「跑」。**而且它們都不走 JSON。gRPC 走 Protocol Buffers 的二進位編碼，跑在 HTTP/2 上；tRPC 走 JSON，線上格式跟 REST 一樣；限制在**型別**——Client 的型別由 Server 的 router 推導出來，所以要用就得兩端在同一個 TypeScript 專案裡。
+**它們不在這一堂課執行，因為它們的價值在「讀」，不在「跑」。** 而且它們都不走 JSON。gRPC 走 Protocol Buffers 的二進位編碼，跑在 HTTP/2 上；tRPC 走 JSON，線上格式跟 REST 一樣；限制在**型別**——Client 的型別由 Server 的 router 推導出來，所以要用就得兩端在同一個 TypeScript 專案裡。
 
 `notes.proto` 的關鍵在這裡：
 
@@ -276,7 +276,7 @@ service NoteService {
 
   這是「contract-first」和「code-first」的差別。你在 `trpc-contract.ts` 裡看到的正是 code-first：契約寫在 Server 的 router 裡，Client 的型別由 TypeScript **推導**出來，所以不需要產生器，代價是跨語言時拿不到那份型別——其他語言仍然可以呼叫這支 API，只是變成未型別的 HTTP/JSON Client。
 
-  **SOAP/gRPC 是跨語言的必要成本；tRPC 放棄跨語言的「型別」，換掉整個產生步驟。**它沒有禁止別的語言呼叫，只是那邊拿不到型別檢查。
+  **SOAP/gRPC 是跨語言的必要成本；tRPC 放棄跨語言的「型別」，換掉整個產生步驟。** 它沒有禁止別的語言呼叫，只是那邊拿不到型別檢查。
 </Callout>
 
 ---
@@ -329,7 +329,7 @@ service NoteService {
   GraphQL 換到 Client 控制回應形狀，代價是聚合複雜度與「狀態碼不再代表成功」。
   tRPC 換掉跨語言的型別安全，換掉整個產生步驟。
 
-  你在職場上讀到一份 API 契約時，真正要問的是：**這份契約的作者把什麼換掉了？**因為那個取捨決定了它會在哪裡壞掉。
+  你在職場上讀到一份 API 契約時，真正要問的是：**這份契約的作者把什麼換掉了？** 因為那個取捨決定了它會在哪裡壞掉。
 </Callout>
 
 ## 07. WebSocket：HTTP 換掉自己
@@ -408,13 +408,13 @@ $ python websocket_demo.py frame
 `}</Terminal>
 
 <Callout type="important" title="這一段是整個 WebSocket 最會讓人卡住的地方">
-  **HTTP 會結束。**`Content-Length: 317` 說了「接下來 317 個位元組，然後 Body 結束」，所以讀完就結束，連線可以關。
+  **HTTP 會結束。** `Content-Length: 317` 說了「接下來 317 個位元組，然後 Body 結束」，所以讀完就結束，連線可以關。
 
-  **WebSocket 不會結束。**沒有 `Content-Length`，也沒有「讀到 EOF」——連線就是一直開著，等下一則訊息。
+  **WebSocket 不會結束。** 沒有 `Content-Length`，也沒有「讀到 EOF」——連線就是一直開著，等下一則訊息。
 
   所以原本那句 `data = connection.recv(4096)` **在這裡會直接把你卡死**：它會一直等下一則訊息，而下一則可能十分鐘後才來。
 
-  正確的讀法是：**先讀前兩個位元組，看出這一 frame 有多長，再讀那麼多。**第 08 節那個 `serve` 就是這樣寫的。
+  正確的讀法是：**先讀前兩個位元組，看出這一 frame 有多長，再讀那麼多。** 第 08 節那個 `serve` 就是這樣寫的。
 </Callout>
 
 <Callout type="note" title="為什麼要 mask">
@@ -467,7 +467,7 @@ opcode 0x81, length 5, payload b'hello'
 
   Client 送出的是 `81 82 01 02 03 04 69 6b`——第二個位元組是 `0x82`，`0x80` 就是 mask bit，後面多四個位元組的 key。
 
-  **第一個位元組兩邊都是 `0x81`，一模一樣。**差別全在第二個位元組：Server 的 `0x05` 是純長度，Client 的 `0x82` 是「有 mask」加上長度。
+  **第一個位元組兩邊都是 `0x81`，一模一樣。** 差別全在第二個位元組：Server 的 `0x05` 是純長度，Client 的 `0x82` 是「有 mask」加上長度。
 
   而 Client 那四個 key 位元組是 Server 完全沒有的 —— 它不是規格選項，是 mask 開著就必須附帶的東西。**整個 WebSocket 的方向不對稱性就在 `0x80` 那一個 bit 上。**
 </Callout>
@@ -486,9 +486,9 @@ opcode 0x81, length 5, payload b'hello'
 </Callout>
 
 <Callout type="warning" title="三個 WebSocket 特有的、HTTP 沒有的問題">
-  1. **重新連線。**手機切網路、Proxy 逾時，連線會斷，而且斷的時候 Server 那邊不一定知道。**你要自己寫重連邏輯，而每一次重連都要考慮「我漏掉了什麼」。**
-  2. **沒有狀態碼。**握手之後就沒有 `200`／`404` 了。一則訊息處理失敗，Client 只能從你自訂的內容判斷。
-  3. **連線數量。**一萬個 Client 就是一萬條連線。單元 12 講過的限流和單元 16 的多個行程，在這裡都要重新考慮。
+  1. **重新連線。** 手機切網路、Proxy 逾時，連線會斷，而且斷的時候 Server 那邊不一定知道。**你要自己寫重連邏輯，而每一次重連都要考慮「我漏掉了什麼」。**
+  2. **沒有狀態碼。** 握手之後就沒有 `200`／`404` 了。一則訊息處理失敗，Client 只能從你自訂的內容判斷。
+  3. **連線數量。** 一萬個 Client 就是一萬條連線。單元 12 講過的限流和單元 16 的多個行程，在這裡都要重新考慮。
 
   這三個都不是「學會協定」就會解決的，它們是架構問題。
 </Callout>

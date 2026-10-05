@@ -117,11 +117,14 @@ def run_both() -> None:
     print()
     print(f"   ratio: {over_ns / direct_ns:,.0f}x more expensive per call")
     print()
-    print("   Do not quote that ratio. Across six runs with pauses it moved")
-    print("   between about 1,500x and about 7,900x, because the HTTP side")
-    print("   carries whatever else this machine is doing. What holds every")
-    print("   time is the order of magnitude: hundreds of nanoseconds against")
-    print("   hundreds of microseconds. Three orders, at least a thousandfold.")
+    print("   Both numbers move between runs, and the ratio moves with them.")
+    print("   Run this file a few times with a pause between runs and watch how")
+    print("   far apart the ratios get: same machine, same code. The HTTP side")
+    print("   carries whatever else the machine was doing at the time, which is")
+    print("   why a single run's ratio is not a property of the code.")
+    print()
+    print("   What does not move: hundreds of nanoseconds against hundreds of")
+    print("   microseconds. Three orders of magnitude, every run.")
 
 
 def run_inprocess() -> None:

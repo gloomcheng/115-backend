@@ -68,7 +68,7 @@ fastapi dev main.py --port 8008
 Internal Server Error
 `}</Terminal>
 
-**Client 拿到的全部訊息就是 `Internal Server Error` 這 21 個字元。**沒有檔名、沒有行號、沒有「是 `ValueError` 還是 `KeyError`」。
+**Client 拿到的全部訊息就是 `Internal Server Error` 這 21 個字元。** 沒有檔名、沒有行號、沒有「是 `ValueError` 還是 `KeyError`」。
 
 這是刻意的。把例外細節寫進回應是資安漏洞 —— traceback 會洩漏你的檔案路徑、套件版本和內部結構。所以框架只給一句通用話語，真正的資訊留在 Server 端。
 
@@ -112,7 +112,7 @@ ValueError: something the handler could not handle
 <Callout type="note" title="為什麼 traceback 那麼長，而且前面全都不是你的程式">
   `boom` 是同步函式，框架把它丟到執行緒裡跑才有動。要離開同步世界，就必須經過 `anyio` 這一層執行緒包裝器，traceback 因此把每一層都記下來。
 
-  **看 traceback 的規則很簡單：從下往上讀，跳過所有不是你寫的檔案。**第一個屬於你的路徑通常就是真正出錯的位置。這一招在實務上適用於每一種例外，不只 Python。
+  **看 traceback 的規則很簡單：從下往上讀，跳過所有不是你寫的檔案。** 第一個屬於你的路徑通常就是真正出錯的位置。這一招在實務上適用於每一種例外，不只 Python。
 </Callout>
 
 ---
@@ -151,7 +151,7 @@ traceback 裡沒有路徑、沒有狀態碼、沒有時間戳、沒有 client IP
 2026-10-03 00:12:01,971 INFO  notes listing users count=1 request_id=-
 `}</Terminal>
 
-`request_id=-`。**減號代表沒有。**這行 log 說明了「有列出使用者」，但你無法把它和任何一次特定請求對起來。
+`request_id=-`。**減號代表沒有。** 這行 log 說明了「有列出使用者」，但你無法把它和任何一次特定請求對起來。
 
 現在加上中介軟體。`main.py` 裡已經寫好了：
 
@@ -227,12 +227,12 @@ INFO:     127.0.0.1:49563 - "GET /slow HTTP/1.1" 200 OK
 INFO:     127.0.0.1:50183 - "GET /users?token=SECRETVALUE&page=2 HTTP/1.1" 200 OK
 `}</Terminal>
 
-**`SECRETVALUE` 已經在 log 裡了，而這完全不是刻意做的。**uvicorn 的 access log 預設就印整條路徑，包含 query string。
+**`SECRETVALUE` 已經在 log 裡了，而這完全不是刻意做的。** uvicorn 的 access log 預設就印整條路徑，包含 query string。
 
 <Callout type="warning" title="query string 經常就是憑證">
   `?token=...`、`?api_key=...`、`?password=...`、`?email=...`、`?reset=...` 全部會原樣進 log。而 log 的讀取權限通常比資料庫寬鬆、保留期限比資料庫長、而且會被複製到監控、告警與第三方服務。
 
-  **憑證不該放在 query string。**它會進 browser history、進 referer、進中間 proxy 的快取，也會進 log。真的需要傳 token，用 `Authorization` Header —— 單元 11 用的就是那個。
+  **憑證不該放在 query string。** 它會進 browser history、進 referer、進中間 proxy 的快取，也會進 log。真的需要傳 token，用 `Authorization` Header —— 單元 11 用的就是那個。
 
   這是本節唯一需要記住的設定事實：**access log 印不印 query string，不是可以隨意開關的顯示選項，而是你資料管線的一部分。**
 </Callout>
@@ -249,12 +249,12 @@ INFO:     127.0.0.1:50183 - "GET /users?token=SECRETVALUE&page=2 HTTP/1.1" 200 O
 2026-10-03 00:12:52,872 INFO  notes admin viewed with token=Bearer eyJhbGciOiJIUzI1NiJ9.demo
 `}</Terminal>
 
-**它把 token 印出來了。**單元 11 說過 JWT 的 payload 任何人都能解出來，而簽名是唯一的保護。把 token 寫進 log，等於是把憑證交給每一個有 log 讀取權限的人，並且永久留在備份裡。
+**它把 token 印出來了。** 單元 11 說過 JWT 的 payload 任何人都能解出來，而簽名是唯一的保護。把 token 寫進 log，等於是把憑證交給每一個有 log 讀取權限的人，並且永久留在備份裡。
 
 <Callout type="warning" title="log 是敏感資料的放大器">
   一份 log 通常的讀取權限比資料庫寬鬆、保留期限比資料庫長、而且會被複製到監控系統、告警系統與第三方服務。
 
-  **你永遠不該寫進 log 的東西：**密碼、token、API key、信用卡號、身分證號碼、完整的 request body（裡面什麼都可能混著上面那些）。
+  **你永遠不該寫進 log 的東西：** 密碼、token、API key、信用卡號、身分證號碼、完整的 request body（裡面什麼都可能混著上面那些）。
 
   要記「有人用 token 進來了」，記識別就好：`request_id` 和 `sub`。單元 12 的 `require_admin` 手上剛好就有 `subject`。
 </Callout>

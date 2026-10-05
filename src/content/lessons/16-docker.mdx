@@ -87,9 +87,9 @@ REPOSITORY      TAG       IMAGE ID       CREATED         SIZE
 lesson16-base   latest    225a001f4ec7   14 seconds ago   306MB
 `}</Terminal>
 
-**306MB。**這不是錯的——裡面有完整的 Python 3.14、FastAPI 和它的相依套件。
+**306MB。** 這不是錯的——裡面有完整的 Python 3.14、FastAPI 和它的相依套件。
 
-這就是 image 的本質：**一個自帶所有東西的檔案系統。**它不需要在目標機器上裝 Python、不需要記得版本、不需要連網下載相依套件。
+這就是 image 的本質：**一個自帶所有東西的檔案系統。** 它不需要在目標機器上裝 Python、不需要記得版本、不需要連網下載相依套件。
 
 <Callout type="important" title="「帶著所有東西」是關鍵">
   沒有容器的話，你把程式碼交給別人，他要在自己的機器上裝對的 Python 版本、對的套件版本、對的系統套件，然後祈禱你的 `python main.py` 會動。
@@ -163,7 +163,7 @@ port 8000 -> 200
 
   或者反過來：應用程式裡寫 `http://127.0.0.1:5432` 連資料庫，在容器裡會連到**容器自己**的 5432，不是資料庫。PostgreSQL 在另一個容器時，要用服務名稱連，不是 `127.0.0.1`。
 
-  **判斷規則：`127.0.0.1` 永遠只指「我現在所在的這台機器」。**容器有自己的 `127.0.0.1`，和主機無關。
+  **判斷規則：`127.0.0.1` 永遠只指「我現在所在的這台機器」。** 容器有自己的 `127.0.0.1`，和主機無關。
 </Callout>
 
 ---
@@ -180,9 +180,9 @@ INFO:     192.168.215.1:49432 - "GET /health HTTP/1.1" 200 OK
 
 `192.168.215.1` 不是你的筆電 IP，也不是 `127.0.0.1`。它是 docker 網路裡的閘道位址。
 
-**你那邊的數字會不同。**這是 Docker 在這台機器上配的 bridge 閘道，換一台可能變成別的 `192.168.x.1`。要看的不是數字，是**它既不是你的主機 IP，也不是 `127.0.0.1`**。
+**你那邊的數字會不同。** 這是 Docker 在這台機器上配的 bridge 閘道，換一台可能變成別的 `192.168.x.1`。要看的不是數字，是**它既不是你的主機 IP，也不是 `127.0.0.1`**。
 
-**這是單元 15 那個警告的實例。**你若靠 access log 的 IP 做稽核，在容器環境裡會記到一個完全沒有意義的位址。
+**這是單元 15 那個警告的實例。** 你若靠 access log 的 IP 做稽核，在容器環境裡會記到一個完全沒有意義的位址。
 
 那怎麼拿到真實的來源？改用 proxy 傳來的 Header，而單元 15 提過的那個 `X-Forwarded-For` 就是它的來源，這支 API 的 Dockerfile 已經開了：
 
@@ -198,7 +198,7 @@ INFO:     192.168.215.1:49432 - "GET /health HTTP/1.1" 200 OK
 <Callout type="note" title="`--proxy-headers` 不是開關，是信任宣告">
   `fastapi run --proxy-headers --forwarded-allow-ips=*` 的意思是「**我假設所有連到我的人都可信賴，他們帶的 `X-Forwarded-For` 就是真的**」。
 
-  上面那個 `203.0.113.9` 是我隨便 `curl` 出來的，應用程式照單全收。**只有在後面確實有一台可信 proxy 會覆寫這個 Header 時，才可以這樣開。**如果 port 8000 直接暴露在 internet 上又開了這個參數，任何人都能偽造自己的 IP。
+  上面那個 `203.0.113.9` 是我隨便 `curl` 出來的，應用程式照單全收。**只有在後面確實有一台可信 proxy 會覆寫這個 Header 時，才可以這樣開。** 如果 port 8000 直接暴露在 internet 上又開了這個參數，任何人都能偽造自己的 IP。
 
   這個 repo 的做法是安全的：`compose.yaml` 把埠綁在 `127.0.0.1:8000`，所以外部連不到，只能從同機的 nginx 進來。單元 17 會驗收這個邊界。
 </Callout>
@@ -259,7 +259,7 @@ root
 appuser
 `}</Terminal>
 
-**如果程式被塞住，攻擊者拿到的預設身分不是 root。**這是單元 11 講的「權限邊界」在部署層的版本——同樣的道理，只是對象從使用者變成行程。
+**如果程式被塞住，攻擊者拿到的預設身分不是 root。** 這是單元 11 講的「權限邊界」在部署層的版本——同樣的道理，只是對象從使用者變成行程。
 
 ---
 
@@ -274,7 +274,7 @@ requirements.txt
 ls: cannot access '/app/tests': No such file or directory
 `}</Terminal>
 
-那個非 root 的身分還擋掉了一整類問題：`/app` 只有兩個檔案。**Dockerfile 沒有 `COPY` 進去的東西，容器裡就沒有。**沒有 `.git`、沒有 `README`、沒有 `__pycache__`、沒有你的 `.env`。
+那個非 root 的身分還擋掉了一整類問題：`/app` 只有兩個檔案。**Dockerfile 沒有 `COPY` 進去的東西，容器裡就沒有。** 沒有 `.git`、沒有 `README`、沒有 `__pycache__`、沒有你的 `.env`。
 
 這是 `.dockerignore` 的工作：
 
@@ -290,7 +290,7 @@ venv/
 <Callout type="important" title="`.env` 在這份清單裡，而且這不是可選的">
   單元 12 講過簽發金鑰必須從環境變數來，因為寫在檔案裡就會進 Git。
 
-  **`.dockerignore` 保護的是另一條路徑。**沒有它，`docker build` 會把整個目錄送進 build context，而 `.env` 會變成 image 的一層——然後 `docker push` 就把它送上了 registry。Git 裡刪掉也沒用，因為 image 裡已經有了。
+  **`.dockerignore` 保護的是另一條路徑。** 沒有它，`docker build` 會把整個目錄送進 build context，而 `.env` 會變成 image 的一層——然後 `docker push` 就把它送上了 registry。Git 裡刪掉也沒用，因為 image 裡已經有了。
 
   同一個原則的兩個出口：**Git 和 image 都會把檔案帶走，所以兩個都要擋。**
 </Callout>
@@ -323,7 +323,7 @@ venv/
 null
 `}</Terminal>
 
-**`Dockerfile` 沒有 `HEALTHCHECK` 指令，這份健康檢查是 compose 提供的。**兩者都能定義，差別在於 compose 的定義會隨著 `docker compose up` 一起生效，不需要 `docker run` 時手動加參數。
+**`Dockerfile` 沒有 `HEALTHCHECK` 指令，這份健康檢查是 compose 提供的。** 兩者都能定義，差別在於 compose 的定義會隨著 `docker compose up` 一起生效，不需要 `docker run` 時手動加參數。
 
 <Callout type="note" title="這個檢查有效嗎？確認一下它抓得到壞掉的狀態">
   健康檢查最常見的失效方式是「永遠通過」——它檢查的東西根本不會壞，所以它只是一個裝飾。
@@ -341,7 +341,7 @@ null
   dead port -> URLError
   ```
 
-  它打的是真的 HTTP、真的 port。程式沒起來，它就失敗。**判斷標準是：把 port 改錯，它會不會紅？**不會的話，那不是健康檢查。
+  它打的是真的 HTTP、真的 port。程式沒起來，它就失敗。**判斷標準是：把 port 改錯，它會不會紅？** 不會的話，那不是健康檢查。
 </Callout>
 
 `interval`、`timeout`、`retries`、`start_period` 各自回答一個問題：
