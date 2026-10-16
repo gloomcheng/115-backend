@@ -8,7 +8,7 @@ import Terminal from '../../components/Terminal.astro';
 import Callout from '../../components/Callout.astro';
 import FieldNote from '../../components/FieldNote.astro';
 
-第三課你學會路由表是一筆資料，第四課你寫了自己第一條路由，第五課你讓資料活過了行程結束。這一課把前面三件事接起來：**`path` 指向資料庫裡的一筆東西，`method` 決定你對它做什麼。**
+第三課你學會路由表是一筆資料，第四課你寫了自己第一條路由，第五課你讓資料在程式結束後還留得住。這一課把前面三件事接起來：**`path` 指向資料庫裡的一筆東西，`method` 決定你對它做什麼。**
 
 先把課堂 API 啟動起來：
 
@@ -29,7 +29,7 @@ curl -i -X POST http://127.0.0.1:8000/users \\
   -d '{"name":"bob","role":"student"}'
 `}</Terminal>
 
-第一次回 `200`，第二次回 `201`。兩次的 Body 長得完全不同，但你先不要看 Body—— 先看 Request Line 的第一個字。
+第一次回 `200`，第二次回 `201`。兩次的 Body 長得完全不同，但你先不要看 Body，先看 Request Line 的第一個字。
 
 <svg viewBox="0 0 940 400" role="img" aria-labelledby="rest-claim-title rest-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
   <title id="rest-claim-title">同一組 users 資源，method 決定 Server 回哪一個 Status Line</title>
@@ -142,7 +142,7 @@ curl -i -X DELETE http://127.0.0.1:8000/users/bob
 
 `405` 的意思是：這條路徑我認得，但沒有 `DELETE` 這個 method。`allow: GET` 告訴你這條路徑現在只接受哪一種 method。
 
-真正危險的地方在 `GET`。瀏覽器預先載入、proxy 快取、爬蟲、email 掃描器與捷徑輪播，都會自動送出 `GET`，而且不會問你。只要刪除可以被 `GET` 觸發，這些自動行為就會變成刪除。
+真正危險的地方在 `GET`。瀏覽器預先載入、proxy 快取、爬蟲與 email 掃描器，都會自動送出 `GET`，而且不會問你。只要刪除可以被 `GET` 觸發，這些自動行為就會變成刪除。
 
 <Callout type="warning" title="把刪除寫成 GET 會發生什麼事">
   搜尋引擎爬蟲抓到 `GET /users/delete?id=bob`，就會照著執行。瀏覽器 prefetch 也一樣。這種 bug 很少在測試時出現，因為測試只會照著你寫的 method 呼叫；出事的是那些不是你呼叫的那一方。
@@ -239,7 +239,7 @@ RFC 9110 對 `201` 的規定是：Server 應該在 `Location` Header 回報新�
 沒有 `Location` 的實際後果很具體：Client 只能從 Body 的欄位猜剛才那筆資源的識別。如果 Body 沒有回識別欄位（例如回 `{"ok":true}`），Client 就永遠拿不到 `bob` 這個位置，下一步連 `GET /users/bob` 都組不出來。
 
 <Callout type="important" title="Status Code 是 Server 的答案，不是裝飾">
-  第一單元說過：責任分界看打錯網址、遺漏參式，還是後端自己出錯。這一單元多一條規則：Client 送出 `method` 與 `path` 之後，Server 決定執行、拒絕，還是回 `405` 並告訴你它接受什麼。Client 不該從 `200` 推測一切正常，也不該把 `404` 當成空的資料。
+  第一單元說過：責任分界看打錯網址、漏掉參數，還是後端自己出錯。這一單元多一條規則：Client 送出 `method` 與 `path` 之後，Server 決定執行、拒絕，還是回 `405` 並告訴你它接受什麼。Client 不該從 `200` 推測一切正常，也不該把 `404` 當成空的資料。
 </Callout>
 
 ---
@@ -373,14 +373,14 @@ $ python n_plus_one.py scale
   **500 條語句、每條 1 毫秒，就是半秒。** 而且是每一個 Request 都要等半秒，只為了顯示一模一樣的資料。
 </Callout>
 
-### 06.2 為什麼它活過 code review
+### 06.2 為什麼它能通過 code review
 
 <Callout type="important" title="因為開發時資料只有三列">
   你在本地開發，資料庫裡可能有 3 個作者。那就是 4 條語句，跑起來 1 毫秒，**你看不出任何問題。**
 
   上線之後變成 500 個作者，你也不會立刻發現——**它沒有錯誤**，只是某個頁面比別的慢，而那個頁面通常不熱門。
 
-  N+1 是一種**不會自己浮出水面的 bug**：沒有例外、沒有錯誤訊息、沒有 log。它只有在流量和資料量同時長大之後才開始 costing 你，而且已經上線很久了。
+  N+1 是一種**不會自己浮出水面的 bug**：沒有例外、沒有錯誤訊息、沒有 log。它只有在流量和資料量同時長大之後才開始讓你付出代價，而且已經上線很久了。
 </Callout>
 
 <Callout type="note" title="所以怎麼在 review 時抓到它">
@@ -458,7 +458,7 @@ rows = connection.execute(
 
   一條語句，效果跟 `JOIN` 一樣。差別是 `JOIN` 會把兩個表合成一個結果集，`IN` 讓你拿到兩份資料、自己在程式裡對應。
 
-  **哪個比較好取決於你最後要回傳什麼形狀**，而那是單元 06 前五節在講的事。
+  **哪個比較好取決於你最後要回傳什麼形狀**，而那是本課前五節在講的事。
 </Callout>
 
 ### 06.5 這跟單元 05 的索引是同一課的兩半
@@ -483,7 +483,7 @@ rows = connection.execute(
 先講結論。**多數初學專題在這個階段不該拆分，這門課的期末專題也不該**，理由如下：
 
 <Callout type="important" title="拆分的理由不是「檔案太長」">
-  長檔案很煩，但**不貴**。你不需要兩個行程、兩個部署、兩套監控，就能處理一個三千行的檔案。
+  長檔案很煩，但**不貴**。你不需要兩個 process、兩個部署、兩套監控，就能處理一個三千行的檔案。
 
   真正該拆的理由只有一個：**同一件事，因為兩個不同的原因而需要改動。**
 
@@ -545,9 +545,9 @@ $ python split_demo.py overhttp
 
   **每次都成立的是數量級：幾百奈秒對上幾百微秒，三個數量級，至少千倍以上。** 這才是結論；具體幾千倍是這台機器、這個負載的性質，不是這堂課的。
 
-  而且這還是兩台都在同一台機器、用 loopback 的最佳情況。真的跨機器再加上網路來回，數字只會更大。
+  而且這還是兩個 process 都在同一台機器、走 loopback 的最佳情況。真的跨機器再加上網路來回，數字只會更大。
 
-  **所以「要不要拆」從來不是效能問題，是部署與擁有權的問題。** 想清楚那一點，就不會為了「跑得快」去拆。
+  **所以「要不要拆」從來不是效能問題，是部署與歸屬（哪個團隊負責）的問題。** 想清楚那一點，就不會為了「跑得快」去拆。
 </Callout>
 
 ### 07.2 真正改變的是失敗方式
@@ -560,11 +560,11 @@ $ python split_demo.py overhttp
 `}</Terminal>
 
 <Callout type="important" title="這是一個拆分之前不存在的失敗模式">
-  在同一個行程裡，被呼叫的函式**不可能被放棄**。它要嘛回傳答案，要嘛丟例外，而你就站在那裡。
+  在同一個 process 裡，被呼叫的函式**不可能被放棄**。它要嘛回傳答案，要嘛丟例外，而你就站在那裡。
 
   跨到網路之後就不一樣了：**對方可以活著但不回應。**
 
-  行程沒死、port 還開著、CPU 還在跑，只是太慢了。這種狀況在你把兩個東西放進同一個行程時**不存在**。
+  process 沒死、port 還開著、CPU 還在跑，只是太慢了。這種狀況在你把兩個東西放進同一個 process 時**不存在**。
 </Callout>
 
 <Callout type="warning" title="而且它會一路連鎖到別的章節">
@@ -575,29 +575,29 @@ $ python split_demo.py overhttp
 
 ### 07.3 拆分之後你會失去的三樣東西
 
-<Callout type="important" title="同一個交易不能再保證了">
-  同一個行程裡，你可以這樣做：
+<Callout type="important" title="一、同一個交易不能再保證了">
+  同一個 process 裡，你可以這樣做：
 
   ```python
   order = create_order(...)
   decrement_stock(...)      # 這裡失敗了，整件事 rollback
   ```
 
-  拆成兩邊之後，「這裡失敗了要怎麼辦」變成一個**分布式系統的問題**，而沒有免費的答案。
+  拆成兩邊之後，「這裡失敗了要怎麼辦」變成一個**分散式系統的問題**，而沒有免費的答案。
 
   標準做法是 **Saga**：把一筆交易拆成一串可以各自成功的步驟，每一步記錄自己做到哪裡，失敗時照著已完成的步驟往回撤。
 
   **這件事的複雜度是真的。** 它也是「初學專題不該拆」最實際的理由。
 </Callout>
 
-<Callout type="warning" title="2. 記憶體裡的東西變成別人的記憶體">
-  同一個行程裡，一個 `dict` 就是大家共用的。拆分之後它變成**另一個服務的內部狀態**，而你只能透過它的 API 去碰。
+<Callout type="warning" title="二、記憶體裡的東西變成別人的記憶體">
+  同一個 process 裡，一個 `dict` 就是大家共用的。拆分之後它變成**另一個服務的內部狀態**，而你只能透過它的 API 去碰。
 
   這通常是拆分之後最貴的一條：**所有「我就直接改一下」的捷徑全部消失。**
 </Callout>
 
-<Callout type="warning" title="3. 除錯變成兩台電腦的事">
-  單元 15 教過用 request id 把 log 接起來。拆分之後，同一個使用者動作的 log 散在兩個行程、兩份 log、可能兩個時區。
+<Callout type="warning" title="三、除錯變成兩台電腦的事">
+  單元 15 教過用 request id 把 log 接起來。拆分之後，同一個使用者動作的 log 散在兩個 process、兩份 log、可能兩個時區。
 
   **除錯成本上升的不是一點，是一個量級。** 而且這是永久的，不是過渡期。
 </Callout>
@@ -605,15 +605,15 @@ $ python split_demo.py overhttp
 ### 07.4 拆分換來的三樣東西
 
 <Callout type="important" title="公平地講，它換來的是真的">
-  - **各自部署。** 改訂單不必等使用者功能排期。
-  - **各自擴充。** 訂單服務|scale 到十份，使用者服務一份就夠。
+  - **各自部署。** 改訂單不必等使用者功能的上線時程。
+  - **各自擴充。** 訂單服務可以擴充到十份，使用者服務一份就夠。
   - **故障隔離。** 單元 17 講過連鎖故障；如果兩邊本來就有不同的可用性需求，隔離本身就是需求。
 
   **所以它是對的工具，只是昂貴。** 判斷的問題從來不是「好不好」，而是「**我現在這個痛是真的嗎**」。
 </Callout>
 
 <Callout type="note" title="一個誠實的順序">
-  1. 先讓它變成**一個行程裡的好模組**。檔案分開、依賴方向清楚、測試分開。
+  1. 先讓它變成**一個 process 裡的好模組**。檔案分開、依賴方向清楚、測試分開。
   2. 真的痛到受不了了，再上網路。
   3. 上網路之前，先確認你已經會 timeout、會重試、知道什麼叫 idempotent。
 
@@ -624,11 +624,9 @@ $ python split_demo.py overhttp
 
 ---
 
-## 08. 終端實戰驗證：四組對照
+## 08. 終端實戰驗證：六步對照
 
-`LEFT JOIN` 那一組和 N+1 那一組，回傳的資料逐字相同，差別只有語句數。**這是本課最後一個結論的證據，第五步會用 curl 之外的方式再量一次。**
-
-三次讀取與兩次建立的差別看過了，N+1 的差別也看過了。接著把這一課的結論各跑一次：前四步的結果都在 `curl` 的輸出裡，第五步開始換成數語句。
+上面每一節的結論，都能在終端機重跑一次。前四步看 `curl` 的輸出：讀取三次的三行輸出是否相同，`201`、`405`、`404` 各從哪個 method 與 path 來。第五步改成數語句，第六步量拆分的代價。
 
 ### 第一步：讀取不會改動狀態
 
@@ -650,41 +648,6 @@ curl -i http://127.0.0.1:8000/users/iris
 `}</Terminal>
 
 第一個 `201`、第二個 `200`。這是 `POST` 改動了 Server 狀態最直接的證據。
-
-### 第五步：數語句，不是數時間
-
-<Terminal title="bash — step 5, the count that matters" flavor="output">{`
-$ python n_plus_one.py scale
-  n_plus_one, 20 authors
-    statements: 21
-  n_plus_one, 500 authors
-    statements: 501
-  join,       500 authors
-    statements: 1
-`}</Terminal>
-
-**看 `statements` 那一行，不要看 `time`。** 本機的時間證明不了任何事，語句數才是證據。
-
-### 第六步：同一段邏輯，兩種呼叫方式
-
-前五步的時間都不值得看，這一步要看的是另一種成本。第六步把它搬到第二個行程，然後比較**每次呼叫**的代價。
-
-<Terminal title="bash — step 6, the same logic both ways" flavor="output">{`
-$ python split_demo.py inprocess
-     142 ns per call
-
-$ python split_demo.py overhttp
-     295,438 ns per call
-
-   identical : True
-
-$ python split_demo.py both
-   ratio: 3,410x more expensive per call
-`}</Terminal>
-
-**答案一樣，慢了幾千倍。** 具體幾千倍每次跑都不一樣（我量到的區間是 1,476 到 7,851），所以看 `both` 印的那個 `ratio:` 知道量級就好，不要自己用兩個絕對值去算，也不要把某一次的數字寫進報告。
-
-這就是呼叫跨過行程的價格，而這還只是同一台機器上的 loopback，還沒真的上網路。
 
 ### 第三步：撞到 method 的牆
 
@@ -709,6 +672,41 @@ $ python split_demo.py both
 
 `delete` 被當成一個 username。這就是為什麼 method 與 path 要分開負責。
 
+### 第五步：數語句，不是數時間
+
+<Terminal title="bash — step 5, the count that matters" flavor="output">{`
+$ python n_plus_one.py scale
+  n_plus_one, 20 authors
+    statements: 21
+  n_plus_one, 500 authors
+    statements: 501
+  join,       500 authors
+    statements: 1
+`}</Terminal>
+
+前四步驗證的是 method 與 path 的分工，第五步換一個問題：同一份資料取回來，程式問了資料庫幾次？**看 `statements` 那一行，不要看 `time`。** 本機的時間證明不了任何事，語句數才是證據。
+
+### 第六步：同一段邏輯，兩種呼叫方式
+
+前五步的時間都不值得看，這一步要看的是另一種成本。第六步把它搬到第二個 process，然後比較**每次呼叫**的代價。
+
+<Terminal title="bash — step 6, the same logic both ways" flavor="output">{`
+$ python split_demo.py inprocess
+     142 ns per call
+
+$ python split_demo.py overhttp
+     295,438 ns per call
+
+   identical : True
+
+$ python split_demo.py both
+   ratio: 3,410x more expensive per call
+`}</Terminal>
+
+**答案一樣，慢了幾千倍。** 具體幾千倍每次跑都不一樣（我量到的區間是 1,476 到 7,851），所以看 `both` 印的那個 `ratio:` 知道量級就好，不要自己用兩個絕對值去算，也不要把某一次的數字寫進報告。
+
+這就是呼叫跨過 process 的價格，而這還只是同一台機器上的 loopback，還沒真的上網路。
+
 ---
 
 ## 單元實作作業
@@ -727,11 +725,11 @@ $ python split_demo.py both
 10. 執行 `python n_plus_one.py latency`，截圖必須包含 `501 statements` 與 `501 ms if each statement cost 1 ms`。**回答：這一行裡哪個數字是真實的量測、哪個是加上去的？程式把本地時間放在摘要行裡嗎？為什麼不放在？寫出你會怎麼取得真實的網路往返時間。**
 11. 在你自己的專題資料模型上找一個 N+1：`grep -n "for .* in " *.py`，找出迴圈裡有沒有查資料庫。回答：**你找到的迴圈裡有查詢嗎？如果有，那是第幾層的迴圈？**（兩層迴圈各自再查一次，會是幾條語句？）
 12. 執行 `python split_demo.py both`，截圖必須包含 `ratio:` 那一行。**然後再執行一次，兩張截圖的 `ratio:` 差多少？回傳的資料有沒有不同？用第 07.1 節的結論回答：這是效能問題還是部署問題？**
-13. 執行 `python split_demo.py overhttp`，截圖必須包含 `client gave up after 1s`。**回答：對方的行程有死掉嗎？這種狀況在同一個行程裡存在嗎？為什麼？**
+13. 執行 `python split_demo.py overhttp`，截圖必須包含 `client gave up after 1s`。**回答：對方的 process 有死掉嗎？這種狀況在同一個 process 裡存在嗎？為什麼？**
 14. 回答第 07.3 節的三個問題，用你自己的專題回答：
     - 如果你把「訂單」和「使用者」拆成兩個服務，`create_order` 和扣庫存之間的 rollback 還做得到嗎？你會用什麼取代它？
     - 你現在的專題裡有沒有任何一個 `dict` 或 cache 是兩個功能共用的？拆開之後那個要怎麼處理？
-    - 你的專題上一次你想除一個 bug，是怎麼查的？拆成兩個之後要多做什麼？
+    - 你的專題上一次除錯是怎麼查的？拆成兩個之後要多做什麼？
 15. 最後回答：你的期末專題**要不要拆**？用第 07 節開頭那三條理由對照你的專題，寫出你滿足了哪一條、還差多少。如果一條都沒有，寫下「什麼情況出現時我會重新考慮」。
 
 把作業截圖與簡答筆記存入 `exercises/06-resource-modeling/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。

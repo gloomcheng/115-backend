@@ -76,7 +76,7 @@ identical result: True
 
 ```bash
 python split_demo.py inprocess   # 直接函式呼叫
-python split_demo.py overhttp    # 跨到第二個行程
+python split_demo.py overhttp    # 跨到第二個 process
 python split_demo.py trigger     # 什麼時候該拆
 ```
 
@@ -90,13 +90,13 @@ python split_demo.py trigger     # 什麼時候該拆
 
 慢兩千倍，但答案一樣。**所以這不是效能問題，是部署與擁有權的問題。**
 
-`overhttp` 最後會讓另一個行程變慢，然後印出：
+`overhttp` 最後會讓另一個 process 變慢，然後印出：
 
 ```
    outcome   : client gave up after 1s (1.0s)
 ```
 
-對方的行程沒有死，只是太慢。這種狀況在同一個行程裡**不存在** —— 因為你不可能放棄一個還在同一個行程裡的函式呼叫。
+對方的 process 沒有死，只是太慢。這種狀況在同一個 process 裡**不存在** —— 因為你不可能放棄一個還在同一個 process 裡的函式呼叫。
 
 ## 繳交
 

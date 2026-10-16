@@ -26,7 +26,7 @@ echo "$TOKEN"
 `}</Terminal>
 
 <Callout type="note" title="為什麼要存成變數">
-  接下來每一段都要重複使用同一枚 token，所以先 `export` 成 `$TOKEN`。`export` 讓它成為環境變數，後面 `python` 子行程才讀得到；只是 `TOKEN=...` 賦值的話，子行程看不到。
+  接下來每一段都要重複使用同一枚 token，所以先 `export` 成 `$TOKEN`。`export` 讓它成為環境變數，後面 `python` 子 process 才讀得到；只是 `TOKEN=...` 賦值的話，子 process 看不到。
 </Callout>
 
 <svg viewBox="0 0 940 440" role="img" aria-labelledby="auth-claim-title auth-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">

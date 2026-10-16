@@ -65,7 +65,8 @@ export const chapters: Chapter[] = [
     title: '資料、介面與錯誤契約',
     english: 'Persistence, Interface & Error Contracts',
     range: 'Week 05 – 10',
-    summary: '先讓資料活過行程結束，再把資源建模成路由，最後把驗證失敗變成可被程式讀懂的錯誤契約。',
+    summary:
+      '先讓資料在程式結束後還留得住，再把資源建模成路由，最後把驗證失敗變成可被程式讀懂的錯誤契約。',
     aiFocus: '模型可以提資料操作，但你要用測試確認資料沒有多一筆或少一筆。',
     weeks: [
       {

@@ -1,6 +1,6 @@
 # 05 — 存資料：File 跟 SQLite 差在哪
 
-三種存法，同樣寫入，結果三樣。這一課的重點只有一句話：**那個 `dict` 活不過一次執行。**
+三種存法，同樣寫入，結果三樣。這一課的重點只有一句話：**程式一結束，那個 `dict` 裡的資料就沒了。**
 
 ## 一、三種存法，先全部跑一次
 
@@ -21,7 +21,7 @@ python store.py sqlite-list
 
 ## 二、dict 為什麼讀不到
 
-`dict-list` 只看到 `alice`。因為上一個 `dict-add` 的行程已經結束了。
+`dict-list` 只看到 `alice`。因為上一個 `dict-add` 的 process 已經結束了。
 
 ## 三、文字檔同時寫會互相蓋掉
 
@@ -75,7 +75,7 @@ python indexes.py unused     # 沒人用的索引讓檔案變大多少
 
 `plan` 與 `index` 回傳的資料一模一樣，差的是 `SCAN`（讀完 5 萬列）變成 `SEARCH`（直接跳過去）。
 
-**你的時間數字會跟課本不同，plan 那行字不會。**看 plan。
+**你的時間數字會跟課本不同，plan 那行字不會。** 看 plan。
 
 ## 快取：一份會說謊的資料
 
@@ -115,7 +115,7 @@ add a NOT NULL column with no default: refused
 
 ## 繳交
 
-1. 六個 `store.py` 模式的輸出截圖（全部六行）+ 回答：哪一個模式在**新行程**裡讀得到資料？
+1. 六個 `store.py` 模式的輸出截圖（全部六行）+ 回答：哪一個模式在**新 process**裡讀得到資料？
 2. `json_race.py` 的完整輸出 + `cat users.json`，必須同時包含「兩邊都報成功」與「檔案裡沒有 `writer-A`」。回答：**有沒有任何一行輸出告訴你資料掉了？**
 3. `hold_the_lock.py hold` 與 `hold_the_lock.py write` 的兩張截圖（必須含 `database is locked`）+ `file notes.db`。回答：SQLite 做了文字檔沒做的事，是什麼？
 4. `ls -l` 與 `file notes.db` 的輸出截圖。**回答：一個固定大小、一個跟著資料量長，這個差別來自哪裡？**

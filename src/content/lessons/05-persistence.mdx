@@ -1,7 +1,7 @@
 ---
 title: "存資料 — File 跟 SQLite 差在哪"
 week: 5
-description: "dict 活不過一次執行，文字檔活著但會安靜地弄丟你的資料，SQLite 會明確拒絕你。"
+description: "dict 的資料在程式結束時就沒了；文字檔存得下來，但同時寫入時會不吭一聲弄丟資料；SQLite 會明確拒絕你。"
 ---
 
 import Terminal from '../../components/Terminal.astro';
@@ -13,9 +13,9 @@ import Callout from '../../components/Callout.astro';
 users = {"alice": {"name": "Alice", "note": "First HTTP example"}}
 `}</Terminal>
 
-這一行撐得住四課，因為你還沒重啟過程式。這一課的重點只有一句話：**那個 `dict` 活不過一次執行。**
+這一行撐得住四課，因為你還沒重啟過程式。這一課的重點只有一句話：**程式一結束，那個 `dict` 裡的資料就沒了。**
 
-這一課的三個程式都在 `exercises/05-persistence/`。`store.py` 每一個模式都只做兩件事之一——寫入或讀取——而且是**兩次不同的執行**。先全部跑一次：
+這一課的三個程式都在 `exercises/05-persistence/`。`store.py` 每一個模式都只做兩件事之一——寫入或讀取——而且是**分開跑的兩次**。先全部跑一次：
 
 <Terminal title="bash — write, then read from a fresh process">{`
 cd exercises/05-persistence
@@ -29,14 +29,14 @@ python store.py sqlite-list
 
 <svg viewBox="0 0 940 430" role="img" aria-labelledby="storage-claim-title storage-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
   <title id="storage-claim-title">三種存法，同樣寫入，結果三樣</title>
-  <desc id="storage-claim-description">dict 寫入後第二個行程看不到資料；users.json 寫入後看得見，但兩個 writer 同時寫會安靜地丟掉一筆；notes.db 寫入後看得見，而且同時寫入時第二個 writer 收到 database is locked。</desc>
+  <desc id="storage-claim-description">dict 寫入後第二個 process 看不到資料；users.json 寫入後看得見，但兩個 writer 同時寫會安靜地丟掉一筆；notes.db 寫入後看得見，而且同時寫入時第二個 writer 收到 database is locked。</desc>
   <defs>
     <marker id="storage-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
       <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
     </marker>
   </defs>
   <rect x="20" y="20" width="280" height="46" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
-  <text x="160" y="49" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">dict（行程記憶體）</text>
+  <text x="160" y="49" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">dict（process 記憶體）</text>
   <rect x="340" y="20" width="280" height="46" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
   <text x="480" y="49" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">users.json（文字檔）</text>
   <rect x="660" y="20" width="260" height="46" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
@@ -48,15 +48,15 @@ python store.py sqlite-list
   <path d="M480 112 V136" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#storage-arrow)" />
   <path d="M790 112 V136" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#storage-arrow)" />
   <rect x="20" y="142" width="280" height="112" rx="7" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
-  <text x="160" y="172" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">下一個行程看到</text>
+  <text x="160" y="172" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">下一個 process 看到</text>
   <text x="160" y="204" text-anchor="middle" fill="#ef795e" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">alice</text>
   <text x="160" y="232" text-anchor="middle" fill="#ef795e" font-size="14">carol 不見了</text>
   <rect x="340" y="142" width="280" height="112" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
-  <text x="480" y="172" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">下一個行程看到</text>
+  <text x="480" y="172" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">下一個 process 看到</text>
   <text x="480" y="204" text-anchor="middle" fill="#0b3d63" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">alice, carol</text>
   <text x="480" y="232" text-anchor="middle" fill="#274f67" font-size="14">56 bytes 純文字</text>
   <rect x="660" y="142" width="260" height="112" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
-  <text x="790" y="172" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">下一個行程看到</text>
+  <text x="790" y="172" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">下一個 process 看到</text>
   <text x="790" y="204" text-anchor="middle" fill="#0b3d63" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">carol</text>
   <text x="790" y="232" text-anchor="middle" fill="#274f67" font-size="14">8192 bytes，含結構</text>
   <rect x="20" y="272" width="280" height="94" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
@@ -76,7 +76,7 @@ python store.py sqlite-list
 
 ---
 
-## 01. dict 活不過一次執行
+## 01. dict 的資料，程式一結束就沒了
 
 先看前兩行輸出：
 
@@ -88,17 +88,17 @@ $ python store.py dict-list
 dict sees: ['alice']
 `}</Terminal>
 
-`dict-add` 確實把 `carol` 放進去了。`dict-list` 也確實是一個新的執行——它看不到 `carol`，因為 `carol` 住在**剛才那個行程的記憶體裡**，而那個行程已經結束了。
+`dict-add` 確實把 `carol` 放進去了。`dict-list` 是另一次全新的執行——它看不到 `carol`，因為 `carol` 住在**剛才那個 process 的記憶體裡**，而那個 process 已經結束了。
 
 這就是為什麼 `fastapi dev` 沒有 `--reload` 時，你重啟一次 Server，先前 `POST /users` 建立的資料就會不見。`examples/http-api/main.py:8` 的 `users` 就是這種東西。
 
 <Callout type="important" title="這不是 bug，是 dict 的定義">
-  Python 的 `dict` 是一個執行行程內的物件。行程結束，它就結束。要讓資料活過行程結束，必須寫進**行程之外**的東西。接下來兩種寫法，都在做這件事。
+  Python 的 `dict` 只存在於 process 的記憶體裡。process 結束，它就消失。要讓資料在程式結束後還在，必須寫進**process 之外**的東西。接下來兩種寫法，都在做這件事。
 </Callout>
 
 ---
 
-## 02. 文字檔：活下來了，但只是一串字
+## 02. 文字檔：存下來了，但只是一串字
 
 <Terminal title="bash — the JSON case" flavor="output">{`
 $ python store.py json-add
@@ -114,7 +114,7 @@ $ cat users.json
 {"alice": {"name": "Alice"}, "carol": {"name": "Carol"}}
 `}</Terminal>
 
-`carol` 活過了行程結束。檔案裡的 56 個位元組就是你用 `cat` 看到的東西——**沒有藏起來的東西**。你可以用任何文字編輯器改它，`git diff` 也看得懂它改了什麼。
+`carol` 在 process 結束後還在。檔案裡的 56 個位元組就是你用 `cat` 看到的東西——**沒有藏起來的東西**。你可以用任何文字編輯器改它，`git diff` 也看得懂它改了什麼。
 
 這是文字檔最大的優點，也是它最大的問題：因為它是純文字，**兩個程式同時改它時，沒有任何機制會告訴你其中一個改動不見了。**
 
@@ -131,7 +131,7 @@ $ cat users.json
 
 **`writer-A` 不見了，而兩個 writer 都說「我寫好了」。** 沒有錯誤訊息、沒有例外、沒有任何地方留下紀錄。
 
-`json_race.py` 的核心只有四行（先讀、再加一個 key、最後寫回），你可以自己去讀：兩個行程都「讀整個檔案 → 加一個 key → 寫回整個檔案」。B 讀到的版本裡還沒有 A 的改動，所以它寫回去的時候，把 A 的改動一併蓋掉了。這種「兩個同時寫入、彼此蓋掉」的結果就叫 lost update—— 資料蓋掉了，而且沒有人知道。
+`json_race.py` 的核心只有四行（先讀、再加一個 key、最後寫回），你可以自己去讀：兩個 process 都「讀整個檔案 → 加一個 key → 寫回整個檔案」。B 讀到的版本裡還沒有 A 的改動，所以它寫回去的時候，把 A 的改動一併蓋掉了。這種「兩個同時寫入、彼此蓋掉」的結果就叫 lost update：資料被蓋掉了，而且沒有人知道。
 
 <Callout type="warning" title="這一課最該記住的一句話">
   資料不見了，而且沒有任何人被告知。這是文字檔最危險的地方——不是它存不住資料，是它在**存不住的那一次完全沒有聲音**。單元 08 CRUD 與單元 10 驗證會處理怎麼預防它。
@@ -171,7 +171,7 @@ CREATE TABLE notes (id INTEGER PRIMARY KEY, text TEXT NOT NULL)
 `NOT NULL`、`INTEGER PRIMARY KEY` 這些規則**寫在檔案裡**，不是寫在你的 Python 程式裡。這是關鍵差異：你的程式結束了、換了一個人維護，規則還在。
 
 <Callout type="note" title="為什麼一個檔案要 8192 bytes">
-  SQLite 把磁碟空間切成固定大小的 page（預設 4 KB），一次配置兩頁。空的資料庫也會占掉這些空間。檔案大小不是資料量，這一點在單元 08 討論磁碟與容量時會再遇到。
+  SQLite 把磁碟空間切成固定大小的 page（預設 4 KB），一次配置兩頁。空的資料庫也會佔用這些空間。檔案大小不是資料量，這一點在單元 08 討論磁碟與容量時會再遇到。
 </Callout>
 
 ---
@@ -200,7 +200,7 @@ $ sqlite3 notes.db "SELECT id, typeof(id) FROM notes;"
 
 ## 05. 同時寫入：一個拒絕，一個不說話
 
-把第 02 節那個安靜的失敗，和 SQLite 放在同一個實驗裡。`hold_the_lock.py` 讓 writer A 獨占寫入鎖三秒：
+把第 02 節那個安靜的失敗，和 SQLite 放在同一個實驗裡。`hold_the_lock.py` 讓 writer A 獨佔寫入鎖三秒：
 
 <Terminal title="Terminal 1 — take the write lock">{`
 $ python hold_the_lock.py hold
@@ -238,7 +238,7 @@ $ sqlite3 notes.db "SELECT id, text FROM notes;"
 
 ---
 
-## 06. 併發：把「同時」看清楚
+## 06. 並行：把「同時」看清楚
 
 第 05 節看的是資料庫怎麼**拒絕**同時寫入。但真實的後端很少有「只有一個人會動」的時刻——你的 API 同時有幾個 Request 在跑，每一個都是一個執行緒。
 
@@ -256,7 +256,7 @@ $ cat race.json
 {"A": {"at": 1790996440.988849}}
 `}</Terminal>
 
-**兩個行程都讀到空物件，兩個都說寫成功了，檔案裡只有一個。** 沒有任何一行輸出提到出錯。
+**兩個 process 都讀到空物件，兩個都說寫成功了，檔案裡只有一個。** 沒有任何一行輸出提到出錯。
 
 那個 `"at": 1790996440.988849` 是 `time.time()` 寫進去的，你的會是另一個數字。**要看的不是那個值，是 `at` 這個欄位存在，而裡面只有一個作者。**
 
@@ -272,9 +272,9 @@ $ cat race.json
 **誰消失是不確定的。** 這就是第 02 節那個 `json_race.py` 的 lost update：沒有任何一行輸出告訴你出了事。
 
 <Callout type="warning" title="「讀→改→寫」這三步之間，任何東西都可以插進來">
-  `read()` 返回之後、`write()` 之前，是一段真空。另一個行程完全可以在這段裡面讀到同樣的舊資料、算出自己的版本、寫回去，把你的改動蓋掉。
+  `read()` 回傳之後、`write()` 之前，有一段空窗。另一個 process 完全可以在這段裡面讀到同樣的舊資料、算出自己的版本、寫回去，把你的改動蓋掉。
 
-  這個視窗在真實系統裡不是一秒，是**你把資料從網路讀完、算完、寫回去的所有時間**——可能幾百毫秒。單機上你用 `sleep(1)` 才看得到；線上它天天發生，而且通常只在尖峰時才出現。
+  這段空窗在真實系統裡不是一秒，是**你把資料從網路讀完、算完、寫回去的所有時間**——可能幾百毫秒。單機上你用 `sleep(1)` 才看得到；線上它天天發生，而且通常只在尖峰時才出現。
 </Callout>
 
 ### 06.1 計數器：更安靜的遺失
@@ -293,19 +293,19 @@ $ cat race.json
 {"count": 1, "A": {"at": 1790996442.054744}}
 `}</Terminal>
 
-**兩個行程各加一次，檔案裡的 `count` 是 1。**
+**兩個 process 各加一次，檔案裡的 `count` 是 1。**
 
 這比遺失一個 key 更難發現：key 消失你會注意到檔案少東西，計數器少加一次，**沒有任何東西看起來不對**。
 
 <Callout type="important" title="這是後端最常見、也最貴的一類 bug">
-  計數器少算，庫存賣超賣，投票少計。這些錯誤上線之後不會自己復原——資料已經錯了，而且沒有任何機制會把它修回來。
+  計數器少算，庫存超賣，投票少計。這些錯誤上線之後不會自己復原——資料已經錯了，而且沒有任何機制會把它修回來。
 
-  判斷標準只有一句：**這個值是「算出來的」還是「讀出來的事實」？** 讀出來的事實不會自己變；算出來的東西每一次計算都可能踩到同一段真空。
+  判斷標準只有一句：**這個值是「算出來的」還是「讀出來的事實」？** 讀出來的事實不會自己變；算出來的東西每一次計算都可能踩到同一段空窗。
 </Callout>
 
-### 06.2 加鎖：讓真空消失
+### 06.2 加鎖：把空窗關起來
 
-正確的作法是把「讀→改→寫」整段圈起來，讓第二個行程進來之前必須等：
+正確的作法是把「讀→改→寫」整段圈起來，讓第二個 process 進來之前必須等：
 
 <Terminal title="bash — the same race, serialised" flavor="output">{`
 $ rm -f race.json race.lock
@@ -319,7 +319,7 @@ $ cat race.json
 {"A": {"at": 1790996459.28441}, "B": {"at": 1790996460.289021}}
 `}</Terminal>
 
-**兩個都在。** 而且注意第二行程讀到的是 `{'A': ...}`——它讀得到 A 剛剛寫進去的東西，代表 A 確實已經寫完並釋放鎖，B 才進來。
+**兩個都在。** 而且注意第二 process 讀到的是 `{'A': ...}`——它讀得到 A 剛剛寫進去的東西，代表 A 確實已經寫完並釋放鎖，B 才進來。
 
 跑三次，三次都是 `["A", "B"]`，而 `naive` 跑三次遺失的是不同的一個。**這不是運氣好，是機制。**
 
@@ -344,9 +344,9 @@ os.close(lock)
 <Callout type="warning" title="我第一版寫錯了，而它是這裡最值得學的一件事">
   我第一次寫的 `acquire_lock()` 是開檔、`flock`、然後**立刻 `close()`**。跑起來結果是資料照樣遺失。
 
-  原因是 `flock` 綁在「開啟檔案的那個敘述」上，不是綁在那個檔案路徑上。你一 close，鎖就立刻被釋放——所以它從來沒有生效過，只是一段看起來很專業的程式碼。
+  原因是 `flock` 綁在「這一次開啟檔案」上，不是綁在檔案路徑上。你一 close，鎖就立刻被釋放——所以它從來沒有生效過，只是一段看起來很專業的程式碼。
 
-  **這是併發最典型的失敗模式：防禦看起來在那裡，實際上不在。** 你在測試時幾乎不會發現，因為測試通常一次只跑一件事。只有當兩個行程真的同時進來，你才會知道那把鎖是假的。
+  **這是並行最典型的失敗模式：防禦看起來在那裡，實際上不在。** 你在測試時幾乎不會發現，因為測試通常一次只跑一件事。只有當兩個 process 真的同時進來，你才會知道那把鎖是假的。
 </Callout>
 
 ### 06.3 三個詞分清楚
@@ -364,7 +364,7 @@ os.close(lock)
 
   **這就是優先用資料庫的理由。** 你手寫 `flock` 時要自己決定鎖哪裡、鎖多久、忘了釋放會怎樣；資料庫已經把這些規則收進去了。
 
-  所以實務上的順序是：**先問「資料庫能不能幫我擋」，可以就用資料庫；只有在它擋不住的時候（例如兩個行程各自快取了一份資料）才自己加鎖。**
+  所以實務上的順序是：**先問「資料庫能不能幫我擋」，可以就用資料庫；只有在它擋不住的時候（例如兩個 process 各自快取了一份資料）才自己加鎖。**
 </Callout>
 
 ---
@@ -423,14 +423,14 @@ CREATE INDEX idx_notes_author ON notes (author)
 
   不是。`notes` 裡的 5 萬列，索引前後一模一樣。索引只是**另外抄一份排序過的清單**，讓資料庫知道要跳到哪一頁。
 
-  所以刪掉 index 不會刪掉資料，只會讓查詢變慢。反過來，**有 index 也不等於查詢會快**——下面 07.3 會看到資料庫自己放棄使用它的情況。
+  所以刪掉 index 不會刪掉資料，只會讓查詢變慢。反過來，**有 index 也不等於查詢會快**——前面 07.2 的 `LIKE` 與 `tag = 'sql'` 就是資料庫自己放棄索引的例子。
 </Callout>
 
 ### 07.1 你其實早就有一個 index 了
 
 注意第二段：`SEARCH notes USING INTEGER PRIMARY KEY (rowid=?)`。
 
-`id INTEGER PRIMARY KEY` 這行——第 03 節講型別約束的時候提到過——在 SQLite 裡不只是「不能重複」，它**就是 `rowid` 本身**，資料庫本來就把它排好序了。所以 `WHERE id = ?` 從來不需要你自己建索引。
+`id INTEGER PRIMARY KEY` 這行——第 04 節講型別約束的時候提到過——在 SQLite 裡不只是「不能重複」，它**就是 `rowid` 本身**，資料庫本來就把它排好序了。所以 `WHERE id = ?` 從來不需要你自己建索引。
 
 <Callout type="note" title="所以在建 index 之前，先問一句：這張表的主鍵是什麼？">
   主鍵本來就有一個 index。這是最便宜的一次查詢最佳化，因為你不用做任何事。
@@ -462,7 +462,7 @@ $ python indexes.py composite
 
 四件事，全部直接寫在 plan 那一行裡：
 
-**一、`WHERE` 裡條件的先後順序不影响資料庫。** 前兩段的 plan 完全一樣，雖然你寫的順序相反。資料庫會自己把條件排到跟索引一致的順序。
+**一、`WHERE` 裡條件的先後順序不影響資料庫。** 前兩段的 plan 完全一樣，雖然你寫的順序相反。資料庫會自己把條件排到跟索引一致的順序。
 
 **二、索引的最左欄沒有被指定，它還是會被用。** 第三段出現 `ANY(tag)`——意思是「我不確定 tag 是哪一個，但我知道 author 一定是 `user0042`，所以我把 8 個 tag 各查一次」。這跟教科書上「最左欄必須出現」的說法不一樣，**SQLite 實際上就是這樣做的**。
 
@@ -500,7 +500,7 @@ $ python indexes.py composite
 <Callout type="important" title="所以「什麼時候該建 index」的答案不是背規則">
   規則是：**`WHERE`、`JOIN`、`ORDER BY` 裡出現的欄位，考慮建 index。** 其餘的都可以先不管。
 
-  然後**每一條查詢都看一次 plan**，確認它真的被用了。資料庫有權不聽你的——第 02 節就是例子：沒有索引時，`tag = 'sql'` 符合 6 250 列，佔全表的八分之一，那時候整表掃描就是對的選擇。
+  然後**每一條查詢都看一次 plan**，確認它真的被用了。資料庫有權不聽你的——第 07.2 節就是例子：`tag = 'sql'` 符合 6 250 列，佔全表的八分之一，那時候整表掃描就是對的選擇。
 </Callout>
 
 ### 07.3 索引是有代價的
@@ -619,7 +619,7 @@ $ python cache.py ttl
 
 <Callout type="important" title="所以要決定的是：可以忍受不對多久">
   - 顯示商品價格：錯 30 秒通常沒關係 → 給 TTL。
-  - 顯示轉帳餘額：錯 30 秒就是資安問題 → **不能只靠 TTL。**
+  - 顯示轉帳餘額：錯 30 秒就是帳務事故 → **不能只靠 TTL。**
 
   這是政策決定，不是技術決定。**先決定你能忍受多久不對，再去選機制**，而不是先加一個 TTL 再想它夠不夠。
 </Callout>
@@ -639,7 +639,7 @@ $ python cache.py invalidate
 
 把規則寫出來很簡單，簡單到不像工程：**每一條寫入路徑都要清快取**，不管那個寫入是使用者按的、TTL 觸發的，還是腳本跑的。
 
-問題在於「每一條」。單元 08 第 04 節的 `PUT` 和 `PATCH` 是兩條，第 07 節的遷移腳本是第三條，後臺工作、資料修正、第三方匯入，每一個都是一條。**少清一條，就是一個會上線的錯誤數字。**
+問題在於「每一條」。單元 08 第 04 節的 `PUT` 和 `PATCH` 是兩條，本課第 09 節的遷移腳本是第三條，背景工作、資料修正、第三方匯入，每一個都是一條。**少清一條，就是一個會上線的錯誤數字。**
 
 <Callout type="warning" title="這就是 cache invalidation 為什麼出了名地難">
   新增快取本身很簡單——一個 dict，兩行 code。難的是**你必須窮舉所有寫入路徑，而且不能漏**。
@@ -647,7 +647,7 @@ $ python cache.py invalidate
   漏掉的時候不會有任何症狀，只會在有人真的去比對數字的時候才發現。這是這門課裡少數「寫錯了也不會壞掉」的主題。
 </Callout>
 
-### 08.3 一個行程裡的快取，不是一個快取
+### 08.3 一個 process 裡的快取，不是一個快取
 
 這一節是最後一塊拼圖，也是最容易被忽略的：`worker`。兩個 worker，兩份快取。
 
@@ -669,17 +669,17 @@ $ python cache.py workers
 **worker B 正確，worker A 不正確，而 A 會一直錯下去。**
 
 <Callout type="important" title="這是單元 16 與 17 的伏筆">
-  你現在用 `fastapi dev` 跑，只有一個行程，所以第 08.2 節那種寫法「看起來沒問題」。
+  你現在用 `fastapi dev` 跑，只有一個 process，所以第 08.2 節那種寫法「看起來沒問題」。
 
-  部署之後會用多個 worker（第 16、17 單元）。**那時一份行程內的快取變成 N 份**，而「寫入時清掉」只清得到剛才那一份。
+  部署之後會用多個 worker（第 16、17 單元）。**那時一份 process 內的快取變成 N 份**，而「寫入時清掉」只清得到剛才那一份。
 
-  所以正確的順序是：**先假設你有多個行程來設計。** 要嘛把快取放在行程外面（Redis 這類，所有行程共用一份），要嘛接受它不一致，並且明確決定哪些資料可以不一致。
+  所以正確的順序是：**先假設你有多個 process 來設計。** 要嘛把快取放在 process 外面（Redis 這類，所有 process 共用一份），要嘛接受它不一致，並且明確決定哪些資料可以不一致。
 </Callout>
 
 <Callout type="note" title="那什麼時候不該用快取">
   問自己：**這份資料被改變之後，讓讀取者看到舊值，會產生問題嗎？**
 
-  - 會（價格、餘額、權限）→ 不要用行程內快取，或者 TTL 要短到可以接受。
+  - 會（價格、餘額、權限）→ 不要用 process 內快取，或者 TTL 要短到可以接受。
   - 不會（商品說明、圖片路徑、幾乎不改的設定）→ 快取很好用，而且 TTL 可以給很長。
 
   **先量過再說。** 第 07 節那個查詢在有索引和沒索引之間差了兩三個數量級，值得那份複雜度。第 08.1 節第一次讀取 `queries=1`——如果本來就只要 1 次查詢，快取連賺都沒賺到。
@@ -687,7 +687,7 @@ $ python cache.py workers
 
 ## 09. Migration：改資料庫的順序
 
-前三節都在改變「怎麼讀資料」，資料本身一直沒動。這一節要動結構了——而且動的是**已經有真實資料在裡面**的那個結構。
+前三節都在改變「怎麼讀資料」，資料本身一直沒動。這一節要動結構了——而且動的是**已經存了真實資料**的那個結構。
 
 <Callout type="important" title="Migration 和 `CREATE TABLE` 差在哪">
   `CREATE TABLE` 是你在空地上蓋房子。**Migration 是在已經有人住的房子裡施工**，而且住戶還在裡面走動。
@@ -763,7 +763,7 @@ $ python migrations.py limits
 
   翻譯：**新欄位要說每一列舊資料的值，但舊資料不知道自己該是什麼。**
 
-  SQLite 拒絕是對的，因為它沒有辦法猜。`iris` 的 `age` 該是 0、18、還是 `NULL`？這是**你的業務決定，不是資料庫的決定**。
+  SQLite 拒絕是對的，因為它沒有辦法猜。`iris` 的 `age` 該是 0、18、還是 `NULL`？這要看你的資料需求才能決定，**資料庫不能替你決定**。
 
   這也是上一節 `0004` 為什麼要分兩步：先用可空的欄位佔位，再補值，最後才收緊成 `NOT NULL`。
 </Callout>
@@ -854,16 +854,16 @@ $ python migrations.py expand
         800,000          335 ms       0.5 ms    0.42 us    89.2 MB
   `}</Terminal>
 
-  **看那個比例，不要看絕對數字。** `ADD COLUMN` 在三個尺寸都停在零點幾毫秒，因為它只改結構描述；`CREATE INDEX` 跟著資料長，因為它必須讀完再排序。同一個動作在 800 000 列時是 335 ms——**而那個檔案只有 89 MB**，一台正式環境的機器上，一個 89 MB 的索引建置就已經不能放在尖峰時間做了。
+  **看那個比例，不要看絕對數字。** `ADD COLUMN` 在三個尺寸都停在零點幾毫秒，因為它只改結構描述；`CREATE INDEX` 跟著資料長，因為它必須讀完再排序。同一個動作在 800 000 列時是 335 ms，而且還在跟著資料量增加。正式環境的表有幾千萬列時要跑多久，這張表推不出來，要在接近正式規模的測試環境實測。
 
-  `per row` 那一欄存在的目的是讓你看見它不是固定的。但這個程式的執行間變動跟趨勢一樣寬，所以不要從裡面讀出法則；它在 200 000 列那一列每次跑都不一樣。
+  `per row` 那一欄存在的目的是讓你看見它不是固定的。但這個程式每次執行之間的波動跟趨勢一樣大，所以不要從裡面讀出法則；200 000 列那一列每次跑都不一樣。
 </Callout>
 
 <Callout type="warning" title="所以有兩件事必須在寫 migration 之前想">
   1. **這個動作在正式環境要跑多久？** 如果答案需要估算，去找有幾百萬列的測試環境實測，不要用本機的時間推估——上面那個 `per row` 欄就是為什麼不能推估。
   2. **跑的時候，那張表還能被讀寫嗎？** 如果不能，你就是在讓整個服務停機。
 
-  這兩個問題的答案決定了你能不能在維護時段做，還是必須改用「在線新增索引」那種工具——而那些工具在 SQLite 上不存在，因為 SQLite 本身就是一個檔案。
+  這兩個問題的答案決定了你能不能在維護時段做，還是必須改用「不停機建立索引」那種工具——而那些工具在 SQLite 上不存在，因為 SQLite 本身就是一個檔案。
 </Callout>
 
 <Callout type="note" title="這一課的取捨，你現在應該能自己說出來了">
@@ -882,12 +882,12 @@ $ python migrations.py expand
 
 | 你在做的事 | 用哪一種 | 為什麼 |
 | --- | --- | --- |
-| 暫存資料、測試用、單一使用者 | `dict` | 行程結束就丟，正好是你要的 |
+| 暫存資料、測試用、單一使用者 | `dict` | process 結束就丟，正好是你要的 |
 | 設定檔、要進 Git 的資料、人工要能讀能改 | 文字檔 | `git diff` 看得懂，人手改得動 |
-| 會被讀寫的資料、多個程式會同時動它 | SQLite | 規則跟資料同住，並發時會拒絕你 |
+| 會被讀寫的資料、多個程式會同時動它 | SQLite | 規則跟資料同住，同時寫入時會拒絕你 |
 | 同一份資料被重複讀取很多次、而且可以忍受短暫不對 | 快取 | 用記憶體換時間，代價是第 08 節那些一致性問題 |
 
-**判斷的關鍵不是資料量，是「會不會有別的程式同時寫」。** 單機、單一行程的筆記本工具，文字檔完全夠用，強迫自己上資料庫只會增加複雜度。反過來，一旦有第二個執行緒或第二個程式會動同一份資料，文字檔的安靜失敗就變成你必須處理的問題。
+**判斷的關鍵不是資料量，是「會不會有別的程式同時寫」。** 單機、單一 process 的筆記本工具，文字檔完全夠用，強迫自己上資料庫只會增加複雜度。反過來，一旦有第二個執行緒或第二個程式會動同一份資料，文字檔的安靜失敗就變成你必須處理的問題。
 
 真實系統還有第三層：一個跑在別台機器上的伺服器（PostgreSQL、MySQL），行為規則跟 SQLite 相同，但多了網路與權限。單元 08 會先讓你在本機的 SQLite 上把規則與交易看清楚，再談放到網路上。
 
@@ -906,7 +906,7 @@ cd exercises/05-persistence
 rm -f users.json notes.db
 `}</Terminal>
 
-### 第一步：dict 活不過執行
+### 第一步：dict 的資料，程式一結束就沒了
 
 <Terminal title="bash — step 1" flavor="output">{`
 $ python store.py dict-add
@@ -917,7 +917,7 @@ dict sees: ['alice']
 
 `carol` 不在裡面。ls 也證明它沒留下檔案。
 
-### 第二步：文字檔活著，而且你看得懂
+### 第二步：文字檔存得下來，而且你看得懂
 
 <Terminal title="bash — step 2">{`
 $ python store.py json-add && python store.py json-list
@@ -927,7 +927,7 @@ $ cat users.json
 
 `carol` 在裡面，而且檔案是純文字。
 
-### 第三步：SQLite 活著，而且檔案裡有規則
+### 第三步：SQLite 存得下來，而且檔案裡有規則
 
 <Terminal title="bash — step 3">{`
 $ python store.py sqlite-add && python store.py sqlite-list
@@ -1061,7 +1061,7 @@ $ python migrations.py expand
 8. 執行 `python race_fix.py counting A & python race_fix.py counting B & wait` 再 `cat race.json`，截圖必須包含 `count=1`。回答：這比第 7 題更難發現，為什麼？
 9. 執行 `python race_fix.py locked A & python race_fix.py locked B & wait`，截圖必須包含 B 讀到 `{'A': ...}` 那一行。**回答：那一行證明什麼？** 如果 B 讀到的是 `{}`，代表什麼？
 10. 把 `acquire_lock()` 裡的 `os.close(lock)` 移到 `fcntl.flock(lock, ...)` 的**正下方**，重跑第 9 題。截圖必須包含資料遺失的結果。回答：為什麼加鎖「看起來在那裡」卻沒有生效？
-11. 回答：你的期末專題會不會有兩個程式同時寫同一份資料？根據第 08 節那三個問題，你會選哪一種？
+11. 回答：你的期末專題會不會有兩個程式同時寫同一份資料？根據第 10 節那三個問題，你會選哪一種？
 12. 執行 `python indexes.py plan`，截圖必須包含 `plan : SCAN notes` 與 `rows : 10`。**回答：符合條件的只有 10 列，資料庫實際上看了幾列？**
 13. 執行 `python indexes.py index`，截圖必須包含 `SEARCH notes USING INDEX`。回答：你的 `rows` 跟第 12 題一樣嗎？索引有沒有改變回傳的資料？
 14. 執行 `python indexes.py composite`，截圖必須包含 `ANY(tag)` 與 `COVERING INDEX` 兩行。回答：`ANY(tag)` 是什麼意思？為什麼你把 `WHERE` 裡的條件左右對調，plan 沒有變？
@@ -1069,7 +1069,7 @@ $ python migrations.py expand
 16. 執行 `python indexes.py cost` 與 `python indexes.py unused`，截圖必須包含 `the writer got` 那一行與 `4.7 MB`／`8.1 MB`。回答：索引讓誰變慢？為什麼 `DROP INDEX` 之後還要 `VACUUM`？
 17. 執行 `python cache.py stale`，截圖必須包含第三行的 `value=100` 與 `(database says 200)`。**回答：那一行裡的 `queries` 是多少？為什麼你的 log 不會記錄到那個 write？**
 18. 執行 `python cache.py ttl`，截圖必須包含 `t=20 still inside the TTL` 那一行標著 `stale`。回答：TTL 是 30 秒，這個答案最晚可以錯多久？
-19. 執行 `python cache.py workers`，截圖必須包含 `worker A read again: value=100` 與 `database says 200`。回答：**worker B 已經清掉自己的快取了，為什麼 worker A 還是不對？** 用一句話回答「一個行程內的快取」實際上是幾個快取。
+19. 執行 `python cache.py workers`，截圖必須包含 `worker A read again: value=100` 與 `database says 200`。回答：**worker B 已經清掉自己的快取了，為什麼 worker A 還是不對？** 用一句話回答「一個 process 內的快取」實際上是幾個快取。
 20. 回答：你的期末專題會快取什麼？把「改了之後多久才發現不對」寫成一個具體秒數，並說明那個秒數是誰決定、為什麼可以接受。**如果你寫不出那個秒數，代表你還沒想清楚，不要只是寫「視情況」。**
 21. 執行 `python migrations.py runner`，截圖必須包含 `applied 0004`（`email` 是 `None`）與 `applied 0005`（`email` 有值），以及最後那行 `ledger:`。**回答：為什麼這要拆成兩步？如果合併成一步「加 NOT NULL 欄位並填值」，中途失敗會是什麼狀況？**
 22. 執行 `python migrations.py limits`，截圖必須包含 `near "TYPE": syntax error` 與 `Cannot add a NOT NULL column with default value NULL`。**回答：第二個錯誤為什麼是「正確的拒絕」而不是資料庫的缺陷？它要求你先決定什麼？**

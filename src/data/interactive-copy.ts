@@ -83,7 +83,7 @@ export const interactiveCopy = {
         id: 'python3',
         label: 'python3',
         role: '執行環境直譯器',
-        summary: '呼叫本機安裝的 Python 3 直譯器建立獨立行程（Process）。',
+        summary: '呼叫本機安裝的 Python 3 直譯器建立獨立 process。',
         detail: '若電腦中未建立別名，部分系統可能使用 python 代替。它負責提供底層執行環境。',
       },
       {

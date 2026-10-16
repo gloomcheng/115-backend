@@ -213,7 +213,7 @@ INFO:     127.0.0.1:49563 - "GET /slow HTTP/1.1" 200 OK
 
 那個 access log 行**沒有 duration**。注意它有日期嗎？也沒有 —— uvicorn 預設的 access log 格式只有來源位址、Request Line 和狀態碼。
 
-要自己加時間戳，可以傳 `--log-config`，但那個檔案必須是**真的檔案**：把設定寫進 JSON 再用行程替換（`<(...)`）會失敗，`configparser` 讀不到 `/dev/fd/63`。這是實務上會卡住人的地方，值得知道。
+要自己加時間戳，可以傳 `--log-config`，但那個檔案必須是**真的檔案**：把設定寫進 JSON 再用 process substitution（`<(...)`）會失敗，`configparser` 讀不到 `/dev/fd/63`。這是實務上會卡住人的地方，值得知道。
 
 至於 **duration**，這一課不帶你做。要在 access log 裡顯示每個 Request 花了多久，得覆寫 access log 的 formatter 自己計算，那是單元 17 部署時才會需要的東西。**現在你要的時間，上面那條 `curl -w '%{time_total}s'` 已經給你了**——差別只是那是單次查詢，不是 Server 端的長期統計。
 

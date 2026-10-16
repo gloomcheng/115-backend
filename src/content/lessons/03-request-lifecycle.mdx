@@ -231,7 +231,7 @@ $ python queue_demo.py inline
 
 ### 07.1 把工作丟到 Client 看不到的地方
 
-最常見的做法是：把工作寫進一個佇列（先是一張表），立刻回 `202 Accepted`，然後交給另一個行程慢慢做。
+最常見的做法是：把工作寫進一個佇列（先是一張表），立刻回 `202 Accepted`，然後交給另一個 process 慢慢做。
 
 <Terminal title="bash — the request ends, the work has not" flavor="output">{`
 $ python queue_demo.py queued
@@ -254,7 +254,7 @@ $ python queue_demo.py queued
   這是設計，不是缺陷。`202` 存在的唯一理由就是「我現在還不知道答案」；它在 RFC 9110 裡跟 `200`、`201` 同屬 **2xx**，**非同步不等於失敗**。
 </Callout>
 
-### 07.2 工作跑到一半，行程死了
+### 07.2 工作跑到一半，process 死了
 
 這是第一個沒有 Client 幫你擋住的東西。
 
@@ -270,8 +270,8 @@ $ python queue_demo.py crash
 <Callout type="warning" title="注意 `effects: 1`——錢已經扣了">
   這個狀態最危險的地方在於**它看起來還在進行中**。`status` 是 `running`，不是 `failed`。
 
-  - 沒有例外，因為行程不是因為錯誤死的。
-  - 沒有 log，因為行程死掉的時候沒有東西會替你記下最後走到哪裡。
+  - 沒有例外，因為 process 不是因為錯誤死的。
+  - 沒有 log，因為 process 死掉的時候沒有東西會替你記下最後走到哪裡。
   - 沒有 Client 會來問，因為 Client 早就拿到 `202` 走人了。
 
   **前面六節教的三個發現問題的機制，在這裡同時失效。** 這是本節存在的理由。
@@ -327,7 +327,7 @@ $ python queue_demo.py idempotent
 
   ```sql
   SELECT COUNT(*) FROM effects WHERE job_id = 1;   -- 0
-  -- 行程在這裡死掉
+  -- process 在這裡死掉
   INSERT INTO effects ...;                          -- 永遠不會執行到
   ```
 
