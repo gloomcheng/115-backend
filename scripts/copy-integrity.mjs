@@ -48,7 +48,7 @@ if (process.argv.includes('--record')) {
 
 if (!fs.existsSync(baselinePath)) {
   console.error(
-    'Missing docs/copy-baseline.json. Run `npm run copy:baseline` after an approved copy review.'
+    'Missing docs/copy-baseline.json. Run `npm run copy:baseline` on the commit before the layout refactor starts; the file is git-ignored.'
   )
   process.exit(1)
 }

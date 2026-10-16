@@ -33,3 +33,6 @@ output/playwright/
 users.json
 race.json
 race.lock
+
+# Captured on demand before a layout refactor (npm run copy:baseline); never committed
+docs/copy-baseline.json

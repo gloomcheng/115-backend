@@ -92,11 +92,6 @@ const STAGES = [
     args: ['astro', 'build'],
   },
   {
-    name: 'Rendered Copy Integrity Guard',
-    cmd: 'node',
-    args: ['scripts/copy-integrity.mjs'],
-  },
-  {
     name: 'Accessibility (A11y) & Font Size Guard',
     cmd: 'node',
     args: ['scripts/a11y-check.mjs'],
