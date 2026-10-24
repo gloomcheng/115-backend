@@ -520,6 +520,64 @@ print(requested, decision)
 PY
 `}</Terminal>
 
+## 15. 為什麼 Agent 需要結構化狀態？
+
+第 09 節講了 context window 是有限的。接著還有更麻煩的一件事：**對話會被 compact**。被 compact 掉的不是重複，是細節——包含 Agent 已經排好的工作順序。
+
+如果工作順序只活在對話的散文裡，它會跟著 compact 一起衰敗。Agent 會忘記自己答應過要做什麼，而且不會承認自己忘記，它會很流暢地從頭開始。
+
+解法不是寫更好的摘要，而是把工作順序從散文裡拿出來。**能結構化就結構化**：計畫狀態交給 host 保存與重播，模型不負責重述。實際上有四條通道，每一條都不依賴模型記得。
+
+<svg viewBox="0 0 760 300" role="img" aria-labelledby="ai-q15-title ai-q15-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q15-title">ELI5 四條通道把計畫狀態交給 host</title>
+  <desc id="ai-q15-description">工具結果重播、摘要附錄、cadence 注入、磁碟快照四條通道，全部寫入 host 持有的結構化狀態；模型只讀取，不負責重述。</desc>
+  <rect x="20" y="25" width="215" height="52" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="127" y="47" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">toolResult 重播</text>
+  <text x="127" y="66" text-anchor="middle" fill="#274f67" font-size="13">工具結果裡本來就有欄位</text>
+  <rect x="20" y="92" width="215" height="52" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="127" y="114" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">摘要附錄</text>
+  <text x="127" y="133" text-anchor="middle" fill="#274f67" font-size="13">帶版號的機器可讀區段</text>
+  <rect x="20" y="159" width="215" height="52" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="127" y="181" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">cadence 注入</text>
+  <text x="127" y="200" text-anchor="middle" fill="#274f67" font-size="13">每 N 輪重新提醒一次</text>
+  <rect x="20" y="226" width="215" height="52" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="127" y="248" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">磁碟快照</text>
+  <text x="127" y="267" text-anchor="middle" fill="#274f67" font-size="13">細節留檔案，摘要只給指路</text>
+  <path d="M235 51 H440" stroke="#075486" stroke-width="3" />
+  <path d="M440 51 l-11 -7 v14 z" fill="#075486" />
+  <path d="M235 118 H440" stroke="#075486" stroke-width="3" />
+  <path d="M440 118 l-11 -7 v14 z" fill="#075486" />
+  <path d="M235 185 H440" stroke="#075486" stroke-width="3" />
+  <path d="M440 185 l-11 -7 v14 z" fill="#075486" />
+  <path d="M235 252 H440" stroke="#075486" stroke-width="3" />
+  <path d="M440 252 l-11 -7 v14 z" fill="#075486" />
+  <rect x="455" y="25" width="265" height="253" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="587" y="60" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">structured state</text>
+  <text x="587" y="90" text-anchor="middle" fill="#274f67" font-size="14">todo / plan</text>
+  <text x="587" y="118" text-anchor="middle" fill="#274f67" font-size="14">host owns it</text>
+  <text x="587" y="160" text-anchor="middle" fill="#ef795e" font-size="14">模型不重述計畫</text>
+  <text x="587" y="186" text-anchor="middle" fill="#ef795e" font-size="14">model never restates it</text>
+  <text x="587" y="230" text-anchor="middle" fill="#075486" font-size="13">append-only event log</text>
+  <text x="587" y="252" text-anchor="middle" fill="#075486" font-size="13">重播時不猜、不補</text>
+</svg>
+
+這四條通道其實都是 backend 的基本功：**append-only 的事件記錄，加上從記錄重播狀態，再加上每次寫入前的驗證**。單元 10 開始，每一個單元都會把當週的主題接進同一個 `agent-harness` 專案，到期末專題時它是一個跑得起來的系統。
+
+<Terminal title="bash — 狀態寫在事件記錄裡，不是模型重述的">{`
+$ cat events.jsonl
+{"event_id": "45712ffb6e20453baeb09507eaed6609", "observed_at": "2026-10-24T02:55:48Z", "op": "tool_result", "payload": {"tool_call_id": "call_1", "tool_name": "todowrite", "details": {"todos": [{"content": "write the replay tests", "status": "pending"}]}}}
+`}</Terminal>
+
+單元 10 的 harness 只有寫入端與讀取端；單元 12 會加上重播端 `/state`，把事件記錄還原成一份狀態：
+
+```json
+{"tool": "todowrite", "confirmed": true, "items": [{"content": "write the replay tests", "status": "pending"}]}
+```
+
+`confirmed` 這個欄位是重播的核心：**只有被成功結果確認過的寫入才算狀態**，失敗的寫入不覆蓋先前的狀態。單元 13 會把這條規則寫成斷言。
+
+被拒絕的寫入不會出現在狀態裡，因為它根本沒進事件記錄。**記錄裡只裝被接受的東西，重播就不需要猜。**
+
 ## 單元實作作業
 
 建立一個最小的 AI coding proof，不要先做聊天機器人：

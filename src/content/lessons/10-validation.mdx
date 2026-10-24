@@ -537,6 +537,64 @@ python xss_server.py --check
 
 ---
 
+## 09. 把它接回 harness：同一道檢查，換一個來源
+
+這一課到這裡結束了單元的技術內容。接下來這一小節，是從單元 10 開始、一直到期末專題的**專線**：每個單元把你正在學的 backend 主題，接進同一個叫 `agent-harness` 的專案。
+
+先說清楚 `agent-harness` 在做什麼。AI coding agent 跑的時候，模型會呼叫工具，工具會回傳結果。**那些結果是外部輸入**，跟 `POST /users` 的 Body 一樣，可能形狀不對、可能缺欄位、可能多一個沒人認得的欄位。
+
+本課教你的那件事，在 harness 裡原封不動地成立：**檢查寫在哪裡，決定留下什麼。** 這個單元的 harness 有兩個檔案：
+
+- `harness/validation.py` —— 一個 Pydantic 模型，站在入口檢查 tool result 的形狀。
+- `harness/events.py` —— 一個 append-only 的事件記錄，一行一個 JSON 物件。harness 的記憶體。
+
+**這個單元的規則一句話：檢查不過的結果，永遠不會出現在事件記錄裡。**
+
+<Terminal title="bash — start the harness">{`
+cd exercises/agent-harness
+fastapi dev main.py --port 8010
+`}</Terminal>
+
+送一個 tool result 進去：
+
+<Terminal title="bash — a tool result becomes an event" flavor="output">{`
+$ curl -i -X POST http://127.0.0.1:8010/events/tool-result \
+    -H 'Content-Type: application/json' \
+    -d '{"tool_call_id":"call_1","tool_name":"todowrite","details":{"todos":[{"content":"write the replay tests","status":"pending"}]}}'
+HTTP/1.1 201 Created
+{"event_id":"45712ffb6e20453baeb09507eaed6609","observed_at":"2026-10-24T02:55:48Z","op":"tool_result","payload":{...}}
+`}</Terminal>
+
+再送一個少一個欄位的：
+
+<Terminal title="bash — the same request, one field short" flavor="output">{`
+$ curl -s -X POST http://127.0.0.1:8010/events/tool-result \
+    -H 'Content-Type: application/json' \
+    -d '{"tool_name":"todowrite"}'
+{"detail":[{"type":"missing","loc":["body","tool_call_id"],"msg":"Field required","input":{"tool_name":"todowrite"}}]}
+`}</Terminal>
+
+`loc` 是 `["body","tool_call_id"]`。第 02 節講過的東西，在 harness 裡一樣成立：驗證失敗要指出**位置**，Sender 才能只改那裡。
+
+那它到底寫進去了沒有？
+
+<Terminal title="bash — the log only holds what was accepted" flavor="output">{`
+$ curl -s http://127.0.0.1:8010/events
+{"count":1,"events":[{...}]}
+`}</Terminal>
+
+`count` 是 **1**。第二個請求被拒，而被拒的那個**沒有留下任何痕跡**——不是寫進去再標記失敗，是根本沒寫。
+
+<Callout type="note" title="為什麼這件事值得佔掉第 10 課">
+  事件記錄是 harness 的記憶。單元 12 開始，harness 會從這份記錄裡重播「現在做到哪」。記憶裡如果混著「其實失敗過」的東西，之後每一次重播都要先懷疑它——那個懷疑會一直傳下去。
+</Callout>
+
+<Callout type="warning" title="接下來八個單元">
+  這個目錄會每個單元長出一塊：單元 11 加權限，單元 12 加中介軟體與重播，單元 13 把規則寫成斷言，單元 14 做工具呼叫的介面，單元 15 追 log，單元 16 包 Docker，單元 17 上 VPS，期末專題做成能續接的版本。**每個單元都在同一個目錄裡改，不要開新的。** 完整路線圖在 `exercises/agent-harness/README.md`。
+</Callout>
+
+---
+
 ## 單元實作作業
 
 在本地環境完成以下操作並記錄成果。
@@ -550,10 +608,11 @@ python xss_server.py --check
 7. 跑 `python xss_server.py`，用瀏覽器開 `/raw?name=<script>alert(1)</script>` 與 `/escaped?name=<script>alert(1)</script>`，截圖兩張並排。回答：怎麼從畫面分辨哪一個有執行？
 8. `python xss_server.py --check` 的第三、四段（`/naive-attr` 與 `/escaped-attr`），截圖必須包含 `onfocus=alert(1)`。**回答：`naive_escape` 有跳脫 `<` 和 `>`，為什麼注入還是成功？它假設了什麼？**
 9. 回答：你的期末專題如果要顯示使用者輸入的名稱，會放在哪裡（HTML 本文、屬性、URL、還是 JSON）？**那個位置決定你要用哪一個跳脫函數，寫出你的選擇和理由。**
-4. 送出 `[1,2,3]`、`{"name":` 與完全沒有 Body 三種，截圖三個 `detail`。回答：第二個的 `loc` 最後一個成員是數字還是字串？這兩種 `loc` 的形狀差異代表什麼？
-5. 送出 `{"name":"iris","admin":true}` 到 `/strict`，截圖回應。回答：這個欄位去哪裡了？兩種驗證都沒有擋下它，這說明什麼？
-6. 回答一句話：判斷一個失敗該回 `422` 還是 `409`，你的判斷標準是什麼？用「改完資料重送一次會不會成功」回答。
-7. 在你自己的 `main.py` 裡加一條 route，用 Pydantic 模型宣告 `name` 與 `role`，然後送一份壞資料，截圖必須包含 `422` 與 `loc`。用一行 diff 說明你把型別宣告放在哪裡、為什麼那裡是對的位置。
+10. 送出 `[1,2,3]`、`{"name":` 與完全沒有 Body 三種，截圖三個 `detail`。回答：第二個的 `loc` 最後一個成員是數字還是字串？這兩種 `loc` 的形狀差異代表什麼？
+11. 送出 `{"name":"iris","admin":true}` 到 `/strict`，截圖回應。回答：這個欄位去哪裡了？兩種驗證都沒有擋下它，這說明什麼？
+12. 回答一句話：判斷一個失敗該回 `422` 還是 `409`，你的判斷標準是什麼？用「改完資料重送一次會不會成功」回答。
+13. 在你自己的 `main.py` 裡加一條 route，用 Pydantic 模型宣告 `name` 與 `role`，然後送一份壞資料，截圖必須包含 `422` 與 `loc`。用一行 diff 說明你把型別宣告放在哪裡、為什麼那裡是對的位置。
+14. 走完第 09 節的 harness：`fastapi dev main.py --port 8010`，送一個少 `tool_call_id` 的 tool result，截圖必須包含 `422` 與 `loc`；再 `curl -s http://127.0.0.1:8010/events`，截圖必須顯示 `count` 是 `1`；再 `cat events.jsonl`，截圖。**回答一句話：如果把驗證拿掉、只保留寫檔，被拒的那筆會發生什麼事？**
 
 把作業截圖與簡答筆記存入 `exercises/10-validation/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
 

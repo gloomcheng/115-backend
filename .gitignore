@@ -25,6 +25,8 @@ __pycache__/
 output/playwright/
 # jetbrains setting folder
 .idea/
+# event log written by the agent harness exercise
+exercises/agent-harness/events.jsonl
 # sqlite databases produced by lesson exercises
 *.db
 *.db-journal
