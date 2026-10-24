@@ -717,6 +717,96 @@ bad csrf token [403]
 
 ---
 
+## 10. 把它接回 harness：每次呼叫走同一條鏈
+
+前一節講到 middleware 的理由：同一段邏輯不該在每個 handler 裡重複寫。harness 的版本更嚴格一點，連**順序**都固定下來。
+
+`harness/host.py` 裡的 `Host` 把這條鏈寫成四個步驟，每個步驟一個方法：
+
+| 步驟 | 誰在做 | 為什麼在這個位置 |
+|---|---|---|
+| 驗證 | `ToolResultIn.model_validate` | 形狀不對的請求沒有答案，回 422 |
+| 權限 | `require_role` | 知道你是誰不代表你可以做這件事 |
+| 落盤 | `EventLog.append` | 只有前兩關過了才寫 |
+| 重播 | `replay` | 現在是什麼，由整份事件記錄算出來 |
+
+順序不能換。驗證放前面，是因為形狀不對的輸入根本不值得為它查權限；權限放在落盤前面，是因為不該替沒有權限的人寫東西。
+
+這條鏈的重播結果，可以直接讀：
+
+<Terminal title="bash — the state, computed by replaying the log" flavor="output">{`
+$ curl -s http://127.0.0.1:8010/state -H "Authorization: Bearer $TOKEN"
+{
+  "todos": [
+    {"content": "write the replay tests", "status": "pending"},
+    {"content": "design the replay rules", "status": "completed"}
+  ],
+  "counts": {"pending": 1, "in_progress": 0, "completed": 1, "cancelled": 0, "unknown": 0},
+  "confirmed": true,
+  "source_event_id": "e3406a8ab325433798037f0258b83f05",
+  "updated_at": "2026-10-24T10:03:06Z",
+  "last_failed_event_id": null
+}
+`}</Terminal>
+
+`source_event_id` 是這份狀態來自哪一個事件。有它，狀態就可以回頭查證；沒有它，重播就只是一個沒有出處的答案。
+
+再送一個失敗的寫入，然後重讀一次：
+
+<Terminal title="bash — a failed write is evidence, not state" flavor="output">{`
+$ curl -s -X POST http://127.0.0.1:8010/events/tool-result \\
+    -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \\
+    -d '{"tool_call_id":"call_9","tool_name":"todowrite","is_error":true,"details":{"todos":[]}}'
+
+$ curl -s http://127.0.0.1:8010/state -H "Authorization: Bearer $TOKEN"
+{... "todos": [{"content": "write the replay tests", "status": "pending"}], "last_failed_event_id": "…" }
+`}</Terminal>
+
+任務清單沒有變，但 `last_failed_event_id` 指向了那次失敗。**失敗的寫入確實發生過，所以它進事件記錄；它沒有改變任何事實，所以它不改變狀態。** 而先前那筆確認過的寫入仍然成立——它還是目前為止最後一件確定發生的事。
+
+<Callout type="note" title="這個單元的規則">
+  驗證 → 權限 → 落盤 → 重播，每次呼叫走同一條鏈。鏈放在一個物件裡，就只有一個地方寫著順序；新增一條路由，就不可能跳過其中一步。
+</Callout>
+
+<svg viewBox="0 0 940 400" role="img" aria-labelledby="host-claim-title host-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="host-claim-title">每個請求都走同一條四步的鏈，順序固定</title>
+  <desc id="host-claim-description">一個 tool result 進來，依序通過四個關卡：形狀驗證、權限檢查、寫入事件記錄、從事件記錄重播狀態。第一關擋下形狀不對的輸入，第二關擋下角色不對的呼叫，兩關都過了才會寫。第三關寫進去的是第四關唯一能拿到的資料，所以狀態與事件記錄不會分歧。</desc>
+  <defs>
+    <marker id="host-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="26" width="900" height="56" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="470" y="50" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">tool result 進來（外部輸入，形狀未知）</text>
+  <text x="470" y="72" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">POST /events/tool-result</text>
+  <path d="M470 82 V112" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#host-arrow)" />
+  <rect x="20" y="118" width="205" height="74" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="122" y="148" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">1 驗證</text>
+  <text x="122" y="174" text-anchor="middle" fill="#274f67" font-size="13">形狀不對 → 422</text>
+  <path d="M225 155 H265" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#host-arrow)" />
+  <rect x="271" y="118" width="205" height="74" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="373" y="148" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">2 權限</text>
+  <text x="373" y="174" text-anchor="middle" fill="#274f67" font-size="13">角色不對 → 403</text>
+  <path d="M476 155 H516" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#host-arrow)" />
+  <rect x="522" y="118" width="205" height="74" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="624" y="148" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">3 落盤</text>
+  <text x="624" y="174" text-anchor="middle" fill="#274f67" font-size="13">append，append-only</text>
+  <path d="M727 155 H767" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#host-arrow)" />
+  <rect x="773" y="118" width="147" height="74" rx="7" fill="#d8f0dc" stroke="#2f7a45" stroke-width="3" />
+  <text x="846" y="148" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">4 重播</text>
+  <text x="846" y="174" text-anchor="middle" fill="#2f7a45" font-size="13">狀態 = f(log)</text>
+  <path d="M846 192 V232" fill="none" stroke="#2f7a45" stroke-width="4" marker-end="url(#host-arrow)" />
+  <rect x="20" y="238" width="900" height="62" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="40" y="266" fill="#075486" font-size="16" font-weight="700">事件記錄是 append-only，狀態只能從它算出來。</text>
+  <text x="40" y="290" fill="#274f67" font-size="14">所以狀態跟事件記錄不會各說各話——它們是同一件事的兩種看法。</text>
+  <rect x="20" y="312" width="900" height="72" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="40" y="340" fill="#075486" font-size="16" font-weight="700">失敗的寫入是證據，不是狀態：</text>
+  <text x="40" y="364" fill="#274f67" font-size="14">它確實發生過，所以進事件記錄；它沒有改變任何事實，所以不改變狀態。</text>
+  <text x="40" y="382" fill="#274f67" font-size="13">先前那筆確認過的寫入仍然成立——它還是最後一件確定發生的事。</text>
+</svg>
+
+---
+
 ## 單元實作作業
 
 在本地環境完成以下十四項操作，每一項的截圖與簡答都記錄下來。
@@ -735,6 +825,7 @@ bad csrf token [403]
 12. 最後回答：你在 Terminal 2 打 `/profile` 忘了帶 token，但因為剛剛超流而拿到 `429`。**你要怎麼分辨「我被限流了」跟「我忘記帶 token 了」？** 這兩個狀況 Server 給的 Header 有什麼不同？
 13. 照第 11 到 14 步在瀏覽器裡跑一次完整的 CSRF 實驗，截圖必須包含 `victim` 的 `TRANSFER 10000 from iris`、`bearer` 的 `401`、以及 `guarded` 的兩次 `403`。回答：`victim` 和 `guarded` 的差別只有防護，而 `bearer` 連 cookie 都沒有——**三組分別對應到哪一種「憑證會不會被瀏覽器自動附上」？**
 14. 用一句話回答：假設你的期末專題現在把登入方式從 Bearer 改成 Cookie session，**你要多寫哪幾行**？那些行的作用分別是什麼？如果改成 Cookie 卻什麼都不加，**哪一個請求會成功、金額會是多少？**
+15. 走完第 10 節的 harness：送一個成功的 `todowrite`，再送一個 `is_error: true` 的 `todowrite`，然後 `curl -s http://127.0.0.1:8010/state`。截圖必須同時看得到 `todos` 沒變、`confirmed` 是 `true`、`last_failed_event_id` 有值。**回答：失敗的寫入為什麼要留在事件記錄裡？它跟「把狀態改掉」差別在哪裡？**
 
 把作業截圖與簡答筆記存入 `exercises/12-middleware/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。這一課的作業重點不在截圖數量，而在第 3、4、8 三題的答案是否真的對照到指令輸出。
 

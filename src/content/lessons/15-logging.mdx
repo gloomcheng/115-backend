@@ -280,6 +280,78 @@ INFO:     127.0.0.1:50183 - "GET /users?token=SECRETVALUE&page=2 HTTP/1.1" 200 O
 
 ---
 
+## 08. 把它接回 harness：一個 request id 貫穿整條鏈
+
+前一節用 request id 把兩段沒有共用東西的文字接起來。harness 裡的 request id 走得更遠：它不只出現在 log 裡，它還落在事件記錄的每一行上。
+
+先看每一個回應都帶著它：
+
+<Terminal title="bash — every response carries a trace id" flavor="output">{`
+$ curl -s -i http://127.0.0.1:8010/health | grep -i trace
+x-trace-id: be1606826d85467a
+`}</Terminal>
+
+呼叫端也可以帶自己的 id 進來。帶進來的 id 只有形狀對才會被採用：
+
+<Terminal title="bash — the caller may correlate with its own id" flavor="output">{`
+$ curl -s -i -X POST http://127.0.0.1:8010/events/tool-result \\
+    -H "Authorization: Bearer $TOKEN" \\
+    -H 'X-Trace-Id: 0123456789abcdef' \\
+    -H 'Content-Type: application/json' \\
+    -d '{"tool_call_id":"call_1","tool_name":"todowrite"}' | grep -i trace
+x-trace-id: 0123456789abcdef
+`}</Terminal>
+
+形狀不對的會被丟掉換一個新的，而不是「修正」成原來那個。**id 完全由呼叫端控制，兩個請求就可能撞到同一個 id；把不合法的 id 改寫成別的，等於把呼叫端原本在對照的連結切斷。**
+
+事件上也帶著同一個 id：
+
+<Terminal title="bash — the event carries the same id" flavor="output">{`
+$ curl -s http://127.0.0.1:8010/events -H "Authorization: Bearer $TOKEN" | python -m json.tool
+{
+  "event_id": "04e5f86cac7a4afd827ade3272efa3d9",
+  "observed_at": "2026-10-24T10:03:48Z",
+  "op": "tool_result",
+  "payload": {…},
+  "meta": {"role": "admin", "subject": "root", "trace_id": "696eb8d499a84aa1"}
+}
+`}</Terminal>
+
+有了它，一個數字就能把整個請求從事件記錄裡撈出來。
+
+<Callout type="note" title="這個單元的規則">
+  一個請求一個 id，那個 id 落在這個請求產生的每一個事件上。`meta` 欄位是 host 自己的筆記，跟呼叫端的 `payload` 分開放——讀事件記錄的人才不用猜哪一段是別人寫的。
+</Callout>
+
+<svg viewBox="0 0 940 360" role="img" aria-labelledby="trace-claim-title trace-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="trace-claim-title">一個 request id 從請求頭一路落到事件記錄的每一行</title>
+  <desc id="trace-claim-description">呼叫端送出請求，帶著或不帶著 X-Trace-Id。服務正規化之後得到一個 id，放進回應的 X-Trace-Id 標頭，同時寫進這個請求產生的每一個事件的 meta 欄位。於是一個數字就能從事件記錄裡把整個請求撈出來。</desc>
+  <defs>
+    <marker id="trace-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="24" width="900" height="56" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="470" y="48" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">請求進來：X-Trace-Id 0123456789abcdef</text>
+  <text x="470" y="70" text-anchor="middle" fill="#274f67" font-size="13">形狀對就用它，形狀不對就換一個新的</text>
+  <path d="M470 80 V116" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#trace-arrow)" />
+  <rect x="150" y="122" width="640" height="70" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="470" y="150" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">服務產生 trace id</text>
+  <text x="470" y="176" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">normalize_trace_id()</text>
+  <path d="M280 192 V226" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#trace-arrow)" />
+  <path d="M660 192 V226" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#trace-arrow)" />
+  <rect x="20" y="232" width="420" height="80" rx="7" fill="#d8f0dc" stroke="#2f7a45" stroke-width="3" />
+  <text x="230" y="260" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">回應標頭</text>
+  <text x="230" y="286" text-anchor="middle" fill="#2f7a45" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">x-trace-id: 0123456789abcdef</text>
+  <rect x="460" y="232" width="460" height="80" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="690" y="260" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">每一個事件的 meta 欄位</text>
+  <text x="690" y="286" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{'"meta": {"trace_id": "0123456789abcdef", …}'}</text>
+  <rect x="20" y="320" width="900" height="34" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="470" y="342" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">於是一個數字就能把整個請求從事件記錄裡撈出來。</text>
+</svg>
+
+---
+
 ## 單元實作作業
 
 在本地環境完成以下八項操作，每一項的截圖與簡答都記錄下來。
@@ -292,6 +364,7 @@ INFO:     127.0.0.1:50183 - "GET /users?token=SECRETVALUE&page=2 HTTP/1.1" 200 O
 6. 自己寫一條 log，必須包含：發生了什麼、一個 request id、一個數量。放在 `/users` 這條路由上，並在 Terminal 1 看到它。截圖必須包含那一行與對應的 `x-request-id`。
 7. 回答：以下四個東西各該不該寫進 log？各用一句話說明。`password`、`/users/iris` 這種資源路徑、`count=1` 這種數量、完整 request body。其中哪一個的答案會讓你猶豫？為什麼？
 8. 在 Terminal 2 打 `curl -s -o /dev/null 'http://127.0.0.1:8008/users?token=SECRETVALUE&page=2'`，然後在 Terminal 1 找到那一行。截圖必須包含 `SECRETVALUE`。回答：把 token 從 query string 搬到 `Authorization` Header 之後，這個 log 會變成什麼？用第 05 節的敏感資料論點說明為什麼這不只是美觀問題。
+9. 走完第 08 節的 harness：用 `X-Trace-Id: 0123456789abcdef` 打一次 `/events/tool-result`，再 `curl -s http://127.0.0.1:8010/events` 找出那個事件的 `meta.trace_id`，兩張截圖並排。再送一個形狀不對的 trace id（例如 `not-an-id`），截圖回應標頭，**回答：服務是丟掉它換一個新的，還是改寫成原來那個？為什麼不能是後者？**
 
 把作業截圖與簡答筆記存入 `exercises/15-logging/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。**不要**把你自己的 token、密碼或任何真實憑證寫進 `main.py` 或任何會被提交的檔案。
 

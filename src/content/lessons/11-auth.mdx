@@ -359,6 +359,88 @@ curl -i http://127.0.0.1:8004/admin -H "Authorization: Bearer $(cat /tmp/tampere
 
 ---
 
+## 08. 把它接回 harness：誰可以寫事件，誰可以讀狀態
+
+前一節講到 `401` 和 `403` 的差別：前者是「我不知道你是誰」，後者是「我知道你是誰，而你的角色不能做這件事」。harness 裡這兩件事都真的發生了，而且同一組 token 兩邊都要用。
+
+先把 harness 的 token 簽出來。`harness/authz.py` 沒有套任何 JWT 函式庫，整個簽章流程就是第 04 節講的那三段：
+
+<Terminal title="bash — mint the first token from the command line">{`
+cd exercises/agent-harness
+export HARNESS_SECRET='test-secret-not-for-production'
+export TOKEN=$(python -m harness.authz root admin)
+echo "$TOKEN"
+`}</Terminal>
+
+```text
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkhBUk5FU1MifQ.eyJleHAiOjE3OTI4Mzk1OTAsInJvbGUiOiJhZG1pbiIsInN1YiI6InJvb3QifQ.<signature>
+```
+
+第三段是簽章，這裡用 `<signature>` 代替。把真的簽章貼進文件，等於教人把憑證貼進文件。
+
+中間那段 base64url 解開就是 `{"exp":...,"role":"admin","sub":"root"}`。簽章涵蓋前兩段，所以呼叫端不能把 `role` 換掉而保留簽名——這正是第 04 節「簽名擋的是篡改」的用途。
+
+接著，harness 有三個角色，分級的意思是 `writer` 讀得到、`reader` 寫不了：
+
+| 角色 | 可以做什麼 |
+|---|---|
+| `reader` | 讀重播出來的狀態。不能寫事件。 |
+| `writer` | 寫事件、讀狀態。 |
+| `admin` | writer 做得到的都做得到，外加簽發新 token。 |
+
+現在把那兩種拒絕都跑一次：
+
+<Terminal title="bash — 401 and 403, two different problems" flavor="output">{`
+$ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8010/events
+401
+
+$ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8010/events/tool-result \\
+    -H "Authorization: Bearer $READER_TOKEN" -H 'Content-Type: application/json' \\
+    -d '{"tool_call_id":"call_1","tool_name":"todowrite"}'
+403
+`}</Terminal>
+
+`401` 的修法是重新登入，`403` 的修法是換角色。把它們分成兩個狀態碼，Client 才知道該做哪一件。
+
+<Callout type="note" title="這個單元的規則">
+  每個請求帶著一個角色，寫與讀都要先對角色。harness 對「能寫事件」和「能讀狀態」是兩個獨立的檢查，因為這兩件事的風險不同：寫進去的事件會變成之後每一次重播的基礎。
+</Callout>
+
+<svg viewBox="0 0 940 400" role="img" aria-labelledby="authz-claim-title authz-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="authz-claim-title">同一個事件寫入，沒有 token 與角色不足會得到兩種不同的拒絕</title>
+  <desc id="authz-claim-description">一個 tool result 送到 harness。沒有 Authorization header 時，服務無法知道呼叫端是誰，回 401。帶著 reader 角色的 token 時，服務知道是誰，但角色不能寫事件，回 403。帶著 writer 角色時才會落盤，回 201。</desc>
+  <defs>
+    <marker id="authz-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="300" y="18" width="340" height="50" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="470" y="48" text-anchor="middle" fill="#075486" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">POST /events/tool-result</text>
+  <path d="M360 68 V106" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#authz-arrow)" />
+  <path d="M470 68 V106" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#authz-arrow)" />
+  <path d="M580 68 V106" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#authz-arrow)" />
+  <rect x="20" y="112" width="310" height="104" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="175" y="140" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">沒有 Authorization header</text>
+  <text x="175" y="170" text-anchor="middle" fill="#ef795e" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">401 Unauthorized</text>
+  <text x="175" y="196" text-anchor="middle" fill="#274f67" font-size="13">我不知道你是誰</text>
+  <rect x="315" y="112" width="310" height="104" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="470" y="140" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">token 正確，角色是 reader</text>
+  <text x="470" y="170" text-anchor="middle" fill="#a06a00" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">403 Forbidden</text>
+  <text x="470" y="196" text-anchor="middle" fill="#274f67" font-size="13">我知道你是誰，但你不能寫</text>
+  <rect x="610" y="112" width="310" height="104" rx="7" fill="#d8f0dc" stroke="#2f7a45" stroke-width="3" />
+  <text x="765" y="140" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">token 正確，角色是 writer</text>
+  <text x="765" y="170" text-anchor="middle" fill="#2f7a45" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">201 Created</text>
+  <text x="765" y="196" text-anchor="middle" fill="#274f67" font-size="13">事件寫進事件記錄</text>
+  <rect x="20" y="244" width="900" height="70" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="40" y="274" fill="#075486" font-size="16" font-weight="700">角色是分級的，所以 writer 也讀得到狀態：</text>
+  <text x="40" y="300" fill="#274f67" font-size="14">reader &lt; writer &lt; admin。權限表在一個 dict 裡，一張表就看完。</text>
+  <rect x="20" y="326" width="900" height="58" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="40" y="352" fill="#075486" font-size="16" font-weight="700">第一枚 token 是用命令列簽的，不是用 API 簽的。</text>
+  <text x="40" y="374" fill="#274f67" font-size="13">簽 token 這件事本身需要權限，所以第一枚必須由操作者自己簽出來。</text>
+</svg>
+
+---
+
 ## 單元實作作業
 
 在本地環境完成以下操作並記錄成果。
@@ -371,6 +453,7 @@ curl -i http://127.0.0.1:8004/admin -H "Authorization: Bearer $(cat /tmp/tampere
 6. 用過期的 token 打 `/private`，截圖必須包含 `401` 與 `Token expired`。回答：簽名有效和 token 還能用，是同一件事嗎？
 7. 用一句話回答：`401` 與 `403` 各自在問什麼問題？把答案寫成「誰該去修什麼」。
 8. 回答：如果你把 `{"user_id": 7, "is_admin": true}` 放進 payload，Server 會怎麼處理 `is_admin`？這和單元 10 第 06 節「一個沒被擋下來的問題」那個未宣告欄位是同一個問題嗎？
+9. 走完第 08 節的 harness：`python -m harness.authz root admin` 簽出 token，用它打一次 `/events`（要 `200`）與一次 `/events/tool-result`（要 `201`）。截圖必須包含 `x-trace-id`。再簽一個 `reader` token，用它打 `/events/tool-result`，截圖必須是 `403`。**回答一句話：`401` 和 `403` 各自在問什麼問題？把答案寫成「誰該去修什麼」。**
 
 把作業截圖與簡答筆記存入 `exercises/11-auth/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
 

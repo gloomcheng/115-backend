@@ -370,6 +370,92 @@ null
 
 ---
 
+## 09. 把它接回 harness：映像是換得掉的，log 不是
+
+前一節講到健康檢查與 stage 的分法。harness 的映像多了一件事要決定：**事件記錄放在哪裡。**
+
+答案很直接：放在 volume 上，不放在映像裡。映像可以隨時被刪掉重建，而事件記錄是 harness 的記憶，刪掉就是刪掉。
+
+<Terminal title="bash — build the runtime image" flavor="output">{`
+$ cd exercises/agent-harness
+$ docker build --target runtime -t harness-runtime .
+...
+#14 DONE 5.4s
+`}</Terminal>
+
+這三個 stage 各有各的用途：`base` 裝 runtime 相依套件、`test` 多裝 pytest、`runtime` 是一個沒有 root 權限的使用者。
+
+映像建好之後，先在容器裡把測試跑一次。這比在主機上跑更接近真正部署的環境：
+
+<Terminal title="bash — the tests, inside the image" flavor="output">{`
+$ docker build --target test -t harness-test .
+$ docker run --rm harness-test
+............................................................             [100%]
+60 passed in 0.16s
+`}</Terminal>
+
+接著把服務起起來，log 掛在 volume 上：
+
+<Terminal title="bash — run it, with the log on a volume" flavor="output">{`
+$ docker volume create harness-log
+$ docker run -d --name harness \\
+    -p 127.0.0.1:8011:8010 \\
+    -v harness-log:/var/lib/agent-harness \\
+    -e HARNESS_SECRET='test-secret-not-for-production' \\
+    harness-runtime
+
+$ curl -s http://127.0.0.1:8011/health
+{"ok":true}
+`}</Terminal>
+
+注意 `HARNESS_SECRET` 是執行時給的，沒有烤進映像。映像裡有密鑰，等於密鑰跟著映像一起被複製、被推、被別人 pull 走。
+
+<Terminal title="bash — the log is on the volume, not in the image" flavor="output">{`
+$ docker exec harness cat /var/lib/agent-harness/events.jsonl
+{"event_id": "04e5f86cac7a4afd827ade3272efa3d9", "meta": {"role": "admin", "subject": "root", "trace_id": "696eb8d499a84aa1"}, "observed_at": "2026-10-24T10:03:48Z", "op": "tool_result", "payload": {"details": {"todos": [{"content": "write the replay tests", "status": "pending"}]}, "is_error": false, "tool_call_id": "call_1", "tool_name": "todowrite"}}
+`}</Terminal>
+
+容器用 `docker rm` 刪掉之後，這一行還在 volume 上。**那才是重點**：映像可以換，log 不能。
+
+<Callout type="note" title="這個單元的規則">
+  映像是換得掉的，log 不是——所以 log 不在映像裡。`VOLUME` 宣告只是宣告，真正的持久化要靠 `-v` 掛一個具名 volume，否則容器一刪，log 跟著沒了。
+</Callout>
+
+<svg viewBox="0 0 940 380" role="img" aria-labelledby="docker-claim-title docker-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="docker-claim-title">映像可以被刪掉重建，事件記錄留在 volume 上</title>
+  <desc id="docker-claim-description">映像裡只有程式碼與相依套件，容器以非 root 的 appuser 執行，事件記錄寫在掛載進來的 volume 上。容器用 docker rm 刪掉之後重建，volume 上的事件記錄一行都沒有少。映像是換得掉的，log 不是。</desc>
+  <defs>
+    <marker id="docker-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="22" width="380" height="120" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="210" y="50" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">映像 harness-runtime</text>
+  <text x="210" y="78" text-anchor="middle" fill="#274f67" font-size="13">程式碼與相依套件</text>
+  <text x="210" y="100" text-anchor="middle" fill="#274f67" font-size="13">使用者 appuser，沒有 root</text>
+  <text x="210" y="124" text-anchor="middle" fill="#ef795e" font-size="13">沒有 HARNESS_SECRET</text>
+  <path d="M400 82 H470" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#docker-arrow)" />
+  <rect x="476" y="22" width="444" height="120" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="698" y="50" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">容器（可被 docker rm 刪掉）</text>
+  <text x="698" y="78" text-anchor="middle" fill="#274f67" font-size="13">-p 127.0.0.1:8011:8010</text>
+  <text x="698" y="100" text-anchor="middle" fill="#274f67" font-size="13">-e HARNESS_SECRET 執行時才給</text>
+  <text x="698" y="124" text-anchor="middle" fill="#274f67" font-size="13">-v harness-log:/var/lib/agent-harness</text>
+  <path d="M698 142 V182" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#docker-arrow)" />
+  <rect x="330" y="188" width="590" height="104" rx="7" fill="#d8f0dc" stroke="#2f7a45" stroke-width="3" />
+  <text x="625" y="216" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">volume harness-log</text>
+  <text x="625" y="244" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">/var/lib/agent-harness/events.jsonl</text>
+  <text x="625" y="270" text-anchor="middle" fill="#2f7a45" font-size="14" font-weight="700">容器刪掉、重新建立，這裡一行都沒有少</text>
+  <rect x="20" y="188" width="270" height="104" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="155" y="216" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">壞掉的話</text>
+  <text x="155" y="244" text-anchor="middle" fill="#ef795e" font-size="13">volume 沒掛</text>
+  <text x="155" y="270" text-anchor="middle" fill="#ef795e" font-size="13">log 跟著容器一起沒了</text>
+  <rect x="20" y="304" width="900" height="62" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="40" y="332" fill="#075486" font-size="16" font-weight="700">VOLUME 宣告只是宣告，真正的持久化要靠 -v 掛具名 volume。</text>
+  <text x="40" y="356" fill="#274f67" font-size="14">容器一刪就沒有了，那不叫持久化，那叫運氣好。</text>
+</svg>
+
+---
+
 ## 單元實作作業
 
 在本地環境完成以下八項操作，每一項的截圖與簡答都記錄下來。
@@ -382,6 +468,7 @@ null
 6. `docker exec l16 ls /app` 與 `ls /app/tests` 失敗的截圖。回答：`.env` 被 `docker build` 送進 image 和被 `git add` 進 repo，是同一個問題的兩個出口嗎？各自該在哪裡擋？
 7. 把 `compose.yaml` 的 healthcheck 埠從 `8000` 改成 `8016`，`docker compose up` 之後 `docker compose ps` 的 STATUS 會變成什麼？截圖必須包含那個狀態。改回去之後說明：`start_period` 存在的原因是什麼？
 8. 回答：以下四個檔案該不該進 `.dockerignore`？各用一句話說明。`.git/`、`__pycache__/`、`.env`、你的作業截圖資料夾。其中一個的答案取決於它是什麼，你會怎麼分辨？
+9. 走完第 09 節的 harness：`docker build --target test -t harness-test . && docker run --rm harness-test`，截圖必須是 `60 passed`。接著 `docker run -d --name harness -p 127.0.0.1:8011:8010 -v harness-log:/var/lib/agent-harness harness-runtime`，寫一筆事件之後 `docker rm harness`，再從 volume 讀一次。**回答：映像和 log，哪一個可以隨便丟掉？丟掉 log 會損失什麼？**
 
 把作業截圖與簡答筆記存入 `exercises/16-docker/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
 

@@ -334,6 +334,51 @@ cd exercises/13-testing
 
 ---
 
+## 09. 把它接回 harness：把重播規則寫成斷言
+
+前一節講到「逐條契約寫成一條條測試」。harness 的重播規則是三句話，所以測試就寫三個斷言，而且每個斷言的名字就是那一條規則。
+
+| 不變式 | 測試名 |
+|---|---|
+| 同一份 log 永遠重播成同一個狀態 | `test_the_same_log_always_replays_to_the_same_state` |
+| 追加不會改寫已經寫下的東西，所以狀態是整份歷史的函數 | `test_appending_does_not_rewrite_an_earlier_event` |
+| 失敗的寫入不是狀態 | `test_a_failed_write_after_a_confirmed_one_leaves_the_confirmed_state_standing` |
+
+第二條不變式看起來像在講檔案系統，但它其實在講狀態：只要已經寫下的東西不會被改寫，那「現在是什麼」就只取決於整份歷史，而不多取決於任何一筆單獨的事件。
+
+<Terminal title="bash — the three invariants on their own" flavor="output">{`
+$ pytest -q -k state
+............................................................             [100%]
+60 passed in 0.14s
+`}</Terminal>
+
+這裡沒有啟動伺服器。`replay()` 是一個純函式：它吃一份事件記錄，吐一個狀態，不碰磁碟、不碰網路。純函式最好測，因為測試不需要準備任何東西。
+
+<Callout type="note" title="這個單元的規則">
+  重播的三條不變式，各有一個斷言。規則只有三句話，測試就只需要三個斷言——測試的數量是從規則來的，不是從感覺來的。
+</Callout>
+
+<svg viewBox="0 0 940 380" role="img" aria-labelledby="invariant-claim-title invariant-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="invariant-claim-title">重播的三條不變式</title>
+  <desc id="invariant-claim-description">第一條：同一份事件記錄永遠重播成同一個狀態。第二條：追加不改寫舊的，所以狀態是整份歷史的函數。第三條：失敗的寫入不是狀態，它只留在事件記錄裡當證據。三條合起來，讓狀態可以重現、可以回頭查證、也不會被失敗的寫入污染。</desc>
+  <rect x="20" y="20" width="900" height="92" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="44" y="50" fill="#075486" font-size="17" font-weight="700">不變式一：同一份 log 永遠重播成同一個狀態</text>
+  <text x="44" y="78" fill="#274f67" font-size="14">replay() 是純函式：吃一份事件記錄，吐一個狀態，不碰磁碟、不碰網路。</text>
+  <text x="44" y="100" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">test_the_same_log_always_replays_to_the_same_state</text>
+  <rect x="20" y="124" width="900" height="92" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="44" y="154" fill="#075486" font-size="17" font-weight="700">不變式二：追加不改寫舊的，狀態是整份歷史的函數</text>
+  <text x="44" y="182" fill="#274f67" font-size="14">已寫下的東西不會變，所以「現在是什麼」只取決於整份歷史。</text>
+  <text x="44" y="204" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">test_appending_does_not_rewrite_an_earlier_event</text>
+  <rect x="20" y="228" width="900" height="92" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="44" y="258" fill="#075486" font-size="17" font-weight="700">不變式三：失敗的寫入不是狀態</text>
+  <text x="44" y="286" fill="#274f67" font-size="14">它進事件記錄當證據，但不改變重播出來的狀態；先前確認過的寫入仍然成立。</text>
+  <text x="44" y="308" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">test_a_failed_write_after_a_confirmed_one_leaves_the_confirmed_state_standing</text>
+  <rect x="20" y="332" width="900" height="40" rx="7" fill="#d8f0dc" stroke="#2f7a45" stroke-width="3" />
+  <text x="470" y="357" text-anchor="middle" fill="#2f7a45" font-size="15" font-weight="700">規則三句話，斷言三個。測試的數量是從規則來的。</text>
+</svg>
+
+---
+
 ## 單元實作作業
 
 在本地環境完成以下八項操作，每一項的截圖與簡答都記錄下來。
@@ -346,6 +391,7 @@ cd exercises/13-testing
 6. 寫一條測試，斷言 `POST /notes` 送出缺少 `name` 的 Body 時，**狀態碼是 `422`**，而且 `content-type` 是 `application/json`——**兩條都要寫**。截圖必須包含通過，然後把 `raise HTTPException(status_code=422, ...)` 改成 `return {"detail": "name is required"}`，截圖必須包含失敗。回答：狀態碼從 `422` 變成 `200`，是哪一條斷言發現的？`content-type` 有沒有跟著變？
 7. 回答：為什麼 `test_list_reports_a_count_that_matches_the_items` 斷言的是 `count == len(items)`，而不是 `count == 1`？各自在什麼情況下會誤報？
 8. 回答：這一課沒有任何一步需要先啟動 `fastapi dev`。用第 06 節那張表說明，為什麼 `pytest` 取代不了 `curl`，以及 `curl` 取代不了 `pytest`。
+9. 走完第 09 節的 harness：`pytest -q -k state`，截圖必須是 `60 passed`。然後打開 `tests/test_state.py`，用一句話回答：**三條不變式各自由哪一條程式碼保證？**（提示：`replay()` 是純函式這件事，本身就是其中一條。）
 
 把作業截圖與簡答筆記存入 `exercises/13-testing/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。**不要**提交任何被改壞的 `main.py` 或被刪掉斷言的 `tests/test_contract.py`；那兩個檔案必須維持第 1 步的狀態。
 

@@ -1,0 +1,49 @@
+[Unit]
+Description=Agent Harness — event log, state replay and checkpoints
+Documentation=https://docs.astro.build
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=harness
+Group=harness
+WorkingDirectory=/opt/agent-harness
+
+# The secret lives in a file that only root can read. It is never an
+# argument on the command line, because the command line is world readable.
+EnvironmentFile=/etc/agent-harness/env
+
+# The log is the harness's memory. It is on disk, not in memory, because a
+# restart must not lose it.
+Environment=HARNESS_LOG=/var/lib/agent-harness/events.jsonl
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/agent-harness/.venv/bin/uvicorn main:app \
+    --host 127.0.0.1 \
+    --port 8010 \
+    --proxy-headers \
+    --forwarded-allow-ips=127.0.0.1 \
+    --log-level info
+
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+# The service may write to exactly one directory, and read its own code.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+ReadWritePaths=/var/lib/agent-harness
+
+[Install]
+WantedBy=multi-user.target

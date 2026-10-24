@@ -880,6 +880,84 @@ $ git diff origin/main...HEAD
 </Callout>
 
 ---
+## 12. 把它接回 harness：讓 harness 在機器上活著
+
+接著，harness 的上線照同一個順序走：先驗收，再交付。
+
+這支安裝腳本一次做完那些會被遺忘的事：
+
+<Terminal title="bash — install the harness as a service" flavor="output">{`
+$ sudo bash deploy/install.sh
+[install] creating the service user
+[install] installing the application into /opt/agent-harness
+[install] creating a virtual environment
+[install] preparing the state directory
+[install] preparing the configuration directory
+[install] generating a new secret in /etc/agent-harness/env
+[install] installing the systemd unit
+[install] waiting for the service to answer
+[install] the service is up on 127.0.0.1:8010
+`}</Terminal>
+
+密鑰是隨機產生而且**不會被印出來**。它在一個只有 root 讀得到（`0640`）的檔案裡，由 `EnvironmentFile` 讀進去，不在命令列上——命令列是全世界讀得到的。
+
+systemd unit 裡的加固不是裝飾，每一條都擋掉一個具體的東西：
+
+| 設定 | 擋掉什麼 |
+|---|---|
+| `ProtectSystem=strict` | 除了明講的路徑，檔案系統全部唯讀 |
+| `ReadWritePaths=/var/lib/agent-harness` | 唯一能寫的地方就是 log 的目錄 |
+| `NoNewPrivileges=true` | 拿不到比啟動時更高的權限 |
+| `PrivateTmp=true` | 看不到別人的 `/tmp` |
+| `ProtectHome=true` | 看不到 `/home` |
+
+服務只綁 `127.0.0.1`，對外由 nginx 進來。`deploy/nginx.conf` 是那份設定，它同時也限了 request body 的大小——這個服務只接受一個小 JSON 物件，比那更大的本來就不該進來。
+
+最後，驗收的證據有三個：
+
+<Terminal title="bash — the acceptance evidence" flavor="output">{`
+$ curl -fsS http://127.0.0.1:8010/health
+{"ok":true}
+
+$ sudo systemctl is-enabled harness
+enabled
+
+$ sudo systemctl is-active harness
+active
+`}</Terminal>
+
+`is-enabled` 回答的是「重開機之後它會不會自己回來」，`is-active` 回答的是「它現在活著嗎」。兩個問題要分開問。
+
+<Callout type="note" title="這個單元的規則">
+  服務要活著，而且要在重開機之後還活著。`Restart=on-failure` 處理的是當機，`systemctl enable` 處理的是重開機——兩個都不做，服務就只是一個碰巧還在跑的行程。
+</Callout>
+
+<svg viewBox="0 0 940 380" role="img" aria-labelledby="deploy-claim-title deploy-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="deploy-claim-title">一個請求通過每一關的證據</title>
+  <desc id="deploy-claim-description">請求從網路進來，先到 nginx，再到綁在 127.0.0.1:8010 的 harness 服務。服務以 harness 使用者執行，密鑰從只有 root 讀得到的檔案進來，log 寫在唯一被允許寫入的目錄。驗收要看三件事：服務活著、重開機會回來、log 還在。</desc>
+  <defs>
+    <marker id="deploy-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="24" width="900" height="52" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="470" y="56" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">請求（帶著 token）</text>
+  <path d="M470 76 V112" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#deploy-arrow)" />
+  <rect x="20" y="118" width="900" height="58" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="44" y="144" fill="#075486" font-size="16" font-weight="700">關卡一：nginx</text>
+  <text x="44" y="166" fill="#274f67" font-size="13">client_max_body_size 256k；轉發 X-Trace-Id，讓呼叫端可以自己對照</text>
+  <path d="M470 176 V212" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#deploy-arrow)" />
+  <rect x="20" y="218" width="900" height="58" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="44" y="244" fill="#075486" font-size="16" font-weight="700">關卡二：harness 服務</text>
+  <text x="44" y="266" fill="#274f67" font-size="13">綁 127.0.0.1:8010；使用者 harness；密鑰從 /etc/agent-harness/env 進來</text>
+  <path d="M470 276 V312" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#deploy-arrow)" />
+  <rect x="20" y="318" width="900" height="52" rx="7" fill="#d8f0dc" stroke="#2f7a45" stroke-width="3" />
+  <text x="44" y="342" fill="#075486" font-size="16" font-weight="700">關卡三：事件記錄</text>
+  <text x="44" y="362" fill="#274f67" font-size="13">唯一被允許寫入的地方：/var/lib/agent-harness（ReadWritePaths）</text>
+</svg>
+
+---
+
 ## 單元實作作業
 
 這一單元的作業分成三塊，**第一塊是把 FastAPI 部署到 VPS**，證據全部來自真實的 VPS。
@@ -906,6 +984,7 @@ $ git diff origin/main...HEAD
 12. 執行 `python review_demo.py mechanical`，截圖必須包含四個檢查的 hit 數字。**回答：`printed instead of logged` 有那麼多 hit，你會把這條規則打開還是把 linter 關掉？寫出你的判斷和理由。**
 13. 用 `git diff --stat origin/main...HEAD` 看你的專題目前的完整改動，然後只讀 `-` 開頭的那一半（刪掉的程式碼），截圖或筆記列出**至少兩個你原本會漏掉的刪除**。回答：刪掉一行程式碼，可能改變什麼行為而沒有任何錯誤？
 14. 找一個你最近寫過的函式，寫出它在六個月後被讀到時，你希望它叫什麼。**回答：它現在叫什麼？兩個名字差多少？**
+15. 走完第 12 節的 harness：`sudo bash deploy/install.sh`，然後把 `curl -fsS http://127.0.0.1:8010/health`、`systemctl is-enabled harness`、`systemctl is-active harness` 三個輸出截圖並排。**回答：`is-enabled` 和 `is-active` 分別在回答哪一個問題？如果只做了 `enable` 沒做 `Restart=on-failure`，重開機之後會發生什麼事？**
 
 截圖前遮住公司 IP、SSH 使用者名稱、email、Token 與密鑰。對外公開的服務網域可以保留。
 

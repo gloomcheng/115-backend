@@ -37,3 +37,18 @@ class EventIn(BaseModel):
 
     op: str = Field(min_length=1, max_length=64)
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolCallIn(BaseModel):
+    """One tool call the agent runtime wants executed.
+
+    A call and a result are two different shapes on purpose. The call asks
+    for something; the result reports what happened. Mixing them is how a
+    half-finished write ends up looking like a finished one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    tool_call_id: str = Field(min_length=1, max_length=128)
+    tool_name: str = Field(min_length=1, max_length=64)
+    arguments: dict[str, Any] = Field(default_factory=dict)

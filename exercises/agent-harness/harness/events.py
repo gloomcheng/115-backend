@@ -11,10 +11,10 @@ readable by `cat`, `grep` and a text editor when something goes wrong.
 
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 
 def _now() -> str:
@@ -24,12 +24,19 @@ def _now() -> str:
 
 @dataclass(frozen=True)
 class Event:
-    """One recorded fact about what happened."""
+    """One recorded fact about what happened.
+
+    `payload` is what the caller sent. `meta` is what the host knows about
+    it: which request it belonged to, who was allowed to send it. The two
+    are kept apart on purpose, so a reader of the log can tell the caller's
+    data from the host's bookkeeping without guessing.
+    """
 
     event_id: str
     observed_at: str
     op: str
     payload: dict[str, Any]
+    meta: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -37,6 +44,7 @@ class Event:
             "observed_at": self.observed_at,
             "op": self.op,
             "payload": self.payload,
+            "meta": self.meta,
         }
 
     def to_json(self) -> str:
@@ -50,6 +58,9 @@ class Event:
             observed_at=data["observed_at"],
             op=data["op"],
             payload=data["payload"],
+            # `meta` was added in unit 15. A line written before that has no
+            # meta, and a line written before that still has to be readable.
+            meta=data.get("meta") or {},
         )
 
 
@@ -59,7 +70,12 @@ class EventLog:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
 
-    def append(self, op: str, payload: dict[str, Any]) -> Event:
+    def append(
+        self,
+        op: str,
+        payload: dict[str, Any],
+        meta: Optional[dict[str, Any]] = None,
+    ) -> Event:
         """Append one event and return it.
 
         Existing lines are never touched. A line that was appended stays
@@ -70,6 +86,7 @@ class EventLog:
             observed_at=_now(),
             op=op,
             payload=payload,
+            meta=meta or {},
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as handle:

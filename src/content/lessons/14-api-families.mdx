@@ -509,6 +509,96 @@ opcode 0x81, length 5, payload b'hello'
 
 ---
 
+## 09. 把它接回 harness：工具呼叫的介面與協定
+
+前一節把五個 API 家族放在一起看，結論是它們都在回答同一個問題：怎麼讓呼叫端猜得到會拿到什麼。harness 的工具走的是同一條路，只不過契約寫在程式裡而不是檔案裡。
+
+呼叫與結果是兩個形狀，這是刻意的：
+
+```json
+// 呼叫：想做什麼
+{"tool_call_id": "call_1", "tool_name": "todowrite", "arguments": {"todos": [...]}}
+
+// 結果：發生了什麼
+{"tool_call_id": "call_1", "tool_name": "todowrite", "is_error": false, "details": {...}}
+```
+
+因此，分開的好處在於失敗寫進去時看得出來。呼叫端知道 `is_error` 為 `true` 的意思是「這件事沒成」，而不是「沒有回應」。
+
+先看看目錄，裡面有每個工具自己的參數 schema：
+
+<Terminal title="bash — the tool catalogue" flavor="output">{`
+$ curl -s http://127.0.0.1:8010/tools -H "Authorization: Bearer $TOKEN"
+{
+  "tools": [
+    {"name": "read_state", "description": "Read the replayed state back.", "arguments": {...}},
+    {"name": "todowrite", "description": "Replace the task list with the given todos.", "arguments": {...}}
+  ]
+}
+`}</Terminal>
+
+呼叫端在呼叫之前就知道要給什麼，這是契約存在的唯一理由。
+
+現在呼叫一個不存在的工具：
+
+<Terminal title="bash — an execution failure is recorded, and it is not state" flavor="output">{`
+$ curl -s -X POST http://127.0.0.1:8010/tools \\
+    -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \\
+    -d '{"tool_call_id":"call_2","tool_name":"nope","arguments":{}}'
+{"event_id":"…","op":"tool_result","payload":{"tool_call_id":"call_2","tool_name":"nope","is_error":true,
+ "details":{"error":"unknown tool: nope","known_tools":["read_state","todowrite"]}},"meta":{…}}
+`}</Terminal>
+
+這裡有**兩種不一樣的失敗**，分開處理是重點：
+
+| 失敗 | 發生在哪裡 | 會不會進事件記錄 |
+|---|---|---|
+| 形狀不對 | 進 handler 之前 | **不會**。單元 10 的規則。 |
+| 執行失敗 | 工具跑了，但是失敗了 | **會**，而且標成 `is_error: true` |
+
+執行失敗要進事件記錄，因為「那個工具失敗了」是關於世界的一件事，而事件記錄就是放事實的地方。它只是**不是狀態**。
+
+<Callout type="note" title="這個單元的規則">
+  加一個工具是加一筆目錄，不是在 host 裡加一個分支。host 對每一個工具說同一套話，工具的數量增加不改變 host 的結構。
+</Callout>
+
+<svg viewBox="0 0 940 400" role="img" aria-labelledby="tool-claim-title tool-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="tool-claim-title">兩種失敗走不同的路，一種不進事件記錄，一種進去但不是狀態</title>
+  <desc id="tool-claim-description">一個工具呼叫進來。第一關是形狀驗證，形狀不對就回 422，完全不碰事件記錄。形狀對了才進工具執行；執行失敗會被記成 is_error 為 true 的事件，是證據但不是狀態。執行成功則是確認過的寫入，會變成重播的基礎。</desc>
+  <defs>
+    <marker id="tool-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="22" width="900" height="52" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="470" y="45" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">工具呼叫：tool_call_id、tool_name、arguments</text>
+  <text x="470" y="65" text-anchor="middle" fill="#274f67" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">POST /tools</text>
+  <path d="M300 74 V106" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#tool-arrow)" />
+  <path d="M640 74 V106" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#tool-arrow)" />
+  <rect x="20" y="112" width="470" height="96" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="255" y="140" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">形狀不對</text>
+  <text x="255" y="168" text-anchor="middle" fill="#ef795e" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">422 Unprocessable Entity</text>
+  <text x="255" y="192" text-anchor="middle" fill="#274f67" font-size="13">事件記錄裡完全沒有這一次的痕跡</text>
+  <rect x="520" y="112" width="400" height="96" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="720" y="140" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">形狀對了，進工具執行</text>
+  <text x="720" y="168" text-anchor="middle" fill="#274f67" font-size="14">is_error 是 false 或 true，兩種都會被記錄</text>
+  <text x="720" y="192" text-anchor="middle" fill="#274f67" font-size="13">details 裡帶著原因</text>
+  <path d="M620 208 V244" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#tool-arrow)" />
+  <path d="M830 208 V244" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#tool-arrow)" />
+  <rect x="400" y="250" width="420" height="84" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="610" y="278" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">執行失敗：is_error = true</text>
+  <text x="610" y="304" text-anchor="middle" fill="#274f67" font-size="13">是證據，不是狀態。任務清單不變。</text>
+  <text x="610" y="324" text-anchor="middle" fill="#274f67" font-size="13">但它留在事件記錄裡，說明發生了什麼</text>
+  <rect x="20" y="250" width="350" height="84" rx="7" fill="#d8f0dc" stroke="#2f7a45" stroke-width="3" />
+  <text x="195" y="278" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">執行成功：is_error = false</text>
+  <text x="195" y="304" text-anchor="middle" fill="#274f67" font-size="13">確認過的寫入，會變成重播的基礎</text>
+  <text x="195" y="324" text-anchor="middle" fill="#274f67" font-size="13">這才是狀態</text>
+  <rect x="20" y="346" width="900" height="42" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="470" y="372" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">加一個工具是加一筆目錄，不是在 host 裡加一個分支。</text>
+</svg>
+
+---
+
 ## 單元實作作業
 
 在本地環境完成以下十三項操作，每一項的截圖與簡答都記錄下來。
@@ -526,6 +616,7 @@ opcode 0x81, length 5, payload b'hello'
 11. 開兩個 Terminal 跑 `python websocket_demo.py serve` 與 `python websocket_demo.py client`，截圖必須包含 Server 端的 `--- server computed accept` 和兩邊的 frame。**回答：Server 送的是 `81 05 68 65 6c 6c 6f`，Client 送的是 `81 82 01 02 03 04 69 6b`。第二個位元組差在哪？那一個位元組代表什麼？**
 12. 把 Client 的 mask 改成 `00 00 00 00`，重送一次。**回答：`Sec-WebSocket-Accept` 會變嗎？payload 會變嗎？這兩件事為什麼是獨立的？**
 13. 回答：你的期末專題如果有「有人留言時即時通知」這個需求，你會用 WebSocket 嗎？**先用第 07.4 節的判斷標準寫下結論和理由**，如果你選長輪詢，寫出你要多久問一次以及那個間隔怎麼選。
+14. 走完第 09 節的 harness：`curl -s http://127.0.0.1:8010/tools` 截圖，然後呼叫一個不存在的工具，截圖必須包含 `"is_error":true` 與 `known_tools`。再送一個**形狀不對**的請求，截圖必須是 `422`。**回答：這兩個失敗為什麼一個進事件記錄、一個不進？**
 
 把作業截圖與簡答筆記存入 `exercises/14-api-families/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。`main.py`、`notes.proto` 與 `trpc-contract.ts` 都是課堂教材，**不要**修改。
 

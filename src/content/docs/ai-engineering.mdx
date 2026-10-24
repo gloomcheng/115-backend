@@ -568,15 +568,78 @@ $ cat events.jsonl
 {"event_id": "45712ffb6e20453baeb09507eaed6609", "observed_at": "2026-10-24T02:55:48Z", "op": "tool_result", "payload": {"tool_call_id": "call_1", "tool_name": "todowrite", "details": {"todos": [{"content": "write the replay tests", "status": "pending"}]}}}
 `}</Terminal>
 
-單元 10 的 harness 只有寫入端與讀取端；單元 12 會加上重播端 `/state`，把事件記錄還原成一份狀態：
+單元 10 的 harness 只有寫入端與讀取端；單元 12 加上了重播端 `/state`，把事件記錄還原成一份狀態：
 
 ```json
-{"tool": "todowrite", "confirmed": true, "items": [{"content": "write the replay tests", "status": "pending"}]}
+{
+  "todos": [{"content": "write the replay tests", "status": "pending"}],
+  "counts": {"pending": 1, "in_progress": 0, "completed": 0, "cancelled": 0, "unknown": 0},
+  "confirmed": true,
+  "source_event_id": "e3406a8ab325433798037f0258b83f05",
+  "updated_at": "2026-10-24T10:03:06Z",
+  "last_failed_event_id": null
+}
 ```
 
-`confirmed` 這個欄位是重播的核心：**只有被成功結果確認過的寫入才算狀態**，失敗的寫入不覆蓋先前的狀態。單元 13 會把這條規則寫成斷言。
+`confirmed` 這個欄位是重播的核心：**只有被成功結果確認過的寫入才算狀態**，失敗的寫入不覆蓋先前的狀態，而是被記在 `last_failed_event_id`。單元 13 會把這條規則寫成斷言。
 
 被拒絕的寫入不會出現在狀態裡，因為它根本沒進事件記錄。**記錄裡只裝被接受的東西，重播就不需要猜。**
+
+## 16. 期末專題：續接之後，計畫不遺失
+
+第 15 節說「把工作順序從散文裡拿出來」，但還沒回答一個實際問題：**續接的時候，那份結構化狀態要怎麼交給下一個 session？**
+
+直覺答案是寫一段摘要。那個答案是錯的，原因要講準確：**摘要是散文，而散文是副本。同一件事的兩份副本會開始分歧，一旦有人改其中一份，沒有人能說得清哪一份才對。**
+
+所以期末專題把 checkpoint 分成兩半：
+
+- **散文**說工作要去哪裡，並指向附錄。它**不列**任務。
+- **附錄**放任務清單，版本化的結構化格式，程式讀得懂。
+
+<Terminal title="bash — the checkpoint, both halves" flavor="output">{`
+$ curl -s 'http://127.0.0.1:8010/checkpoint?goal=ship%20the%20replay%20tests' \\
+    -H "Authorization: Bearer $TOKEN" | python -m json.tool
+{
+  "prose": "Goal: ship the replay tests\\n\\nThe task list is in the appendix below. That appendix is the only copy of it.",
+  "appendix": "<harness-context version=\\"1\\">\\n  <task-state confirmed=\\"true\\" source-event-id=\\"e3406a8ab325433798037f0258b83f05\\" updated-at=\\"2026-10-24T10:03:06Z\\">\\n    <todo status=\\"pending\\">write the replay tests</todo>\\n    <todo status=\\"completed\\">design the replay rules</todo>\\n  </task-state>\\n</harness-context>"
+}
+`}</Terminal>
+
+散文裡**沒有**任務清單。清單只在附錄裡，而且附錄有版本號——不知道版本的讀者，不知道自己在看什麼。
+
+附錄是寫給程式看的，那程式就得讀得回去。這個往返是防止格式慢慢變成只有人看得懂的最後一道保險：
+
+```python
+from harness.appendix import parse_appendix
+
+parsed = parse_appendix(appendix)
+```
+
+```python
+{'version': 1, 'confirmed': True, 'source_event_id': 'e3406a8ab325433798037f0258b83f05', 'updated_at': '2026-10-24T10:03:06Z', 'todos': [{'status': 'pending', 'content': 'write the replay tests'}]}
+```
+
+<svg viewBox="0 0 900 340" role="img" aria-labelledby="ai-q16-title ai-q16-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="ai-q16-title">兩份副本會分歧，所以任務清單只存在一份</title>
+  <desc id="ai-q16-description">如果散文也列出任務清單，就會有兩份副本。改動其中一份之後，兩份內容不同，沒有人能說得清哪一份才對。分成散文與附錄之後，散文只說目標並指向附錄，任務清單只有附錄一份，附錄有版號且程式讀得回去。</desc>
+  <rect x="20" y="24" width="416" height="130" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="228" y="52" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">兩份副本：散文也列任務</text>
+  <text x="228" y="80" text-anchor="middle" fill="#274f67" font-size="13">散文：write the replay tests</text>
+  <text x="228" y="102" text-anchor="middle" fill="#274f67" font-size="13">附錄：write the replay tests</text>
+  <text x="228" y="130" text-anchor="middle" fill="#ef795e" font-size="14" font-weight="700">改一份之後，兩份不同，沒人知道哪份對</text>
+  <rect x="464" y="24" width="416" height="130" rx="7" fill="#d8f0dc" stroke="#2f7a45" stroke-width="3" />
+  <text x="672" y="52" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">一份副本：散文指向附錄</text>
+  <text x="672" y="80" text-anchor="middle" fill="#274f67" font-size="13">散文：工作要去哪裡，以及清單在哪裡</text>
+  <text x="672" y="102" text-anchor="middle" fill="#274f67" font-size="13">附錄：write the replay tests</text>
+  <text x="672" y="130" text-anchor="middle" fill="#2f7a45" font-size="14" font-weight="700">只有一份，附錄有版號而且讀得回去</text>
+  <rect x="20" y="172" width="860" height="62" rx="7" fill="#fffaf0" stroke="#075486" stroke-width="3" />
+  <text x="44" y="200" fill="#075486" font-size="16" font-weight="700">這樣一來，「計畫現在是什麼」這件事只有一個答案，</text>
+  <text x="44" y="224" fill="#274f67" font-size="14">而且那個答案有出處：source_event_id 指向它來自哪一個事件。</text>
+  <rect x="20" y="250" width="860" height="74" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="44" y="278" fill="#075486" font-size="16" font-weight="700">整條線收到這裡：</text>
+  <text x="44" y="302" fill="#274f67" font-size="14">能結構化的交給 host 用結構化通道保存與重播，不可結構化的才交給模型寫散文。</text>
+  <text x="44" y="322" fill="#274f67" font-size="13">模型不必記得自己答應過要做什麼——它只要讀得到。</text>
+</svg>
 
 ## 單元實作作業
 
@@ -590,6 +653,8 @@ $ cat events.jsonl
 6. 補上一段責任說明：你給了模型哪些去識別化的上下文、哪些建議被你拒絕，以及哪一個測試讓你接受最後的 patch。
 
 這份流程圖比「模型回答得很像人」更能證明你知道系統在哪裡做決定。
+
+7. 走完第 16 節的期末專題：`curl -s 'http://127.0.0.1:8010/checkpoint?goal=你的目標'` 的輸出截圖，必須同時看得到散文與附錄；`pytest -q -k checkpoint` 截圖。**回答兩個問題：(a) 附錄為什麼要有版本號？(b) 如果散文也把任務清單列出來，會發生什麼事？**
 
 ## 延伸來源
 
