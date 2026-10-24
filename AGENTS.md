@@ -92,6 +92,25 @@ Consult these guides before working on related tasks:
 
 ---
 
+## Content and UI Standards
+
+The shared content and UI standards apply to every document and interface in this
+course: course prose, UI copy, labels and error messages. The rules live in
+`~/.agents/rules/05-content-and-ui-standards.md` and the `content-standards`
+skill; this repository does not keep a second copy.
+
+The gate runs as stage 11 of `npm run check`. It reports findings without
+blocking. Read a finding as a question about the sentence or the interface, not
+as a style preference: a step that starts with a verb, a field that has a
+label, a link that names its destination.
+
+```bash
+python3 ~/.agents/skills/content-standards/scripts/content_standards_check.py \
+  --root . --mode report --paths docs,src,exercises
+```
+
+---
+
 ## RTK Policy
 
 Follow `~/.agents/RTK.md` and the current tool's global instructions for automatic versus manual RTK routing. Preserve exact output when required.
