@@ -1,0 +1,270 @@
+---
+title: "從模型 API 到執行迴圈：六週實作"
+description: "用 OpenAI 相容的 Chat Completions API，從單次呼叫一路實作到可追蹤的工具執行迴圈。"
+---
+
+import Callout from '../../components/Callout.astro';
+import Terminal from '../../components/Terminal.astro';
+
+這個獨立單元把「呼叫模型」當成一次 HTTP 交易來看：你送出 Request，服務端回傳 Response；模型給出文字或工具呼叫建議，你的程式負責執行工具、回填結果，再決定是否繼續。六週結束時，你會有一個可在終端機執行、能留下執行紀錄的 CLI agent。
+
+<Callout type="note" title="單元資訊">
+  共 6 週。前置知識：HTTP Request/Response、`curl -v`、Python 基礎與終端機操作。Week 1 需申請 NVIDIA API key。
+</Callout>
+
+## 單元地圖
+
+| 週次 | 主題 | 你要交出的證據 |
+| --- | --- | --- |
+| Week 1 | 第一次模型呼叫：在 `curl -v` 裡看見回覆 | `week1_single_call.py` + 成功/失敗觀察紀錄 |
+| Week 2 | 工具描述與分派：模型提出，程式執行 | `week2_tool_dispatch.py` + 一次完整 tool-use 紀錄 |
+| Week 3 | 執行迴圈與對話狀態：把多輪步驟接起來 | `week3_agent_loop.py` + 多步執行 log |
+| Week 4 | 多工具與錯誤回填：失敗也是觀察資料 | `week4_multi_tools.py` + 成功/失敗 log |
+| Week 5 | 執行紀錄與邊界：讓行為可追蹤、可限制 | trace 檔 + 設定與護欄說明 |
+| Week 6 | 整合驗收：一個可追蹤的 CLI agent | `harness.py` + demo trace + `README.md` |
+
+<svg viewBox="0 0 760 170" role="img" aria-labelledby="agent-loop-map-title agent-loop-map-desc" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="agent-loop-map-title">ELI5 從 API 呼叫到執行迴圈</title>
+  <desc id="agent-loop-map-desc">messages 送到模型 API，模型回傳文字或 tool_calls；程式執行工具後把結果 append 回 messages，再送出下一次請求。</desc>
+  <rect x="20" y="55" width="150" height="60" rx="8" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="95" y="92" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">messages</text>
+  <path d="M170 85 H240" stroke="#075486" stroke-width="4" />
+  <path d="M240 85 l-12 -8 v16 z" fill="#075486" />
+  <rect x="240" y="45" width="170" height="80" rx="8" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="325" y="78" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">Model API</text>
+  <text x="325" y="102" text-anchor="middle" fill="#274f67" font-size="13">POST /chat/completions</text>
+  <path d="M410 85 H480" stroke="#075486" stroke-width="4" />
+  <path d="M480 85 l-12 -8 v16 z" fill="#075486" />
+  <rect x="480" y="45" width="150" height="80" rx="8" fill="#fff0bf" stroke="#075486" stroke-width="3" />
+  <text x="555" y="78" text-anchor="middle" fill="#075486" font-size="16" font-weight="700">你的程式</text>
+  <text x="555" y="102" text-anchor="middle" fill="#274f67" font-size="13">分派 / 回填 / 停止</text>
+  <path d="M555 125 V150 H95 V115" fill="none" stroke="#ef795e" stroke-width="4" />
+  <path d="M95 115 l-8 12 h16 z" fill="#ef795e" />
+  <text x="325" y="158" text-anchor="middle" fill="#ef795e" font-size="13" font-weight="700">tool result append 後送出下一次 Request</text>
+</svg>
+
+---
+
+## Week 1：第一次模型呼叫：在 `curl -v` 裡看見回覆
+
+**這週目標**：把「請模型回答」還原成一次可觀察的 HTTP Request/Response。你要能用 `curl -v` 指出 Request Line、Headers、Body、Status Code，以及模型回覆文字在 Response Body 的哪個欄位。
+
+### 1. 申請 NVIDIA API key
+
+本單元使用 NVIDIA 提供的 OpenAI 相容推論端點。
+
+1. 前往 [NVIDIA API Catalog](https://build.nvidia.com/) 並登入 NVIDIA 帳號。
+2. 在模型頁面或 API Keys 頁選擇 **Get API Key** / **Generate API Key** 建立金鑰。
+3. 把金鑰存到環境變數，讓程式與 `curl` 從環境讀取（將下方的佔位文字替換為你在後台產生的金鑰）：
+
+<Terminal title="bash — store API key in current shell">{`
+export NVIDIA_API_KEY=YOUR_NVIDIA_API_KEY
+`}</Terminal>
+
+建議另外建立 `.env` 保存（確認 `.env` 已列在 `.gitignore`），使用時再載入。繳交作業只附上去識別化的指令與輸出。
+
+<Callout type="warning" title="API key 是認證秘密">
+  `Authorization` Header 會帶出金鑰。貼 `curl -v` 紀錄、截圖或分享檔案前先遮蔽。若懷疑外洩，到 NVIDIA 後台撤銷並重新產生；不要把 key 寫進原始碼或 commit。
+</Callout>
+
+### 2. 本週要接的 endpoint 與 model
+
+| 項目 | 值 | 說明 |
+| --- | --- | --- |
+| Base URL | `https://integrate.api.nvidia.com/v1` | OpenAI 相容 API 根路徑 |
+| Path | `/chat/completions` | Chat Completions 端點 |
+| Method | `POST` | 送出 JSON 請求 |
+| Model | `meta/llama-3.1-8b-instruct` | 本週預設，可在 [build.nvidia.com](https://build.nvidia.com/) 模型頁確認可用名稱 |
+
+若課堂指定其他 model id，以課堂公告為準；欄位觀察方式相同。
+
+### 3. 用 `curl -v` 送出第一次呼叫
+
+`curl -v` 會顯示傳輸細節：`>` 開頭是送出的 Request，`<` 開頭是收到的 Response；空行後緊接的 JSON（stdout）是 Response Body。模型回覆就在 Response Body 裡。
+
+<Terminal title="bash — curl -v call chat completions">{`
+curl -v https://integrate.api.nvidia.com/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer $NVIDIA_API_KEY" \\
+  -d '{
+    "model": "meta/llama-3.1-8b-instruct",
+    "messages": [
+      {"role": "user", "content": "用一句話說明什麼是 HTTP"}
+    ],
+    "max_tokens": 128,
+    "temperature": 0.2
+  }'
+`}</Terminal>
+
+觀察時對照這幾個位置：
+
+<Terminal title="HTTP — 你要在輸出中指出的欄位" flavor="output">{`
+> POST /v1/chat/completions HTTP/2        ← Request Line（方法 + 路徑）
+> Host: integrate.api.nvidia.com
+> Authorization: Bearer ***               ← Request Header（遮蔽後記錄）
+> Content-Type: application/json
+>
+{ "model": "...", "messages": [...] }     ← Request Body（-d 內容）
+
+< HTTP/2 200                              ← Response Status Code
+< content-type: application/json
+<
+{                                         ← Response Body（stdout）
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "HTTP 是..."          ← 模型回覆文字在這裡
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "prompt_tokens": ..., "completion_tokens": ..., "total_tokens": ... }
+}
+`}</Terminal>
+
+結論要很具體：**狀態碼**看 `< HTTP/...`；**模型回覆**看 `choices[0].message.content`；**你送出的任務**看 Request Body 的 `messages`。這就是「call model 的結果」在網路上可被看見的形式。
+
+只取出模型回覆文字（`-v` 的傳輸細節走 stderr，不影響 stdout）：
+
+<Terminal title="bash — extract content with jq">{`
+curl -s https://integrate.api.nvidia.com/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer $NVIDIA_API_KEY" \\
+  -d '{
+    "model": "meta/llama-3.1-8b-instruct",
+    "messages": [{"role": "user", "content": "用一句話說明什麼是 HTTP"}],
+    "max_tokens": 128,
+    "temperature": 0.2
+  }' | jq -r '.choices[0].message.content'
+`}</Terminal>
+
+### 4. 製造一個失敗並讀懂它
+
+成功只能證明「有通」；失敗才能證明你知道責任在哪。
+
+| 情境 | 預期 Status | 你要指出的證據 |
+| --- | --- | --- |
+| key 正確、model 正確、JSON 合法 | `200` | `choices[0].message.content` 與 `usage` |
+| `Authorization` 缺少或錯誤 | `401`（或服務回報的認證錯誤） | Response Body 的 error/message |
+| `model` 名稱錯誤或必要欄位缺失 | `400` / `404`（依服務） | 哪個欄位被拒絕、錯誤描述 |
+
+<Callout type="note" title="先看 Status Code，再讀 Body">
+  `2xx` 表示請求被接受並處理；`4xx` 通常表示 Client 送出的內容有問題（認證、格式、model 名稱等）。不要只看程式有沒有輸出文字。
+</Callout>
+
+### 5. 用 Python 寫同一個呼叫並對照
+
+`curl` 與 Python 都是 Client。它們對同一個 endpoint 送出語意相同的 Request，應得到結構一致的 Response。
+
+<Terminal title="bash — create week1_single_call.py">{`
+cat > week1_single_call.py <<'PY'
+import json
+import os
+
+import requests
+
+API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+MODEL = "meta/llama-3.1-8b-instruct"
+
+
+def call_model(messages):
+    api_key = os.environ["NVIDIA_API_KEY"]
+    resp = requests.post(
+        API_URL,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": MODEL,
+            "messages": messages,
+            "max_tokens": 128,
+            "temperature": 0.2,
+        },
+        timeout=60,
+    )
+    print("status:", resp.status_code)
+    data = resp.json()
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+    if resp.ok:
+        print("reply:", data["choices"][0]["message"]["content"])
+    else:
+        print("error:", data.get("error", data))
+    return data
+
+
+if __name__ == "__main__":
+    call_model([{"role": "user", "content": "用一句話說明什麼是 HTTP"}])
+PY
+`}</Terminal>
+
+執行：
+
+<Terminal title="bash — run week1_single_call.py">{`
+python3 week1_single_call.py
+`}</Terminal>
+
+對照 `curl -v`：`status` 對應 Response Status Code；`reply` 對應 `choices[0].message.content`；`usage` 對應 token 統計。若 status 非 2xx，改從輸出的 `error` 說明問題來源。
+
+### Week 1 交付與驗收
+
+- `week1_single_call.py`（不含 key、不含 `.env`）。
+- 一份觀察紀錄（文字或 Markdown）：遮蔽 key 後，貼上一次成功與一次失敗的 `curl -v` 重點片段，並標註 Request Line、至少兩個 Request Headers、Request Body 的 `model` 與 `messages`、Response Status Code、成功案例的 `choices[0].message.content` 或失敗案例的 error 欄位。
+- 驗收時你要能口頭指出：模型回覆在哪個欄位；失敗是 4xx 哪一類、由 Request 的哪個部分造成。
+
+---
+
+## Week 2：工具描述與分派：模型提出，程式執行
+
+**心智模型**：模型不直接讀檔或發 HTTP；它在回應中產生 `tool_calls`，描述要呼叫的工具名稱與參數。你的程式依描述執行，將結果以 `role: "tool"` 訊息回填，再請模型根據結果回答。
+
+- **核心概念**：tool schema（`type: "function"`、`name`、`description`、`parameters`）、`choices[0].message.tool_calls`、`tool_call_id` 對應、`dispatch(name, arguments)`。
+- **實作**：定義一個工具 `http_get(url)`（用 `requests.get`，設定 timeout）；第一次呼叫帶 `tools` 取得 `tool_calls`；執行工具後組出 tool message；第二次呼叫取得最終 `content`（本週先不寫迴圈，手動兩步）。
+- **可觀察驗證**：紀錄中能分清「模型建議的參數」與「程式實際執行得到的 status code / body 摘要」。
+- **產出**：`week2_tool_dispatch.py` + 一次完整 tool-use 對話紀錄（兩次 API request/response 重點）。
+
+## Week 3：執行迴圈與對話狀態：把多輪步驟接起來
+
+**心智模型**：Chat Completions API 本身不替你保存狀態；你的程式把每輪 assistant 訊息與 tool result 追加到 `messages` 後重送，才形成連續的工作過程。
+
+- **核心概念**：`while` 迴圈、append 順序（含 `tool_calls` 的 assistant 訊息 → 對應的 tool 訊息）、停止條件（回應沒有 `tool_calls`）、`max_steps` 上限。
+- **實作**：把 Week 2 改為迴圈；每輪印出 step 編號與本輪類型（`tool_call` / `final`）；以需要至少兩次工具呼叫的任務驗證。
+- **可觀察驗證**：log 可還原 `messages` 如何增長，以及為何在某一步停止。
+- **產出**：`week3_agent_loop.py` + 多步執行 log。
+
+## Week 4：多工具與錯誤回填：失敗也是觀察資料
+
+**心智模型**：真實環境會逾時、回 404、或收到不合法參數。程式要捕捉錯誤並把結果結構化回填，讓模型能根據觀察修正或停止。
+
+- **核心概念**：工具註冊表、多工具 schema、參數解析與驗證、timeout/例外處理、統一結果格式（成功/失敗都可序列化）。
+- **實作**：擴充到 2–3 個工具（建議 `http_get` 與 `read_file`）；處理未知工具、JSON 參數錯誤、連線失敗與非 2xx 回應；刻意觸發一個失敗案例。
+- **可觀察驗證**：失敗 log 顯示錯誤被捕捉、寫入 tool result，下一輪模型回應能引用或回報該錯誤。
+- **產出**：`week4_multi_tools.py` + 成功與失敗各一組 log。
+
+## Week 5：執行紀錄與邊界：讓行為可追蹤、可限制
+
+**心智模型**：能重跑不等於能解釋。沒有執行紀錄就難除錯；沒有邊界就不應執行危險動作。紀錄與限制屬於執行程式的責任。
+
+- **核心概念**：結構化 trace（如 JSONL，記錄 step、事件類型、請求/回應摘要、工具輸入輸出）、設定外部化（`NVIDIA_API_KEY`、model、`MAX_STEPS`、timeout）、最小權限（路徑或指令限制）、`--dry-run`。
+- **實作**：輸出可追讀的 trace 檔；從環境變數讀設定；為檔案或指令類工具加基本護欄；支援 dry-run 顯示預計動作而不執行。
+- **可觀察驗證**：可由 trace 還原每一步的決策與結果；越權操作被拒絕並留下原因。
+- **產出**：可設定的執行程式 + `trace.jsonl` 範例 + 設定/護欄說明。
+
+## Week 6：整合驗收：一個可追蹤的 CLI agent
+
+**心智模型**：驗收重點不是「看起來聰明」，而是行為可預期、失敗可解釋、證據可檢查。
+
+- **核心概念**：CLI 介面、端到端任務、停止條件與限制說明、設計取捨。
+- **實作**：整合為 `python harness.py "任務描述"`（或等價介面）；完成一個端到端示範（依課堂環境選定，例如透過 HTTP 取得資訊後彙整，或讀取本地資料後產出摘要）；撰寫 `README.md` 說明架構、工具清單、停止條件、安全限制與已知限制。
+- **可觀察驗證**：他人可依 trace 指出第 N 步送出的 Request、收到的 Response/status、執行的工具與停止原因。
+- **產出**：可執行 CLI agent + demo trace + `README.md`。
+
+---
+
+## 評量方式
+
+- **每週證據**：繳交可執行程式與觀察紀錄；能指出 Request/Response 關鍵欄位與 status code。
+- **核心能力**：能說明一次 tool call 的完整往返（模型產生呼叫 → 程式執行 → 結果回填 → 下一次模型回應）。
+- **除錯能力**：能從 trace 判斷失敗來源（認證、參數、模型輸出、工具執行或環境）與程式如何處理。
+- **安全底線**：API key 不入庫、不入明文 log；繳交前遮蔽秘密與個人資料。
