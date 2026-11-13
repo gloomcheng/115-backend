@@ -74,7 +74,11 @@ export NVIDIA_API_KEY=YOUR_NVIDIA_API_KEY
 | Base URL | `https://integrate.api.nvidia.com/v1` | OpenAI 相容 API 根路徑 |
 | Path | `/chat/completions` | Chat Completions 端點 |
 | Method | `POST` | 送出 JSON 請求 |
-| Model | `minimaxai/minimax-m3.1-flash` | MiniMax M3.1 Flash，本週預設；可在 [build.nvidia.com](https://build.nvidia.com/minimaxai/minimax-m3.1-flash) 模型頁確認可用名稱 |
+| Model | `minimaxai/minimax-m3.1-flash` | MiniMax M3.1 Flash，本週預設；可在 [build.nvidia.com](https://build.nvidia.com/minimaxai/minimax-m3.1-flash) 模型頁確認可用名稱與建議參數 |
+
+<Callout type="note" title="參數對齊">
+  本週依 NVIDIA 範例使用 `temperature: 1` 與 `top_p: 0.95`。MiniMax M3.1 Flash 支援 reasoning；`max_tokens` 需同時容納思考與最終回答，簡短提問先設 `512`。回應的 `message` 在某些情況下可能包含 `reasoning_content`，本週觀察與擷取仍以 `choices[0].message.content` 為主。
+</Callout>
 
 若課堂指定其他 model id，以課堂公告為準；欄位觀察方式相同。
 
@@ -91,8 +95,9 @@ curl -v https://integrate.api.nvidia.com/v1/chat/completions \\
     "messages": [
       {"role": "user", "content": "用一句話說明什麼是 HTTP"}
     ],
-    "max_tokens": 128,
-    "temperature": 0.2
+    "max_tokens": 512,
+    "temperature": 1,
+    "top_p": 0.95
   }'
 `}</Terminal>
 
@@ -134,8 +139,9 @@ curl -s https://integrate.api.nvidia.com/v1/chat/completions \\
   -d '{
     "model": "minimaxai/minimax-m3.1-flash",
     "messages": [{"role": "user", "content": "用一句話說明什麼是 HTTP"}],
-    "max_tokens": 128,
-    "temperature": 0.2
+    "max_tokens": 512,
+    "temperature": 1,
+    "top_p": 0.95
   }' | jq -r '.choices[0].message.content'
 `}</Terminal>
 
@@ -179,8 +185,9 @@ def call_model(messages):
         json={
             "model": MODEL,
             "messages": messages,
-            "max_tokens": 128,
-            "temperature": 0.2,
+            "max_tokens": 512,
+            "temperature": 1,
+            "top_p": 0.95,
         },
         timeout=60,
     )
