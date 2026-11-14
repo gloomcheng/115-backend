@@ -214,11 +214,16 @@ python3 week1_single_call.py
 
 對照 `curl -v`：`status` 對應 Response Status Code；`reply` 對應 `choices[0].message.content`；`usage` 對應 token 統計。若 status 非 2xx，改從輸出的 `error` 說明問題來源。
 
-### Week 1 交付與驗收
+### Week 1 繳交與自我檢查
 
-- `week1_single_call.py`（不含 key、不含 `.env`）。
-- 一份觀察紀錄（文字或 Markdown）：遮蔽 key 後，貼上一次成功與一次失敗的 `curl -v` 重點片段，並標註 Request Line、至少兩個 Request Headers、Request Body 的 `model` 與 `messages`、Response Status Code、成功案例的 `choices[0].message.content` 或失敗案例的 error 欄位。
-- 驗收時你要能口頭指出：模型回覆在哪個欄位；失敗是 4xx 哪一類、由 Request 的哪個部分造成。
+**要繳交到個人 GitHub repo**
+
+- `week1_single_call.py`：程式中不得包含 API key，也不要把 `.env` 一起提交。
+
+**自己練習，不用繳交**
+
+- **整理一次觀察紀錄**（文字或 Markdown，留在自己電腦即可）：遮蔽 key 後，貼上一筆成功與一筆失敗的 `curl -v` 重點輸出，並替自己標出 Request Line、至少兩個 Request Headers、Request Body 裡的 `model` 與 `messages`、Response Status Code，以及成功時的 `choices[0].message.content` 或失敗時的 error 欄位。
+- **自我檢查能不能說明**：看到回應後，你能指出模型回覆文字在哪個欄位；看到失敗後，你能說出屬於哪一類 4xx，以及是 Request 的哪個部分造成（例如認證、model 名稱或 JSON 欄位）。
 
 ---
 
