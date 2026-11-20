@@ -229,12 +229,297 @@ python3 week1_single_call.py
 
 ## Week 2：工具描述與分派：模型提出，程式執行
 
-**心智模型**：模型不直接讀檔或發 HTTP；它在回應中產生 `tool_calls`，描述要呼叫的工具名稱與參數。你的程式依描述執行，將結果以 `role: "tool"` 訊息回填，再請模型根據結果回答。
+**這週目標**：把一次工具呼叫拆成兩筆 API 交易。你要能指出第一筆回應的 `tool_calls`、程式實際執行的結果，以及第二筆請求裡回填的 `role: "tool"` 訊息。模型只提出建議；執行與回填都是你的程式的工作。
 
-- **核心概念**：tool schema（`type: "function"`、`name`、`description`、`parameters`）、`choices[0].message.tool_calls`、`tool_call_id` 對應、`dispatch(name, arguments)`。
-- **實作**：定義一個工具 `http_get(url)`（用 `requests.get`，設定 timeout）；第一次呼叫帶 `tools` 取得 `tool_calls`；執行工具後組出 tool message；第二次呼叫取得最終 `content`（本週先不寫迴圈，手動兩步）。
-- **可觀察驗證**：紀錄中能分清「模型建議的參數」與「程式實際執行得到的 status code / body 摘要」。
-- **產出**：`week2_tool_dispatch.py` + 一次完整 tool-use 對話紀錄（兩次 API request/response 重點）。
+### 1. 先描述工具：tool schema
+
+模型不知道你的程式能做什麼，除非你把工具寫進 Request。Chat Completions API 用 `tools` 陣列描述工具。每個工具是一層 `function`：
+
+<Terminal title="JSON — http_get 的 tool schema" flavor="output">{`
+{
+  "type": "function",
+  "function": {
+    "name": "http_get",
+    "description": "Fetch a URL with HTTP GET. Return status code and a short body summary.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Absolute http(s) URL to fetch."
+        }
+      },
+      "required": ["url"]
+    }
+  }
+}
+`}</Terminal>
+
+| 欄位 | 誰讀它 | 目的 |
+| --- | --- | --- |
+| `type: "function"` | API | 宣告這是一個函式呼叫工具 |
+| `name` | 模型 | 決定要呼叫哪個工具 |
+| `description` | 模型 | 判斷什麼時候用這個工具 |
+| `parameters` | 模型 | 產生符合規格的 arguments |
+
+<Callout type="note" title="arguments 是字串">
+  模型回傳的 `function.arguments` 是 JSON 字串，不是 Python dict。程式要先 `json.loads`，才能拿裡面的 `url`。
+</Callout>
+
+### 2. 第一次呼叫：取得 tool_calls
+
+沿用 Week 1 的 endpoint、model 與 `NVIDIA_API_KEY`。把工具描述放進 Request Body：
+
+<Terminal title="bash — build the first request body">{`
+cat > week2_first_request.json <<'JSON'
+{
+  "model": "minimaxai/minimax-m3.1-flash",
+  "messages": [
+    {"role": "user", "content": "用 http_get 抓取 https://example.com，然後用一句話說明你看到什麼。"}
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "http_get",
+        "description": "Fetch a URL with HTTP GET. Return status code and a short body summary.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "url": {"type": "string", "description": "Absolute http(s) URL to fetch."}
+          },
+          "required": ["url"]
+        }
+      }
+    }
+  ],
+  "max_tokens": 512,
+  "temperature": 1,
+  "top_p": 0.95
+}
+JSON
+`}</Terminal>
+
+<Terminal title="bash — send the first request">{`
+curl -s https://integrate.api.nvidia.com/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer $NVIDIA_API_KEY" \\
+  -d @week2_first_request.json | jq '.choices[0].message'
+`}</Terminal>
+
+你要在輸出中看到的是 `tool_calls`，不是最終答案：
+
+<Terminal title="HTTP — 第一次回應的重點" flavor="output">{`
+{
+  "role": "assistant",
+  "content": null,
+  "tool_calls": [
+    {
+      "id": "call_...",
+      "type": "function",
+      "function": {
+        "name": "http_get",
+        "arguments": "{\\"url\\":\\"https://example.com\\"}"
+      }
+    }
+  ]
+}
+`}</Terminal>
+
+<Callout type="note" title="如果只拿到 content">
+  模型有時會直接回答，不產生 `tool_calls`。先確認 user message 明確要求使用工具，再檢查 `tools` 是否送出。不要在這個階段自己改寫模型的參數。
+</Callout>
+
+### 3. 執行工具，回填 tool message
+
+程式的責任是照 `name` 與 `arguments` 執行，並把結果放回 `messages`。`tool_call_id` 必須和上一步的 `id` 相同，模型才知道這筆結果對應哪個建議。
+
+<Terminal title="Python — dispatch and tool message">{`
+def dispatch(name, arguments):
+    if name != "http_get":
+        raise ValueError(f"unknown tool: {name}")
+    args = json.loads(arguments)
+    resp = requests.get(args["url"], timeout=10)
+    return {
+        "status_code": resp.status_code,
+        "body_summary": resp.text[:120],
+    }
+
+
+call = first["tool_calls"][0]
+print("模型建議:", call["function"]["arguments"])
+result = dispatch(call["function"]["name"], call["function"]["arguments"])
+print("程式執行:", json.dumps(result, ensure_ascii=False))
+
+messages.append(first)
+messages.append({
+    "role": "tool",
+    "tool_call_id": call["id"],
+    "content": json.dumps(result, ensure_ascii=False),
+})
+`}</Terminal>
+
+這裡已經把兩件事分開：**模型建議的參數**是 `arguments`，**程式實際得到的結果**是 `status_code` 與 `body_summary`。
+
+### 4. 第二次呼叫：取得最終 content
+
+第二次請求不帶 `tools`。模型看不到工具，就只能根據 tool result 回答。
+
+<Terminal title="HTTP — 第二次請求的重點" flavor="output">{`
+{
+  "messages": [
+    {"role": "user", "content": "用 http_get 抓取 https://example.com，然後用一句話說明你看到什麼。"},
+    {"role": "assistant", "content": null, "tool_calls": ["..."]},
+    {
+      "role": "tool",
+      "tool_call_id": "call_...",
+      "content": "{\\"status_code\\":200,\\"body_summary\\":\\"<!doctype html> ...\\"}"
+    }
+  ]
+}
+`}</Terminal>
+
+<Terminal title="HTTP — 第二次回應的重點" flavor="output">{`
+{
+  "role": "assistant",
+  "content": "回傳內容是一份 HTML 文件，開頭是 <!doctype html>。"
+}
+`}</Terminal>
+
+如果第二次又出現 `tool_calls`，那不是錯誤。那表示任務需要更多步驟；Week 3 會把這兩步接成迴圈。
+
+### 5. 用 Python 寫完整兩步流程
+
+<Terminal title="bash — create week2_tool_dispatch.py">{`
+cat > week2_tool_dispatch.py <<'PY'
+import json
+import os
+
+import requests
+
+API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+MODEL = "minimaxai/minimax-m3.1-flash"
+
+HTTP_GET_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "http_get",
+        "description": "Fetch a URL with HTTP GET. Return status code and a short body summary.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Absolute http(s) URL to fetch.",
+                }
+            },
+            "required": ["url"],
+        },
+    },
+}
+
+
+def call_model(messages, tools=None):
+    api_key = os.environ["NVIDIA_API_KEY"]
+    payload = {
+        "model": MODEL,
+        "messages": messages,
+        "max_tokens": 512,
+        "temperature": 1,
+        "top_p": 0.95,
+    }
+    if tools is not None:
+        payload["tools"] = tools
+
+    resp = requests.post(
+        API_URL,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=60,
+    )
+    print("status:", resp.status_code)
+    data = resp.json()
+    if not resp.ok:
+        print("error:", data.get("error", data))
+        raise SystemExit(1)
+    return data["choices"][0]["message"]
+
+
+def http_get(url):
+    resp = requests.get(url, timeout=10)
+    return {
+        "status_code": resp.status_code,
+        "body_summary": resp.text[:120],
+    }
+
+
+def dispatch(name, arguments):
+    if name != "http_get":
+        raise ValueError(f"unknown tool: {name}")
+    args = json.loads(arguments)
+    return http_get(args["url"])
+
+
+if __name__ == "__main__":
+    messages = [
+        {
+            "role": "user",
+            "content": "用 http_get 抓取 https://example.com，然後用一句話說明你看到什麼。",
+        }
+    ]
+
+    first = call_model(messages, tools=[HTTP_GET_TOOL])
+    print("tool_calls:", json.dumps(first.get("tool_calls"), ensure_ascii=False, indent=2))
+    if not first.get("tool_calls"):
+        raise SystemExit("沒有拿到 tool_calls；先檢查工具描述與 user message。")
+
+    messages.append(first)
+    for call in first["tool_calls"]:
+        print("模型建議:", call["function"]["arguments"])
+        result = dispatch(call["function"]["name"], call["function"]["arguments"])
+        print("程式執行:", json.dumps(result, ensure_ascii=False))
+        messages.append({
+            "role": "tool",
+            "tool_call_id": call["id"],
+            "content": json.dumps(result, ensure_ascii=False),
+        })
+
+    final = call_model(messages)
+    print("reply:", final.get("content"))
+PY
+`}</Terminal>
+
+執行：
+
+<Terminal title="bash — run week2_tool_dispatch.py">{`
+python3 week2_tool_dispatch.py
+`}</Terminal>
+
+### 6. 紀錄你觀察到的兩次呼叫
+
+把重點整理成一張表。數字用你自己的輸出，不要抄上面範例。
+
+| 步驟 | 模型建議 | 程式實際執行 |
+| --- | --- | --- |
+| 第一次 API 回應 | `name: http_get`，`arguments: {"url": "..."}` | 尚未執行；只收到建議 |
+| 工具執行 | 無 | `status_code`、`body_summary`（前 120 字） |
+| 第二次 API 請求 | 無 | `tool_call_id` 與第一次的 `id` 相同 |
+| 第二次 API 回應 | 無 | `choices[0].message.content` |
+
+### Week 2 繳交與自我檢查
+
+**要繳交到個人 GitHub repo**
+
+- `week2_tool_dispatch.py`：程式中不得包含 API key，也不要把 `.env` 一起提交。
+- 一次完整 tool-use 對話紀錄：含兩次 API 呼叫的重點輸出，並標出上表四列。
+
+**自己練習，不用繳交**
+
+- **整理一次觀察紀錄**（文字或 Markdown，留在自己電腦即可）：遮蔽 key 後，貼上第一次回應的 `tool_calls`、`function.arguments`、程式的 `status_code` 與 `body_summary`，以及第二次回應的 `content`。
+- **自我檢查能不能說明**：模型建議的 URL 在哪裡；程式用哪個函式真的發出請求；`tool_call_id` 對不上會發生什麼；為什麼第二次呼叫不帶 `tools`。
 
 ## Week 3：執行迴圈與對話狀態：把多輪步驟接起來
 

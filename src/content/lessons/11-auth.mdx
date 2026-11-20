@@ -29,7 +29,7 @@ echo "$TOKEN"
   接下來每一段都要重複使用同一枚 token，所以先 `export` 成 `$TOKEN`。`export` 讓它成為環境變數，後面 `python` 子 process 才讀得到；只是 `TOKEN=...` 賦值的話，子 process 看不到。
 </Callout>
 
-<svg viewBox="0 0 940 440" role="img" aria-labelledby="auth-claim-title auth-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+<svg viewBox="0 0 940 650" role="img" aria-labelledby="auth-claim-title auth-claim-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
   <title id="auth-claim-title">無狀態的 HTTP 靠 Client 重複出示證明，分成兩個問題</title>
   <desc id="auth-claim-description">Server 不記得上一個 Request 是誰。第一個問題是你是誰：沒有或壞掉的證明回 401 並附上 WWW-Authenticate。第二個問題是你能不能做：證明有效但權限不足回 403，不附 WWW-Authenticate。放棄重試與放棄執行是兩件事。</desc>
   <defs>
@@ -39,28 +39,33 @@ echo "$TOKEN"
   </defs>
   <rect x="20" y="20" width="900" height="52" rx="7" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
   <text x="470" y="52" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">HTTP 是無狀態的：第二個 Request 到的時候，Server 已經不記得第一個是誰發的</text>
-  <path d="M470 72 V104" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#auth-arrow)" />
-  <rect x="290" y="108" width="360" height="56" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
-  <text x="470" y="133" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">你是誰？</text>
-  <text x="470" y="154" text-anchor="middle" fill="#274f67" font-size="13">證明有沒有、對不對、還沒過期</text>
-  <path d="M400 164 V200 M540 164 V200" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#auth-arrow)" />
-  <rect x="60" y="204" width="300" height="106" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
-  <text x="210" y="232" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">沒有、簽名不對、或過期</text>
-  <text x="210" y="266" text-anchor="middle" fill="#ef795e" font-size="24" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">401</text>
-  <text x="210" y="294" text-anchor="middle" fill="#ef795e" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">WWW-Authenticate 一定要有</text>
-  <rect x="580" y="204" width="300" height="106" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
-  <text x="730" y="232" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">證明有效</text>
-  <text x="730" y="266" text-anchor="middle" fill="#0b3d63" font-size="24" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200</text>
-  <text x="730" y="294" text-anchor="middle" fill="#274f67" font-size="13">進入第二個問題</text>
-  <path d="M730 310 V346" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#auth-arrow)" />
-  <rect x="290" y="350" width="360" height="56" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
-  <text x="470" y="375" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">你能不能做？</text>
-  <text x="470" y="396" text-anchor="middle" fill="#274f67" font-size="13">證明有效之後才問這個</text>
-  <path d="M400 406 H300 M540 406 H640" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#auth-arrow)" />
-  <rect x="60" y="404" width="240" height="34" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
-  <text x="180" y="427" text-anchor="middle" fill="#0b3d63" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200</text>
-  <rect x="640" y="404" width="240" height="34" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
-  <text x="760" y="427" text-anchor="middle" fill="#ef795e" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">403</text>
+  <path d="M470 72 V140" fill="none" stroke="#075486" stroke-width="4" marker-end="url(#auth-arrow)" />
+  <rect x="290" y="140" width="360" height="56" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="470" y="165" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">你是誰？</text>
+  <text x="470" y="186" text-anchor="middle" fill="#274f67" font-size="13">證明有沒有、對不對、還沒過期</text>
+  <path d="M470 196 V220" fill="none" stroke="#075486" stroke-width="3" />
+  <path d="M470 220 H210 V270" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#auth-arrow)" />
+  <path d="M470 220 H730 V270" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#auth-arrow)" />
+  <rect x="60" y="270" width="300" height="106" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="210" y="298" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">沒有、簽名不對、或過期</text>
+  <text x="210" y="332" text-anchor="middle" fill="#ef795e" font-size="24" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">401</text>
+  <text x="210" y="360" text-anchor="middle" fill="#ef795e" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">WWW-Authenticate 一定要有</text>
+  <rect x="580" y="270" width="300" height="106" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="730" y="298" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">證明有效</text>
+  <text x="730" y="332" text-anchor="middle" fill="#0b3d63" font-size="24" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200</text>
+  <text x="730" y="360" text-anchor="middle" fill="#274f67" font-size="13">進入第二個問題</text>
+  <path d="M730 376 V400" fill="none" stroke="#075486" stroke-width="3" />
+  <path d="M730 400 H470 V450" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#auth-arrow)" />
+  <rect x="290" y="450" width="360" height="56" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="470" y="475" text-anchor="middle" fill="#075486" font-size="17" font-weight="700">你能不能做？</text>
+  <text x="470" y="496" text-anchor="middle" fill="#274f67" font-size="13">證明有效之後才問這個</text>
+  <path d="M470 506 V530" fill="none" stroke="#075486" stroke-width="3" />
+  <path d="M470 530 H180 V580" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#auth-arrow)" />
+  <path d="M470 530 H760 V580" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#auth-arrow)" />
+  <rect x="60" y="580" width="240" height="44" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="180" y="607" text-anchor="middle" fill="#0b3d63" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">200</text>
+  <rect x="640" y="580" width="240" height="44" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="760" y="607" text-anchor="middle" fill="#ef795e" font-size="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">403</text>
 </svg>
 
 ---
@@ -113,8 +118,8 @@ def sign(header: dict, payload: dict) -> str:
 
 <Terminal title="JWT — the shape" flavor="output">{`
 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9 . eyJzdWIiOiJpcmlzIiwi... . Z-Se3QP8ajcLOd5j...
-└──────── header ──────────┘ └──────── payload ──────────┘ └──── signature ────┘
-        base64url              base64url                HMAC-SHA256
+└───────────── header ─────────────┘   └────── payload ──────┘   └─── signature ───┘
+               base64url                        base64url              HMAC-SHA256
 `}</Terminal>
 
 <Callout type="note" title="為什麼不用套件">
@@ -141,6 +146,42 @@ print('payload:', dec(payload))
 header : {'alg': 'HS256', 'typ': 'JWT'}
 payload: {'sub': 'iris', 'role': 'student', 'iat': 1790951676, 'exp': 1790955276}
 `}</Terminal>
+
+<svg viewBox="0 0 940 420" role="img" aria-labelledby="jwt-anatomy-title jwt-anatomy-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="jwt-anatomy-title">JWT 的三段裡，header 與 payload 不用金鑰就能解開，只有 signature 需要密鑰才能驗</title>
+  <desc id="jwt-anatomy-description">一枚 JWT 被兩個點號隔成三段。前兩段是 base64url 編碼，不用金鑰就能解出內容。第三段是 HMAC-SHA256 簽名。Server 用密鑰重算一次比對，沒有密鑰連真偽都驗不了。</desc>
+  <defs>
+    <marker id="jwt-anatomy-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <rect x="20" y="20" width="900" height="52" rx="7" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
+  <text x="470" y="52" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">header 和 payload 不用金鑰就能解開，只有 signature 需要密鑰才能驗</text>
+  <rect x="50" y="96" width="280" height="56" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="190" y="130" text-anchor="middle" fill="#0b3d63" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9</text>
+  <text x="337" y="132" text-anchor="middle" fill="#075486" font-size="18" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">.</text>
+  <rect x="350" y="96" width="280" height="56" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="490" y="130" text-anchor="middle" fill="#0b3d63" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">eyJzdWIiOiJpcmlzIiwi...</text>
+  <text x="637" y="132" text-anchor="middle" fill="#075486" font-size="18" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">.</text>
+  <rect x="650" y="96" width="250" height="56" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="775" y="130" text-anchor="middle" fill="#0b3d63" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="700">Z-Se3QP8ajcLOd5j...</text>
+  <text x="190" y="180" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">header</text>
+  <text x="490" y="180" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">payload</text>
+  <text x="775" y="180" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">signature</text>
+  <text x="190" y="204" text-anchor="middle" fill="#274f67" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{"{'alg': 'HS256', 'typ': 'JWT'}"}</text>
+  <text x="490" y="204" text-anchor="middle" fill="#274f67" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">{"{'sub': 'iris', 'role': 'student', 'exp': ...}"}</text>
+  <text x="775" y="204" text-anchor="middle" fill="#274f67" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">HMAC-SHA256 的位元組</text>
+  <path d="M190 216 V282" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#jwt-anatomy-arrow)" />
+  <path d="M490 216 V282" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#jwt-anatomy-arrow)" />
+  <path d="M775 216 V282" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#jwt-anatomy-arrow)" />
+  <rect x="50" y="288" width="520" height="104" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="310" y="322" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">不需要金鑰，任何拿到 token 的人都能解開</text>
+  <text x="310" y="352" text-anchor="middle" fill="#274f67" font-size="12">base64 是編碼不是加密——秘密不能放進這兩段。</text>
+  <rect x="650" y="288" width="250" height="104" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="775" y="322" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">要密鑰才能驗</text>
+  <text x="775" y="350" text-anchor="middle" fill="#274f67" font-size="12">Server 用密鑰重算一次比對。</text>
+  <text x="775" y="372" text-anchor="middle" fill="#274f67" font-size="12">沒有密鑰，連真偽都驗不了。</text>
+</svg>
 
 **沒有金鑰。沒有 Server。沒有任何權限。** 任何拿到這串 token 的人，都看得到 `role` 是 `student`、它是什麼時候發的、什麼時候到期。
 
@@ -291,9 +332,65 @@ exp = expiration  到期時間
 
 ---
 
-## 07. 終端實戰驗證：五種情況
+## 07. OAuth 在哪裡：發憑證的流程，和憑證本身
 
-上面六節的結論都要自己重跑一次。Terminal 1 跑著 `fastapi dev main.py --port 8004`，Terminal 2 已經把 token 放進 `$TOKEN`，五個步驟都用同一枚：
+到這裡為止，token 都是這門課自己簽的：你把帳號密碼直接交給這台 Server，它簽一枚 JWT 還給你。真實世界常見的登入多一層——「用 Google 登入」。那一層是 OAuth。OAuth 和 JWT 不是競爭關係，它們各答一半的問題：
+
+- **OAuth 是發憑證的流程**，回答「這個 App 憑什麼拿到憑證」。你不用把 Google 的密碼交給那個 App，就同意它拿到一枚限時、限範圍的憑證——授權是委託，不是交出身分。
+- **JWT 是憑證的格式**，回答「每個 Request 你是誰」。一段自己帶著內容與簽名的字串，Server 不用回頭問任何人就能驗。
+
+<svg viewBox="0 0 940 440" role="img" aria-labelledby="oauth-flow-title oauth-flow-description" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="oauth-flow-title">OAuth 是發憑證的流程，JWT 是憑證的格式，OAuth 發的 access token 可以就是一枚 JWT</title>
+  <desc id="oauth-flow-description">OAuth 的流程有四個角色。使用者同意授權給 Client。Client 用授權向授權伺服器換憑證。授權伺服器發下 access token，這枚可能就是 JWT。Client 帶著 token 呼叫資源伺服器，驗簽名後回資料。這門課的 POST /login 把發憑證與驗證憑證做在同一台 Server，所以看不到 OAuth。</desc>
+  <defs>
+    <marker id="oauth-flow-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+    <marker id="oauth-flow-arrow-coral" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#ef795e" />
+    </marker>
+  </defs>
+  <rect x="20" y="20" width="900" height="52" rx="7" fill="#fffaf0" stroke="#ef795e" stroke-width="3" />
+  <text x="470" y="52" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">OAuth 是發憑證的流程，JWT 是憑證的格式 —— OAuth 發的 access token 可以就是一枚 JWT</text>
+  <text x="225" y="104" text-anchor="middle" fill="#075486" font-size="12" font-weight="700">1 同意授權。</text>
+  <text x="445" y="104" text-anchor="middle" fill="#075486" font-size="12" font-weight="700">2 用授權換憑證。</text>
+  <text x="572" y="88" text-anchor="middle" fill="#075486" font-size="12" font-weight="700">4 帶著 token 呼叫（Server 驗簽名、看權限）。</text>
+  <rect x="30" y="110" width="170" height="90" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="115" y="146" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">使用者</text>
+  <text x="115" y="170" text-anchor="middle" fill="#274f67" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">Resource Owner</text>
+  <rect x="250" y="110" width="170" height="90" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="335" y="146" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">Client</text>
+  <text x="335" y="170" text-anchor="middle" fill="#274f67" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">想要資料的 App</text>
+  <rect x="470" y="110" width="170" height="90" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="555" y="146" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">授權伺服器</text>
+  <text x="555" y="170" text-anchor="middle" fill="#274f67" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">Authorization Server</text>
+  <rect x="720" y="110" width="180" height="90" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="810" y="146" text-anchor="middle" fill="#075486" font-size="15" font-weight="700">資源伺服器</text>
+  <text x="810" y="170" text-anchor="middle" fill="#274f67" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">Resource Server</text>
+  <text x="810" y="188" text-anchor="middle" fill="#274f67" font-size="11">驗簽名、回資料</text>
+  <path d="M206 155 H244" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#oauth-flow-arrow)" />
+  <path d="M426 155 H464" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#oauth-flow-arrow)" />
+  <path d="M335 110 V94 H810 V110" fill="none" stroke="#075486" stroke-width="3" marker-end="url(#oauth-flow-arrow)" />
+  <path d="M555 200 V240 H330 V200" fill="none" stroke="#ef795e" stroke-width="3" marker-end="url(#oauth-flow-arrow-coral)" />
+  <text x="442" y="264" text-anchor="middle" fill="#ef795e" font-size="13" font-weight="700">3 發下 access token（這枚可能就是 JWT）。</text>
+  <rect x="30" y="310" width="880" height="92" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="470" y="346" text-anchor="middle" fill="#274f67" font-size="13">這堂課看不到 OAuth：發憑證（POST /login）和驗證憑證是同一台 Server 的事。</text>
+  <text x="470" y="374" text-anchor="middle" fill="#274f67" font-size="13">用「Google 登入」時，這四個角色真的分開，授權流程才有戲可演。</text>
+</svg>
+
+兩件事沒有綁定。OAuth 發下來的 access token 可以就是一枚 JWT，很多系統確實這樣配；OAuth 也照樣能發**不透明 token**——一串只有發行它的伺服器讀得懂的隨機字串，每次驗證都得回頭問它。判斷手上的 token 是不是 JWT，看的是那兩個點、前兩段解不解得開，不是看誰發的。
+
+<Callout type="note" title="這堂課為什麼看不到 OAuth">
+  因為這門課把四個角色塞進同一台 Server：`POST /login` 同時做了使用者授權、簽發憑證、驗證憑證三件事。發憑證的人和收憑證的人是同一個，授權流程就沒有戲可演；OAuth 登場的條件，是這幾件事分屬不同服務。
+
+  順帶一個談資：「Google 登入」嚴格說是 OAuth 2.0 加上 OpenID Connect（OIDC）。OAuth 管的是**授權**——這個 App 能碰我的哪些資料；OIDC 在它之上多發一枚 id token，把「這個人是誰」標準化。授權和驗證是兩個問題，跟這堂課 `403` 與 `401` 的分工是同一個形狀。
+</Callout>
+
+---
+
+## 08. 終端實戰驗證：五種情況
+
+上面七節的結論都要自己重跑一次。Terminal 1 跑著 `fastapi dev main.py --port 8004`，Terminal 2 已經把 token 放進 `$TOKEN`，五個步驟都用同一枚：
 
 ### 第一步：不帶 token
 
@@ -359,7 +456,7 @@ curl -i http://127.0.0.1:8004/admin -H "Authorization: Bearer $(cat /tmp/tampere
 
 ---
 
-## 08. 把它接回 harness：誰可以寫事件，誰可以讀狀態
+## 09. 把它接回 harness：誰可以寫事件，誰可以讀狀態
 
 前一節講到 `401` 和 `403` 的差別：前者是「我不知道你是誰」，後者是「我知道你是誰，而你的角色不能做這件事」。harness 裡這兩件事都真的發生了，而且同一組 token 兩邊都要用。
 
@@ -453,7 +550,7 @@ $ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8010/events/
 6. 用過期的 token 打 `/private`，截圖必須包含 `401` 與 `Token expired`。回答：簽名有效和 token 還能用，是同一件事嗎？
 7. 用一句話回答：`401` 與 `403` 各自在問什麼問題？把答案寫成「誰該去修什麼」。
 8. 回答：如果你把 `{"user_id": 7, "is_admin": true}` 放進 payload，Server 會怎麼處理 `is_admin`？這和單元 10 第 06 節「一個沒被擋下來的問題」那個未宣告欄位是同一個問題嗎？
-9. 走完第 08 節的 harness：`python -m harness.authz root admin` 簽出 token，用它打一次 `/events`（要 `200`）與一次 `/events/tool-result`（要 `201`）。截圖必須包含 `x-trace-id`。再簽一個 `reader` token，用它打 `/events/tool-result`，截圖必須是 `403`。**回答一句話：`401` 和 `403` 各自在問什麼問題？把答案寫成「誰該去修什麼」。**
+9. 走完第 09 節的 harness：`python -m harness.authz root admin` 簽出 token，用它打一次 `/events`（要 `200`）與一次 `/events/tool-result`（要 `201`）。截圖必須包含 `x-trace-id`。再簽一個 `reader` token，用它打 `/events/tool-result`，截圖必須是 `403`。**回答一句話：`401` 和 `403` 各自在問什麼問題？把答案寫成「誰該去修什麼」。**
 
 把作業截圖與簡答筆記存入 `exercises/11-auth/`，並以 Git 提交至個人儲存庫。提交前執行 `git status`，確認只包含作業檔案。
 
