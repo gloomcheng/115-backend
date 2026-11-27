@@ -538,6 +538,36 @@ $ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8010/events/
 
 ---
 
+## 10. Refresh Token：一枚 token 不夠用的時候
+
+第 03 節講過 JWT 的 `exp`：token 過期後 Server 回 `401 Token expired`。這帶來一個兩難：
+
+- **token 壽命短**：被偷走也只偷到短時間，但使用者頻繁被踢回登入頁，體驗差。
+- **token 壽命長**：使用者不用頻繁登入，但外洩後攻擊者長時間可用。
+
+解法是**把「證明身分」和「換發新憑證」拆成兩枚 token**：
+
+- **AT（Access Token）**：短命（幾分鐘到幾小時）。每次呼叫受保護 API 時帶在 `Authorization` header，Server 驗簽名 + 檢查 `exp`。被偷走也只偷到短時間。
+- **RT（Refresh Token）**：長命（幾天到幾週）。**只在 AT 過期時用一次**，去換一張新的 AT，不用重新登入、不用重新輸入密碼。
+- **ET（Expiration Time）**：Server 告訴 client「AT 什麼時候過期」，client 可以在過期前主動用 RT 去換新 AT，避免請求失敗。
+
+流程：
+
+```
+1. 登入 → Server 發 AT（短）+ RT（長）+ ET
+2. client 用 AT 呼叫 API（正常請求）
+3. AT 過期 → client 用 RT 去換新 AT（不用重新登入）
+4. RT 也過期或被撤銷 → 回到登入頁
+```
+
+**為什麼要分開**：AT 外洩，攻擊者最多用幾分鐘；RT 外洩，攻擊者可以換出新的 AT，但 RT 只在「換發」時用一次，被用到的頻率低。RT 通常還綁定裝置／IP，進一步降低風險。
+
+<Callout type="note" title="本課的 JWT 就是 Access Token">
+  第 02 節發的那枚 JWT，本質上就是 Access Token。本課沒有實作 refresh token，因為那是進階主題；但你讀別人的 API 文件時，看到 `access_token` / `refresh_token` / `expires_in` 這三個欄位，就知道它們在做同一件事。
+</Callout>
+
+---
+
 ## 單元實作作業
 
 在本地環境完成以下操作並記錄成果。
