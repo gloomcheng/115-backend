@@ -56,6 +56,17 @@ import Callout from '../../components/Callout.astro';
 
 ### A.0 實證：我們真的去看了網站
 
+<Terminal title="bash — 觀察一個真實的 HTTP 請求（不用登入就能跑）">{`
+curl -v https://assembly.gov.taipei/PolicePeople/ 2>&1 | head -20
+`}</Terminal>
+
+<Terminal title="bash — 登入端點回傳的 JSON（需要 reCAPTCHA token）">{`
+curl -s -X POST https://assembly.gov.taipei/PolicePeople/api/Home/ReCaptchaPassed \
+  -H 'Content-Type: application/json; charset=utf-8' \
+  -d '{"applyPid":"A123456789","robot":"<reCAPTCHA response>"}'
+`}</Terminal>
+
+
 我們打開 `https://assembly.gov.taipei/PolicePeople/`，讀它的 HTML 與 JavaScript bundle（`/bundles/home?v=...`），找到以下事實：
 
 1. **登入端點是公開的 API**：`POST /PolicePeople/api/Home/ReCaptchaPassed`，body `{applyPid, robot}`，其中 `robot` 是 reCAPTCHA 的 response token。Server 回 `{ErrorCode, List:[{AT, RT, ET}]}`，前端把 `AT`（access token）、`RT`（refresh token）、`ET` 存進 `sessionStorage`。**token 真的發給 client，client 拿得到。**

@@ -673,16 +673,6 @@ bad csrf token [403]
   **但它說明了一件事：不要把「擋住大部分攻擊」當成「安全」。** 你能說出它在哪裡失效，才算真的懂這三道防線。
 </Callout>
 
-### 08.8.1 XSRF Token 與 sessionStorage：SPA 的取捨
-
-第 08.6 節的 CSRF token 存在 Cookie 裡（`HttpOnly` 可擋 `document.cookie`）。但 SPA（單頁應用）常用另一種做法：把 XSRF token 存在 `sessionStorage`，JavaScript 讀出來帶進 `X-XSRF-TOKEN` header。
-
-**取捨：**
-- **優點**：SPA 的 JS 能讀到 token，方便帶進 header；不依賴 cookie 的自動附帶。
-- **代價**：`sessionStorage` 是 client 可讀的——任何跑在頁面上的腳本都能讀到 token、帶出去。**擋得住跨站偽造，擋不住使用者自己的腳本。**
-
-這就是「防禦模型不同」的具體例子：CSRF token 防的是「別的網站偽造請求」，不是「client 自己跑腳本」。要防腳本，要靠限流、稽核、reCAPTCHA。
-
 ### 08.9 判斷題：你的專題要不要處理 CSRF
 
 <Callout type="important" title="一條規則，不是感覺">
