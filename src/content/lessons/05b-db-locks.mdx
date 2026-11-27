@@ -20,6 +20,10 @@ import { withBase } from '../../lib/paths';
 
 把「同時搶到」換成「同時想拿」。兩個請求同時呼叫 `BEGIN IMMEDIATE`，SQLite 只讓其中一個拿到鎖，另一個等到 `busy_timeout` 到期就收到拒絕。
 
+<Callout type="note" title="同時抵達是真的，同時持有是假的">
+  兩個請求確實可以在同一瞬間抵達，甚至在同一時脈週期發出指令。不可能的是「兩邊都拿到同一把獨佔鎖」。SQLite 官方文件明說同時只有一個 `RESERVED` 與一個 `EXCLUSIVE`；把文件裡的 process 換成 thread 也一樣成立。
+</Callout>
+
 這和上一課的 `users.json` 對照最清楚。文字檔的 lost update 會讓兩個 writer 都報成功，其中一筆被安靜蓋掉；資料庫的拒絕則讓輸家知道自己沒寫進去。
 
 <svg viewBox="0 0 940 320" role="img" aria-labelledby="lock-claim-title lock-claim-desc" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
@@ -51,9 +55,50 @@ import { withBase } from '../../lib/paths';
   <text x="24" y="284" fill="#274f67" font-size="13">同一個 x 位置看：holder 的框還沒結束時，loser 只能收到拒絕；框結束後，重試才成功。</text>
 </svg>
 
+### 同時起跑：閘門實驗
+
+上一個實驗讓 loser 等 holder 先拿到鎖。要回答「會不會同時摸到鎖」，得讓兩條執行緒真的同時出發。
+
+<Terminal title="bash — start both writers at one gate">{`
+$ cd exercises/05b-db-locks
+$ python barrier_race.py
+`}</Terminal>
+
+<Terminal title="output — exactly one winner in every trial" flavor="output">{`
+trial 01: A acquired, B failed -> database is locked, rows=1
+trial 02: A acquired, B failed -> database is locked, rows=1
+trial 03: B acquired, A failed -> database is locked, rows=1
+trial 04: B acquired, A failed -> database is locked, rows=1
+trial 05: B acquired, A failed -> database is locked, rows=1
+trial 06: B acquired, A failed -> database is locked, rows=1
+trial 07: A acquired, B failed -> database is locked, rows=1
+trial 08: A acquired, B failed -> database is locked, rows=1
+trial 09: A acquired, B failed -> database is locked, rows=1
+trial 10: B acquired, A failed -> database is locked, rows=1
+trial 11: B acquired, A failed -> database is locked, rows=1
+trial 12: B acquired, A failed -> database is locked, rows=1
+trial 13: B acquired, A failed -> database is locked, rows=1
+trial 14: A acquired, B failed -> database is locked, rows=1
+trial 15: B acquired, A failed -> database is locked, rows=1
+trial 16: B acquired, A failed -> database is locked, rows=1
+trial 17: A acquired, B failed -> database is locked, rows=1
+trial 18: A acquired, B failed -> database is locked, rows=1
+trial 19: A acquired, B failed -> database is locked, rows=1
+trial 20: A acquired, B failed -> database is locked, rows=1
+trials=20, winners-per-trial=[1], all-exactly-one=True
+`}</Terminal>
+
+`threading.Barrier(2)` 讓兩條執行緒過同一道閘，誰也不比誰早。`busy_timeout = 0` 讓沒拿到鎖的一方立刻回錯，不給「等一下再拿到」的模糊空間。每一輪換一個新的資料庫檔案。
+
+輸出有兩件事。贏家有時是 A、有時是 B，代表起跑真的同時，順序並不固定。但每一輪都只有一個贏家，`rows=1` 也說明沒有人寫出第二筆。
+
+20 輪是可驗證證據：它證明這台機器上的實作符合契約。有限次實驗不能證明「永遠不可能」。保證來自機制：取得鎖是一次原子操作，核心把同時到達的呼叫排成先後。SQLite 規格也明說同時只有一個 `RESERVED` 與一個 `EXCLUSIVE`。
+
+前提是檔案系統的鎖正常。SQLite 官方文件警告 NFS 的 advisory locking 有實作問題；那種情況下保證會破，資料可能損毀。
+
 ## 二、親手跑一次
 
-與其記術語，先看輸出。這支脚本在同一個資料庫檔案裡開兩條執行緒：holder 持有寫鎖一秒，loser 在同一秒內連續嘗試寫入。
+回到可以自己改的那支脚本。它把剛才的保證攤開成可見的步驟：holder 持有寫鎖一秒，loser 在同一秒內連續嘗試寫入。
 
 <Terminal title="bash — run the contention demo">{`
 $ cd exercises/05b-db-locks

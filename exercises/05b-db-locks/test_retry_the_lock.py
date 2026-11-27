@@ -33,6 +33,19 @@ class LockContentionTests(unittest.TestCase):
         self.assertEqual(result["winner_rows"], 1)
         self.assertEqual(result["loser_rows"], 1)
 
+    def test_barrier_race_produces_exactly_one_winner_per_trial(self):
+        self.assertTrue(Path(__file__).with_name("barrier_race.py").exists())
+
+        from barrier_race import run_barrier_race
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = run_barrier_race(os.path.join(directory, "barrier.db"), trials=6)
+
+        self.assertEqual(len(result["trials"]), 6)
+        self.assertTrue(all(trial["winners"] == 1 for trial in result["trials"]))
+        self.assertTrue(all(trial["loser"] == "database is locked" for trial in result["trials"]))
+        self.assertTrue(all(trial["rows"] == 1 for trial in result["trials"]))
+
 
 if __name__ == "__main__":
     unittest.main()
