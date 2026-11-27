@@ -90,6 +90,14 @@ export const siteCopy = {
       next: '模型 API 與執行迴圈 →',
       nextMeta: '六週實作單元',
     },
+    fairnessCaseStudy: {
+      kicker: 'WEEK 12',
+      reader: 'CASE STUDY',
+      guide: 'IN THIS CASE',
+      tocLabel: 'TOC',
+      back: '← 中介軟體、權限與密鑰邊界',
+      backMeta: 'Week 12 / 單元講義',
+    },
     agentRuntime: {
       kicker: '獨立實作單元',
       reader: 'AGENT RUNTIME LAB',

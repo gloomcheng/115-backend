@@ -6,6 +6,7 @@ description: "中介軟體在路由比對之前就跑完了。它看得到這是
 
 import Terminal from '../../components/Terminal.astro';
 import Callout from '../../components/Callout.astro';
+import { withBase } from '../../lib/paths';
 
 單元 11 回答了「你是誰」。這一課處理剩下的問題，而且從一個位置開始：**這些判斷的程式碼，應該寫在哪一層。**
 
@@ -671,6 +672,10 @@ bad csrf token [403]
   這不是漏洞，是這兩道防線的邊界。攻擊者能不能走到這一步，取決於他能不能同時拿到 token 並且讓瀏覽器不送 `Origin`——真實瀏覽器在跨站情境會送，所以純網頁攻擊走不到。
 
   **但它說明了一件事：不要把「擋住大部分攻擊」當成「安全」。** 你能說出它在哪裡失效，才算真的懂這三道防線。
+</Callout>
+
+<Callout type="note" title="延伸案例">
+  把這一課的 JWT、XSRF、reCAPTCHA 放進真實事件：<a href={withBase('/fairness-case-study')}>路權 0.3 秒案例研究</a>從一個公開端點的 HTTP 請求出發，對照「技術上做不做得到」與「後端怎麼設計才公平」。
 </Callout>
 
 ### 08.9 判斷題：你的專題要不要處理 CSRF
