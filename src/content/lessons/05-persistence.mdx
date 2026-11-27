@@ -6,6 +6,7 @@ description: "dict 的資料在程式結束時就沒了；文字檔存得下來�
 
 import Terminal from '../../components/Terminal.astro';
 import Callout from '../../components/Callout.astro';
+import { withBase } from '../../lib/paths';
 
 前四課你寫的路由，資料都放在一個 Python `dict` 裡。`examples/http-api/main.py` 的 `users` 就是這樣。
 
@@ -234,6 +235,10 @@ $ sqlite3 notes.db "SELECT id, text FROM notes;"
 
 <Callout type="important" title="拒絕比丟資料好">
   `database is locked` 是一句你可以在程式裡接住的訊息。你可以讓它等待、可以重試、可以回 `503` 給 Client。一個沒有錯誤的資料遺失，你連從哪裡開始查都不知道。
+</Callout>
+
+<Callout type="note" title="延伸：05b — 兩個請求同時搶 DB lock 會怎樣">
+  有同學問「假設真的同時搶到 db lock 會怎樣」。答案沿用上面的 `database is locked`：寫鎖只有一個持有者。<a href={withBase('/lessons/05b-db-locks')}>05b</a> 用一支脚本把輸家怎麼退避重試、怎麼靠唯一約束避免重複寫入跑出來。
 </Callout>
 
 ---

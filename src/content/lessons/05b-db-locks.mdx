@@ -1,0 +1,121 @@
+---
+title: "05b — 兩個請求同時搶 DB lock 會怎樣"
+week: 5
+description: "SQLite 的寫鎖只有一個持有者。輸家收到 database is locked，退避重試，靠唯一約束避免寫出重複資料。"
+goals:
+  - "能說出為什麼兩個請求不可能同時持有 SQLite 的寫鎖"
+  - "能接住 database is locked 並寫出有上限的退避重試"
+  - "能解釋唯一約束為什麼讓重試成為冪等操作"
+---
+
+import Terminal from '../../components/Terminal.astro';
+import Callout from '../../components/Callout.astro';
+import { withBase } from '../../lib/paths';
+
+有同學問：兩個請求同時進來，假設是真的同時搶到 DB lock 會怎樣？先把問題修正：以 SQLite 這套檔案資料庫引擎來說，那個假設不成立。寫鎖是獨佔的，同一時間只有一個請求能持有它。
+
+第二個請求收到的 `database is locked` 是一句拒絕訊息，不是資料損毀的通知。資料庫用它告訴你：這次寫入沒有發生，你可以決定下一步。
+
+## 一、先看答案：鎖只有一個贏家
+
+把「同時搶到」換成「同時想拿」。兩個請求同時呼叫 `BEGIN IMMEDIATE`，SQLite 只讓其中一個拿到鎖，另一個等到 `busy_timeout` 到期就收到拒絕。
+
+這和上一課的 `users.json` 對照最清楚。文字檔的 lost update 會讓兩個 writer 都報成功，其中一筆被安靜蓋掉；資料庫的拒絕則讓輸家知道自己沒寫進去。
+
+<svg viewBox="0 0 940 320" role="img" aria-labelledby="lock-claim-title lock-claim-desc" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
+  <title id="lock-claim-title">寫鎖只有一個持有者</title>
+  <desc id="lock-claim-desc">holder 從 BEGIN EXCLUSIVE 到 COMMIT 之間持有寫鎖；loser 在同一段時間兩次收到 database is locked，holder 釋放鎖後第三次才提交。同一時刻只有 holder 持有寫鎖。</desc>
+  <defs>
+    <marker id="lock-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#075486" />
+    </marker>
+  </defs>
+  <line x1="150" y1="62" x2="880" y2="62" stroke="#075486" stroke-width="2" marker-end="url(#lock-arrow)" />
+  <text x="880" y="50" text-anchor="end" fill="#075486" font-size="13">時間 →</text>
+  <line x1="150" y1="72" x2="150" y2="250" stroke="#4f7892" stroke-width="1" stroke-dasharray="5 5" />
+  <line x1="300" y1="72" x2="300" y2="250" stroke="#4f7892" stroke-width="1" stroke-dasharray="5 5" />
+  <line x1="600" y1="72" x2="600" y2="250" stroke="#075486" stroke-width="2" stroke-dasharray="5 5" />
+  <text x="150" y="88" text-anchor="middle" fill="#274f67" font-size="12">t=0</text>
+  <text x="300" y="88" text-anchor="middle" fill="#274f67" font-size="12">0.3s 第一次逾時</text>
+  <text x="600" y="88" text-anchor="middle" fill="#075486" font-size="12" font-weight="700">1.0s COMMIT</text>
+  <text x="24" y="134" fill="#075486" font-size="15" font-weight="700">holder</text>
+  <rect x="150" y="108" width="450" height="48" rx="7" fill="#b8d8e8" stroke="#075486" stroke-width="3" />
+  <text x="375" y="139" text-anchor="middle" fill="#075486" font-size="14" font-weight="700">BEGIN EXCLUSIVE → 持有寫鎖 → COMMIT</text>
+  <text x="24" y="216" fill="#075486" font-size="15" font-weight="700">loser</text>
+  <rect x="150" y="192" width="140" height="46" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="220" y="221" text-anchor="middle" fill="#075486" font-size="12">attempt 1 → locked</text>
+  <rect x="315" y="192" width="140" height="46" rx="7" fill="#ffd2c7" stroke="#ef795e" stroke-width="3" />
+  <text x="385" y="221" text-anchor="middle" fill="#075486" font-size="12">attempt 2 → locked</text>
+  <rect x="600" y="192" width="280" height="46" rx="7" fill="#ffe29a" stroke="#075486" stroke-width="3" />
+  <text x="740" y="221" text-anchor="middle" fill="#075486" font-size="13" font-weight="700">attempt 3 → committed</text>
+  <text x="24" y="284" fill="#274f67" font-size="13">同一個 x 位置看：holder 的框還沒結束時，loser 只能收到拒絕；框結束後，重試才成功。</text>
+</svg>
+
+## 二、親手跑一次
+
+與其記術語，先看輸出。這支脚本在同一個資料庫檔案裡開兩條執行緒：holder 持有寫鎖一秒，loser 在同一秒內連續嘗試寫入。
+
+<Terminal title="bash — run the contention demo">{`
+$ cd exercises/05b-db-locks
+$ rm -f locks.db
+$ python retry_the_lock.py
+`}</Terminal>
+
+<Terminal title="output — one winner, one safe retry" flavor="output">{`
+holder: BEGIN EXCLUSIVE -> write lock acquired
+loser: attempt 1 -> database is locked
+loser: attempt 2 -> database is locked
+holder: COMMIT -> lock released
+loser: attempt 3 -> committed
+replay: same loser id inserted again -> rows for loser = 1
+winner rows: 1, loser rows: 1
+`}</Terminal>
+
+輸出有兩件事要分開看。holder 從 `BEGIN EXCLUSIVE` 到 `COMMIT` 之間，loser 兩次都拿到 `database is locked`。holder commit 之後，第三次嘗試才成功。
+
+最後兩行是第二次證明。replay 把同一個 `loser` id 再送一次，`rows for loser = 1` 沒有變成 2。
+
+## 三、輸家該怎麼辦
+
+鎖拒絕的不是你的程式，而是這一次寫入。接下來四件事，缺一件就會把拒絕變成資料錯帳。
+
+#### 1. 接住鎖衝突，不要全吞
+
+Python 的 `sqlite3` 把鎖衝突丟成 `sqlite3.OperationalError`。腳本只接住訊息裡有 `locked` 的錯誤，其他錯誤照樣往上拋。把所有例外都吞掉，連程式 bug 都會被當成鎖衝突。
+
+#### 2. 退避重試，而且要有上限
+
+每次失敗等 50ms、100ms、200ms，最多試 10 次。上限很重要：鎖永遠不釋放時，程式要停下來回報，不能無限重試。
+
+#### 3. 唯一約束讓重試冪等
+
+重試解決了拿不到鎖的問題，卻帶來新問題：第一次和重試可能各寫一次同一筆。表格的 `id` 是 `PRIMARY KEY`。`INSERT ... ON CONFLICT(id) DO NOTHING` 讓同一筆重送只留一列；`rows for loser = 1` 就是證據。
+
+#### 4. 拿不到就回 503
+
+唯一約束處理的是重複，不是等待。重試用完還拿不到鎖，API 回 `503 Service Unavailable` 加 `Retry-After`。Client 因而知道這是暫時失敗，不是資料已寫入。
+
+<Callout type="important" title="拒絕是可以處理的訊號">
+  鎖的作用正是讓「兩個人都以為自己寫成功」這件事不可能發生。文字檔會安靜丟資料，SQLite 會明確拒絕；拒絕可以被接住、被重試、被記錄。
+</Callout>
+
+## 四、邊界：不是所有資料庫都鎖同一層
+
+PostgreSQL 與 MySQL 用列鎖，兩個交易可以同時改不同列；改同一列時，其中一個等待，形成死結時資料庫會放棄其中一個交易。
+
+那是同一個原則的實作差異，本課沒有在本機驗證，所以不示範。你在這裡學到的是可驗證的部分：寫鎖只有一個贏家，輸家要自己處理失敗。
+
+## 五、作業
+
+1. 執行 `python -m unittest -v test_retry_the_lock.py`。測試會製造一次 `database is locked`，截圖必須包含 `ok`。
+2. 把 `hold_seconds` 改成 `0.1` 後重跑。回答：loser 還會收到 `database is locked` 嗎？
+3. 把 `ON CONFLICT(id) DO NOTHING` 改成普通 `INSERT` 後重跑，看寫入結果。回答：最後有幾筆 `loser`？
+4. 回答：你的期末專題如果有兩個請求同時寫入庫存，唯一約束要放在哪一層？
+
+### 本單元使用的正本
+
+- [SQLite — Documentation: Concurrency](https://www.sqlite.org/lockingv3.html)
+- [SQLite — Transactions](https://www.sqlite.org/lang_transaction.html)
+- [SQLite — PRAGMA busy_timeout](https://www.sqlite.org/pragma.html#pragma_busy_timeout)
+- [SQLite — ON CONFLICT](https://www.sqlite.org/lang_conflict.html)
+- [Python — `sqlite3` 標準函式庫](https://docs.python.org/3/library/sqlite3.html)
