@@ -10,6 +10,10 @@ import { withBase } from '../../lib/paths';
 
 單元 11 回答了「你是誰」。這一課處理剩下的問題，而且從一個位置開始：**這些判斷的程式碼，應該寫在哪一層。**
 
+<Callout type="note" title="本週兩份教材：12a 與 12b">
+  Week 12 分成兩部分。**12a** 是這一頁「中介軟體、權限與密鑰邊界」，把 JWT、CSRF、限流寫在正確的層。**12b** 是 <a href={withBase('/lessons/12b-fairness-case-study')}>路權 0.3 秒案例研究</a>，把同一套機制放進真實事件裡檢驗。
+</Callout>
+
 這支 API 的簽發金鑰從環境變數拿，所以啟動方式和平常不同：
 
 <Terminal title="Terminal 1 — bash — start with a key from the environment">{`
@@ -675,7 +679,7 @@ bad csrf token [403]
 </Callout>
 
 <Callout type="note" title="延伸案例">
-  把這一課的 JWT、XSRF、reCAPTCHA 放進真實事件：<a href={withBase('/fairness-case-study')}>路權 0.3 秒案例研究</a>從一個公開端點的 HTTP 請求出發，對照「技術上做不做得到」與「後端怎麼設計才公平」。
+  把這一課的 JWT、XSRF、reCAPTCHA 放進真實事件：<a href={withBase('/lessons/12b-fairness-case-study')}>路權 0.3 秒案例研究</a>從一個公開端點的 HTTP 請求出發，對照「技術上做不做得到」與「後端怎麼設計才公平」。
 </Callout>
 
 ### 08.9 判斷題：你的專題要不要處理 CSRF

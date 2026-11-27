@@ -10,10 +10,15 @@ goals:
 
 import Terminal from '../../components/Terminal.astro';
 import Callout from '../../components/Callout.astro';
+import { withBase } from '../../lib/paths';
 
 這一課不是新技術，是把前面 11 週學過的東西放進同一個真實事件裡看：HTTP、JWT、CSRF、reCAPTCHA、資料庫、稽核。題材來自一則 Threads 貼文——台北市道路使用申請在開放瞬間 0.3 秒內就被送出，引發「是不是機器人／直接塞資料庫」的爭議。我們從兩個方向走：一是**這件事技術上真的可行嗎**，二是**若由你來設計後端，要怎麼設計才公平**。
 
 讀這課之前，先建立一個心智模型：**「開放瞬間」是一個極端的並發場景**——所有使用者在同一秒送出請求，Server 必須在毫秒內做出「誰先到、誰合法、誰重複」的判斷。這個場景把 HTTP、認證、資料庫、限流全部擠在一起，是很好的綜合練習。
+
+<Callout type="note" title="本週兩份教材：12a 與 12b">
+  本頁是 Week 12 的 **12b**。**12a** 是 <a href={withBase('/lessons/12-middleware')}>中介軟體、權限與密鑰邊界</a>：中介軟體在路由比對之前處理 Request，把 JWT、CSRF、限流寫在正確的層；讀完再回到這裡，看它們在真實事件裡怎麼失效。
+</Callout>
 
 <svg viewBox="0 0 940 300" role="img" aria-labelledby="case-title case-desc" class="my-8 w-full rounded-[4px] border-2 border-[#075486] bg-[#fffdf7] p-3">
   <title id="case-title">同一個事件的兩面：可行性與公平性</title>
@@ -94,7 +99,7 @@ curl -s -X POST https://assembly.gov.taipei/PolicePeople/api/Home/ReCaptchaPasse
 | `RallyPeopleSessId`（session） | 是 | 沒登入就有、沒設過期 |
 | Google reCAPTCHA | **否（直接造不出）** | 由 Google 鑄造、綁私鑰，腳本自己造不出來 |
 
-前 3 個都是「提高取得成本」，不是牆。**第 4 個才是真牆**——但也有旁路（見 A.3）。
+對照上表，前 3 個都是「提高取得成本」，不是牆。**第 4 個才是真牆**——但也有旁路（見 A.3）。
 
 <Callout type="important" title="這就是「後端無法完全信任 client」">
   瀏覽器能構造的請求，腳本基本都能複製。JWT、CSRF token、session id 都是「client 持有的憑證」，client 持有的東西 client 就能拿去用。防禦的本質是提高成本，不是完全阻止。
@@ -102,7 +107,7 @@ curl -s -X POST https://assembly.gov.taipei/PolicePeople/api/Home/ReCaptchaPasse
 
 ### A.2.1 jQuery 與 AJAX：網站怎麼送請求，腳本怎麼複製
 
-大二生可能沒碰過 jQuery。先補充：**jQuery 是 2006 年出現的一個 JavaScript 函式庫**，目的是讓「操作網頁元素」和「送 HTTP 請求」變得簡單。它不是新技術，而是那個年代的標準工具——這個政府網站用它，因為它穩定、老舊瀏覽器也能跑。
+接著看送出端怎麼發請求：大二生可能沒碰過 jQuery。先補充：**jQuery 是 2006 年出現的一個 JavaScript 函式庫**，目的是讓「操作網頁元素」和「送 HTTP 請求」變得簡單。它不是新技術，而是那個年代的標準工具——這個政府網站用它，因為它穩定、老舊瀏覽器也能跑。
 
 網站的 JavaScript 長這樣（從 bundle 擷取）：
 
@@ -154,30 +159,30 @@ $.ajax({
 
 > **名詞來源**：AT/RT/ET 是業界標準用語，不是這個網站自創的。`AT` = Access Token、`RT` = Refresh Token、`ET` = Expiration Time，來自 OAuth 2.0（RFC 6749）與 JWT（RFC 7519）的慣例，這個網站只是把名字縮寫了。正課（第 11 課）只講了「一枚 JWT token」（本質上就是 Access Token），沒有講 refresh token 的換發流程，所以這一節是新內容。CSRF 的攻擊手法則在正課第 12 課（08.6 節）教過——本課 A.5 是把那個機制套到這個真實網站上。
 
-**AT（Access Token，存取權杖）**
+#### AT（Access Token，存取權杖）
 
 - **做什麼**：每次呼叫受保護的 API（例如 `GetRallyTable`、`addAssemblyCase`）時，帶在 header 裡證明「我是登入過的使用者」。
 - **壽命**：短（幾分鐘到幾小時）。偷走也只偷到短時間的權限。
 - **為什麼短**：降低被盜用的影響範圍。AT 外洩，攻擊者最多用幾分鐘。
 
-**RT（Refresh Token，更新權杖）**
+#### RT（Refresh Token，更新權杖）
 
 - **做什麼**：當 AT 過期時，用 RT 去換一張新的 AT，不用重新登入、不用重新解 reCAPTCHA。
 - **壽命**：長（幾天到幾週）。
 - **為什麼要分開**：如果只有一個 token，要嘛壽命短（使用者頻繁重新登入，體驗差）、要嘛壽命長（外洩後攻擊者長時間可用）。分開之後，短命的 AT 負責日常請求，長命的 RT 只在「換新 AT」時用一次，降低 RT 被用到的頻率。
 
-**ET（Expiration Time，到期時間）**
+#### ET（Expiration Time，到期時間）
 
 - **做什麼**：告訴 client「AT 什麼時候過期」，client 可以在過期前主動用 RT 去換新 AT，避免請求失敗。
 - **為什麼需要**：client 不用每次請求都猜 AT 還活著沒有；ET 是契約，client 照著 ET 提前更新。
 
-**XSRF Token（跨站請求偽造防護權杖）**
+#### XSRF Token（跨站請求偽造防護權杖）
 
 - **做什麼**：防 CSRF 攻擊。Server 發一個 token 給 client，client 每次送請求時帶在 header。Server 驗證 header 裡的 token 與 cookie 裡的 token 是否匹配。
 - **為什麼需要**：沒有它，惡意網站可以偽造請求、利用瀏覽器自動帶 cookie 的特性攻擊你。
 - **為什麼存 sessionStorage 而不是 HttpOnly cookie**：因為 SPA（單頁應用）的 JavaScript 需要讀到 token 才能帶進 header。代價是 client 可讀 → 腳本可重用。
 
-**設計取捨總結：**
+#### 設計取捨總結
 
 | Token | 職責 | 壽命 | 存放位置 | 防什麼 |
 | --- | --- | --- | --- | --- |
@@ -250,7 +255,7 @@ token 由 Google 鑄造、綁 Google 私鑰，腳本造不出來。**但 token �
 - 惡意網站 B 的 JS 想打 A 的 API 去拿 token？**同源政策（Same-Origin Policy）** 讓 B 的 JS 讀不到 A 回應的內容，所以抄不到 token。
 - 因此 B 偽造的請求帶不出 `X-XSRF-TOKEN`，Server 拒絕。**CSRF 擋的是「其他網站偽造請求」。**
 
-**但這套擋不住腳本——因為腳本代表你自己：**
+**這道 CSRF 防線擋不住腳本——因為腳本代表你自己：**
 
 - 腳本是第一方發的請求，沒有「跨站偽造」，瀏覽器的同源限制對它不適用。
 - 腳本可以自己打 API 拿 token（就像 `ReCaptchaPassed` 回傳 AT/RT/ET、`getXsrfToken()` 取 XSRF 值），再把 token 帶進 header 送出。
@@ -269,11 +274,11 @@ token 由 Google 鑄造、綁 Google 私鑰，腳本造不出來。**但 token �
 
 ## 02. 方向 B：後端怎麼設計才公平
 
-速度戰的本質問題：**先到先得 + 開放瞬間 + 自動化** = 誰的腳本快誰贏。公平不能靠速度，要靠設計。
+接著進入方向 B。速度戰的本質問題：**先到先得 + 開放瞬間 + 自動化** = 誰的腳本快誰贏。公平不能靠速度，要靠設計。
 
 ### B.1 Server 是唯一真相來源
 
-所有判斷都在 Server 做。Client 送什麼都不可信——`role`、`user_id`、時間戳、申請順序，全部 Server 重算或重蓋。
+設計的起點是：所有判斷都在 Server 做。Client 送什麼都不可信——`role`、`user_id`、時間戳、申請順序，全部 Server 重算或重蓋。
 
 ### B.2 五道防線
 
@@ -304,7 +309,7 @@ token 由 Google 鑄造、綁 Google 私鑰，腳本造不出來。**但 token �
 
 ### B.3 關鍵設計細節
 
-**1. 唯一性約束（資料庫層）**
+#### 1. 唯一性約束（資料庫層）
 
 ```sql
 -- 每身分每窗口只能有一筆申請
@@ -319,25 +324,28 @@ CREATE UNIQUE INDEX ux_road_time_slot
 
 重複送出在 DB 層就擋下，回 `409 Conflict`，不是 `200` 後再發現。
 
-**2. 伺服器時鐘**
+#### 2. 伺服器時鐘
+
+同樣地，時間也由 Server 判定，提前送出要和重複送出一樣在後端擋下來：
 
 ```python
-# 開放前的請求一律拒絕
 if now() < window.open_at:
     raise HTTPException(425, "Too Early")
 if now() > window.close_at:
     raise HTTPException(410, "Gone")
 ```
 
-Client 送來的時間戳一律忽略，Server 用自己的時鐘蓋章。
+也就是說，Client 送來的時間戳一律忽略，Server 用自己的時鐘蓋章。
 
-**3. 限流（per identity / per IP / per device）**
+#### 3. 限流（per identity / per IP / per device）
 
-- 每身分每分鐘 N 次（如 5 次）。
+- 同樣由 Server 計數：每身分每分鐘 N 次（如 5 次）。
 - 每 IP 每分鐘 M 次（防多帳號）。
 - 超過回 `429 Too Many Requests` + `Retry-After`。
 
-**4. 排隊／抽籤取代速度戰**
+#### 4. 排隊／抽籤取代速度戰
+
+接著換掉速度戰本身，比較幾種配置：
 
 | 策略 | 優點 | 缺點 |
 | --- | --- | --- |
@@ -349,11 +357,11 @@ Client 送來的時間戳一律忽略，Server 用自己的時鐘蓋章。
 
 建議：熱門資源用「意願登記窗口 + 抽籤 + 確認」；一般資源用 FIFO 排隊 + 限流。
 
-**5. reCAPTCHA 的定位**
+#### 5. reCAPTCHA 的定位
 
-reCAPTCHA 守的是「改資料」的動作，不是「讀資料」。後端要把 reCAPTCHA token 的驗證放在**寫入路徑**（`POST /addAssemblyCase`），且 token 單次使用、短效期。但 reCAPTCHA 不是公平機制——它只提高機器人的成本，不解決速度戰。公平要靠 B.2 的第 4 道。
+另外，reCAPTCHA 守的是「改資料」的動作，不是「讀資料」。後端要把 reCAPTCHA token 的驗證放在**寫入路徑**（`POST /addAssemblyCase`），且 token 單次使用、短效期。但 reCAPTCHA 不是公平機制——它只提高機器人的成本，不解決速度戰。公平要靠 B.2 的第 4 道。
 
-**6. 稽核與可追溯**
+#### 6. 稽核與可追溯
 
 - 每筆申請記錄：身分、IP、user-agent、申請時間（Server 時鐘）、token 發行紀錄、reCAPTCHA 驗證結果。
 - 開放後公開統計（各路段申請時間分佈），讓公眾驗證公平。
